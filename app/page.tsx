@@ -804,7 +804,7 @@ function MonthlyChart({ data, T }: {
                 <Cell key={i} fill={pieColors[i % pieColors.length]} />
               ))}
             </Pie>
-            <Tooltip formatter={(v: number) => fmt(v)} contentStyle={{
+            <Tooltip formatter={(v: number | undefined) => v !== undefined ? fmt(v) : ''} contentStyle={{
               background: T.tooltipBg, border:`1px solid ${T.border}`, borderRadius:10, fontSize:12, color:T.textPri
             }} />
           </PieChart>
