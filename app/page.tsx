@@ -704,9 +704,10 @@ function MonthlyChart({ data, T }: {
   const gridStroke = T.chartGrid;
 
   const renderPieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: {
-    cx: number; cy: number; midAngle: number; innerRadius: number;
-    outerRadius: number; percent: number;
+    cx: number; cy: number; midAngle?: number; innerRadius: number;
+    outerRadius: number; percent?: number;
   }) => {
+    if (!midAngle || !percent) return null;
     const RADIAN = Math.PI / 180;
     const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
     const x = cx + radius * Math.cos(-midAngle * RADIAN);
