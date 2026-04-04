@@ -13,9 +13,11 @@ import {
   Download, FileSpreadsheet, FileText, CheckCircle, Zap,
   Link, AlertCircle, ExternalLink, Sun, Moon,
   BarChart2, TrendingUp, PieChart as PieIcon, Activity,
+  Wallet, Coins, Send, Copy, CreditCard, LayoutDashboard,
 } from "lucide-react";
+import { useWeb3 } from "./context/Web3Context";
 
-/* ─── THEME TOKENS ────────────────────────────────────────────────────── */
+/* ─── THEME TOKENS ─────────────────────────────────────────────────── */
 
 const DARK = {
   bg:        "#06080f",
@@ -71,7 +73,7 @@ const LIGHT = {
   tagBg:     "rgba(0,0,0,0.03)",
 };
 
-/* ─── CONSTANTS ───────────────────────────────────────────────────────── */
+/* ─── CONSTANTS ────────────────────────────────────────────────────── */
 
 const CATEGORIES: Record<string, { icon: React.ElementType; color: string }> = {
   Family:  { icon: Users,       color: "#8b5cf6" },
@@ -84,46 +86,48 @@ const CATEGORIES: Record<string, { icon: React.ElementType; color: string }> = {
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-const PIE_COLORS = ["#00c9a7", "#60a5fa", "#f43f5e", "#f59e0b", "#8b5cf6", "#34d399"];
-
 const CHART_TYPES = [
-  { id: "bar",    icon: BarChart2,  label: "Bar"    },
-  { id: "line",   icon: TrendingUp, label: "Line"   },
-  { id: "pie",    icon: PieIcon,    label: "Pie"    },
-  { id: "radar",  icon: Activity,   label: "Radar"  },
+  { id: "bar",   icon: BarChart2,  label: "Bar"   },
+  { id: "line",  icon: TrendingUp, label: "Line"  },
+  { id: "pie",   icon: PieIcon,    label: "Pie"   },
+  { id: "radar", icon: Activity,   label: "Radar" },
 ] as const;
 type ChartType = typeof CHART_TYPES[number]["id"];
 
+const NETWORKS = ["Ethereum", "Polygon", "BSC", "Arbitrum", "Optimism", "Base"];
+
 const SEED_DATA = [
-  { id:"1", date:"2025-01-15", project:"Brand Identity — Nexus Co.",    earned:3200, saved:960,  given:320, givenTo:"Charity" },
-  { id:"2", date:"2025-02-03", project:"UI Kit — Waveform App",         earned:1800, saved:540,  given:180, givenTo:"Family"  },
-  { id:"3", date:"2025-03-22", project:"Dashboard — FinFlow",           earned:4500, saved:1350, given:450, givenTo:"Charity" },
-  { id:"4", date:"2025-04-10", project:"Logo Suite — Terra Labs",       earned:2100, saved:630,  given:210, givenTo:"Gift"    },
-  { id:"5", date:"2025-05-05", project:"Motion Pack — Bloom Studio",    earned:2800, saved:840,  given:280, givenTo:"Self"    },
-  { id:"6", date:"2025-06-18", project:"Rebrand — Cobalt Systems",      earned:5200, saved:1560, given:520, givenTo:"Charity" },
-  { id:"7", date:"2025-07-29", project:"App Screens — Lumos Health",    earned:3600, saved:1080, given:360, givenTo:"Family"  },
-  { id:"8", date:"2025-08-14", project:"Icon Set — Meridian Bank",      earned:1500, saved:450,  given:150, givenTo:"Gift"    },
-  { id:"9", date:"2025-09-08", project:"Web Design — Arcadia Foods",    earned:3900, saved:1170, given:390, givenTo:"Charity" },
-  { id:"a", date:"2025-10-20", project:"Pitch Deck — Vertex AI",        earned:4800, saved:1440, given:480, givenTo:"Work"    },
-  { id:"b", date:"2025-11-11", project:"Brand Book — Solaris Tech",     earned:6100, saved:1830, given:610, givenTo:"Charity" },
-  { id:"c", date:"2025-12-05", project:"Year-End Retainer Fee",         earned:2200, saved:660,  given:220, givenTo:"Family"  },
+  { id:"1", date:"2025-01-15", project:"Brand Identity — Nexus Co.",    earned:3200, saved:960,  given:320, givenTo:"Charity", walletAddress:"", walletName:"" },
+  { id:"2", date:"2025-02-03", project:"UI Kit — Waveform App",         earned:1800, saved:540,  given:180, givenTo:"Family",  walletAddress:"", walletName:"" },
+  { id:"3", date:"2025-03-22", project:"Dashboard — FinFlow",           earned:4500, saved:1350, given:450, givenTo:"Charity", walletAddress:"", walletName:"" },
+  { id:"4", date:"2025-04-10", project:"Logo Suite — Terra Labs",       earned:2100, saved:630,  given:210, givenTo:"Gift",    walletAddress:"", walletName:"" },
+  { id:"5", date:"2025-05-05", project:"Motion Pack — Bloom Studio",    earned:2800, saved:840,  given:280, givenTo:"Self",    walletAddress:"", walletName:"" },
+  { id:"6", date:"2025-06-18", project:"Rebrand — Cobalt Systems",      earned:5200, saved:1560, given:520, givenTo:"Charity", walletAddress:"0x71C7656EC7ab88b098defB751B7401B5f6d8976F", walletName:"Main Wallet" },
+  { id:"7", date:"2025-07-29", project:"App Screens — Lumos Health",    earned:3600, saved:1080, given:360, givenTo:"Family",  walletAddress:"0x3A76Bff1aA3c56E9f0E96c8B23B3a61B3f0c21D", walletName:"DeFi Wallet" },
+  { id:"8", date:"2025-08-14", project:"Icon Set — Meridian Bank",      earned:1500, saved:450,  given:150, givenTo:"Gift",    walletAddress:"", walletName:"" },
+  { id:"9", date:"2025-09-08", project:"Web Design — Arcadia Foods",    earned:3900, saved:1170, given:390, givenTo:"Charity", walletAddress:"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", walletName:"Trading Wallet" },
+  { id:"a", date:"2025-10-20", project:"Pitch Deck — Vertex AI",        earned:4800, saved:1440, given:480, givenTo:"Work",    walletAddress:"", walletName:"" },
+  { id:"b", date:"2025-11-11", project:"Brand Book — Solaris Tech",     earned:6100, saved:1830, given:610, givenTo:"Charity", walletAddress:"0x71C7656EC7ab88b098defB751B7401B5f6d8976F", walletName:"Main Wallet" },
+  { id:"c", date:"2025-12-05", project:"Year-End Retainer Fee",         earned:2200, saved:660,  given:220, givenTo:"Family",  walletAddress:"", walletName:"" },
 ];
 
 interface Entry {
   id: string; date: string; project: string;
   earned: number; saved: number; given: number; givenTo: string;
+  walletAddress?: string; walletName?: string;
 }
 
-/* ─── HELPERS ─────────────────────────────────────────────────────────── */
+/* ─── HELPERS ──────────────────────────────────────────────────────── */
 
 const uid   = () => Math.random().toString(36).slice(2, 9);
-const fmt   = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n ?? 0);
+const fmt   = (n: number) => new Intl.NumberFormat("en-US", { style:"currency", currency:"USD", maximumFractionDigits:0 }).format(n ?? 0);
 const pct   = (a: number, b: number) => b > 0 ? ((a / b) * 100).toFixed(1) : "0.0";
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
+const shortAddr = (addr: string) => addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : "";
 
 function buildMonthly(entries: Entry[]) {
-  const map: Record<string, { month: string; earned: number; saved: number; given: number }> = {};
-  MONTHS.forEach(m => { map[m] = { month: m, earned: 0, saved: 0, given: 0 }; });
+  const map: Record<string, { month:string; earned:number; saved:number; given:number }> = {};
+  MONTHS.forEach(m => { map[m] = { month:m, earned:0, saved:0, given:0 }; });
   entries.forEach(({ date, earned, saved, given }) => {
     const m = MONTHS[new Date(date).getMonth()];
     if (m) { map[m].earned += earned; map[m].saved += saved; map[m].given += given; }
@@ -132,18 +136,12 @@ function buildMonthly(entries: Entry[]) {
 }
 
 function buildCumulative(entries: Entry[]) {
-  const sorted = [...entries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const sorted = [...entries].sort((a,b) => new Date(a.date).getTime()-new Date(b.date).getTime());
   let cum = 0;
-  return sorted.map(e => { cum += e.earned; return { date: e.date.slice(0, 7), cumulative: cum }; });
+  return sorted.map(e => { cum += e.earned; return { date:e.date.slice(0,7), cumulative:cum }; });
 }
 
-function buildPieData(entries: Entry[]) {
-  const totals: Record<string, number> = {};
-  entries.forEach(e => { totals[e.givenTo] = (totals[e.givenTo] || 0) + e.earned; });
-  return Object.entries(totals).map(([name, value]) => ({ name, value }));
-}
-
-/* ─── ANIMATED COUNTER ────────────────────────────────────────────────── */
+/* ─── ANIMATED COUNTER ─────────────────────────────────────────────── */
 
 function useCounter(target: number, duration = 900) {
   const [val, setVal] = useState(0);
@@ -162,7 +160,7 @@ function useCounter(target: number, duration = 900) {
   return val;
 }
 
-/* ─── GLASS CARD STYLE ────────────────────────────────────────────────── */
+/* ─── GLASS CARD ───────────────────────────────────────────────────── */
 
 const glassCard = (T: typeof DARK, extra: React.CSSProperties = {}): React.CSSProperties => ({
   background: T.card,
@@ -173,31 +171,24 @@ const glassCard = (T: typeof DARK, extra: React.CSSProperties = {}): React.CSSPr
   ...extra,
 });
 
-/* ─── METRIC CARD ─────────────────────────────────────────────────────── */
+/* ─── METRIC CARD ──────────────────────────────────────────────────── */
 
-function MetricCard({ icon: Icon, label, rawValue, isPercent, sub, accent, index, T }: {
-  icon: React.ElementType; label: string; rawValue: number; isPercent?: boolean;
-  sub: string; accent: string; index: number; T: typeof DARK;
+function MetricCard({ icon:Icon, label, rawValue, isPercent, sub, accent, index, T }: {
+  icon:React.ElementType; label:string; rawValue:number; isPercent?:boolean;
+  sub:string; accent:string; index:number; T:typeof DARK;
 }) {
   const counted = useCounter(rawValue, 700 + index * 100);
   const [hov, setHov] = useState(false);
   return (
-    <div
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        ...glassCard(T, {
-          padding: "1.5rem 1.75rem",
-          position: "relative",
-          overflow: "hidden",
-          border: `1px solid ${hov ? accent + "55" : T.border}`,
-          transition: "border-color 0.3s, transform 0.3s, box-shadow 0.3s",
-          transform: hov ? "translateY(-3px)" : "none",
-          boxShadow: hov ? `0 16px 48px ${accent}22` : "none",
-          cursor: "default",
-        }),
-      }}
-    >
+    <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      style={{ ...glassCard(T, {
+        padding:"1.5rem 1.75rem", position:"relative", overflow:"hidden",
+        border:`1px solid ${hov ? accent+"55" : T.border}`,
+        transition:"border-color 0.3s, transform 0.3s, box-shadow 0.3s",
+        transform: hov ? "translateY(-3px)" : "none",
+        boxShadow: hov ? `0 16px 48px ${accent}22` : "none",
+        cursor:"default",
+      }) }}>
       <div style={{ position:"absolute", top:"-40%", right:"-20%", width:130, height:130, borderRadius:"50%",
         background:`radial-gradient(circle, ${accent}20 0%, transparent 70%)`, pointerEvents:"none" }} />
       <div style={{ position:"absolute", top:0, left:"12%", right:"12%", height:2, borderRadius:999,
@@ -207,11 +198,11 @@ function MetricCard({ icon: Icon, label, rawValue, isPercent, sub, accent, index
         <span style={{ fontSize:11, fontWeight:600, letterSpacing:"0.1em", textTransform:"uppercase", color:T.textMut }}>{label}</span>
         <div style={{ width:36, height:36, borderRadius:10, background:`${accent}18`, border:`1px solid ${accent}30`,
           display:"flex", alignItems:"center", justifyContent:"center" }}>
-          <Icon size={16} style={{ color: accent }} />
+          <Icon size={16} style={{ color:accent }} />
         </div>
       </div>
-      <div style={{ fontFamily:"'DM Mono', 'Fira Mono', monospace", fontSize:"1.9rem", fontWeight:700,
-        color: T.textPri, letterSpacing:"-0.03em", lineHeight:1 }}>
+      <div style={{ fontFamily:"'DM Mono','Fira Mono',monospace", fontSize:"1.9rem", fontWeight:700,
+        color:T.textPri, letterSpacing:"-0.03em", lineHeight:1 }}>
         {isPercent ? `${counted}%` : fmt(counted)}
       </div>
       {sub && <div style={{ fontSize:12, color:T.textMut, marginTop:"0.5rem" }}>{sub}</div>}
@@ -219,7 +210,7 @@ function MetricCard({ icon: Icon, label, rawValue, isPercent, sub, accent, index
   );
 }
 
-/* ─── CATEGORY PILL ───────────────────────────────────────────────────── */
+/* ─── CATEGORY PILL ────────────────────────────────────────────────── */
 
 function Pill({ cat }: { cat: string }) {
   const m = CATEGORIES[cat] || CATEGORIES.Other;
@@ -233,17 +224,36 @@ function Pill({ cat }: { cat: string }) {
   );
 }
 
-/* ─── CUSTOM TOOLTIP ──────────────────────────────────────────────────── */
+/* ─── NETWORK BADGE ─────────────────────────────────────────────────── */
+
+const NETWORK_COLORS: Record<string, string> = {
+  Ethereum: "#627eea", Polygon: "#8247e5", BSC: "#f0b90b",
+  Arbitrum: "#28a0f0", Optimism: "#ff0420", Base: "#0052ff",
+};
+
+function NetworkBadge({ network }: { network: string }) {
+  const color = NETWORK_COLORS[network] || "#94a3b8";
+  return (
+    <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"2px 8px",
+      borderRadius:999, background:`${color}18`, border:`1px solid ${color}33`,
+      fontSize:10, fontWeight:700, color, letterSpacing:"0.05em", textTransform:"uppercase" }}>
+      <span style={{ width:6, height:6, borderRadius:"50%", background:color }} />
+      {network}
+    </span>
+  );
+}
+
+/* ─── CUSTOM TOOLTIP ────────────────────────────────────────────────── */
 
 function ChartTip({ active, payload, label, T }: {
-  active?: boolean; payload?: Array<{ name: string; value: number; color: string }>;
-  label?: string; T: typeof DARK;
+  active?:boolean; payload?:Array<{ name:string; value:number; color:string }>;
+  label?:string; T:typeof DARK;
 }) {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{ background: T.tooltipBg, border:`1px solid ${T.border}`,
+    <div style={{ background:T.tooltipBg, border:`1px solid ${T.border}`,
       borderRadius:12, padding:"10px 14px", fontSize:12, minWidth:140,
-      boxShadow: `0 8px 24px ${T.glow}` }}>
+      boxShadow:`0 8px 24px ${T.glow}` }}>
       <div style={{ color:T.textMut, marginBottom:8, fontWeight:600, letterSpacing:"0.06em", textTransform:"uppercase", fontSize:10 }}>{label}</div>
       {payload.map((p, i) => (
         <div key={i} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:16, marginBottom:3 }}>
@@ -258,11 +268,13 @@ function ChartTip({ active, payload, label, T }: {
   );
 }
 
-/* ─── FORM FIELD ──────────────────────────────────────────────────────── */
+/* ─── FORM FIELD ────────────────────────────────────────────────────── */
 
-function Field({ label, type="text", value, onChange, placeholder, T, ...rest }: {
-  label: string; type?: string; value: string | number; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  placeholder?: string; T: typeof DARK; [k: string]: unknown;
+function Field({ label, type="text", value, onChange, placeholder, T, mono, ...rest }: {
+  label:string; type?:string; value:string|number;
+  onChange:(e:React.ChangeEvent<HTMLInputElement>)=>void;
+  placeholder?:string; T:typeof DARK; mono?:boolean;
+  [k:string]:unknown;
 }) {
   const [focus, setFocus] = useState(false);
   return (
@@ -272,23 +284,24 @@ function Field({ label, type="text", value, onChange, placeholder, T, ...rest }:
         onFocus={() => setFocus(true)} onBlur={() => setFocus(false)}
         style={{ marginTop:6, width:"100%", boxSizing:"border-box",
           background: focus ? `${T.primary}0a` : T.inputBg,
-          border:`1px solid ${focus ? T.primary + "66" : T.border}`,
+          border:`1px solid ${focus ? T.primary+"66" : T.border}`,
           borderRadius:10, padding:"0.6rem 0.9rem", color:T.textPri, fontSize:14,
-          outline:"none", transition:"all 0.2s", fontFamily:"inherit" }} />
+          outline:"none", transition:"all 0.2s",
+          fontFamily: mono ? "'DM Mono','Fira Mono',monospace" : "inherit" }} />
     </div>
   );
 }
 
 function SelectF({ label, value, onChange, options, T }: {
-  label: string; value: string; onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
-  options: string[]; T: typeof DARK;
+  label:string; value:string; onChange:(e:React.ChangeEvent<HTMLSelectElement>)=>void;
+  options:string[]; T:typeof DARK;
 }) {
   return (
     <div>
       <div style={{ fontSize:11, fontWeight:600, letterSpacing:"0.1em", textTransform:"uppercase", color:T.textMut }}>{label}</div>
       <div style={{ marginTop:6, position:"relative" }}>
         <select value={value} onChange={onChange}
-          style={{ width:"100%", appearance:"none", background: T.selectBg,
+          style={{ width:"100%", appearance:"none", background:T.selectBg,
             border:`1px solid ${T.border}`, borderRadius:10,
             padding:"0.6rem 2rem 0.6rem 0.9rem", color:T.textPri,
             fontSize:14, outline:"none", cursor:"pointer", fontFamily:"inherit" }}>
@@ -300,76 +313,102 @@ function SelectF({ label, value, onChange, options, T }: {
   );
 }
 
-/* ─── MODAL WRAPPER ───────────────────────────────────────────────────── */
+/* ─── MODAL WRAPPER ─────────────────────────────────────────────────── */
 
-function Modal({ children, onClose, width = 520, T }: {
-  children: React.ReactNode; onClose: () => void; width?: number; T: typeof DARK;
+function Modal({ children, onClose, width=520, T }: {
+  children:React.ReactNode; onClose:()=>void; width?:number; T:typeof DARK;
 }) {
   useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const h = (e:KeyboardEvent) => { if (e.key==="Escape") onClose(); };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
   }, [onClose]);
   return (
     <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:100,
-      background: T === DARK ? "rgba(0,0,0,0.72)" : "rgba(0,0,0,0.45)",
+      background: T===DARK ? "rgba(0,0,0,0.72)" : "rgba(0,0,0,0.45)",
       backdropFilter:"blur(6px)", WebkitBackdropFilter:"blur(6px)",
       display:"flex", alignItems:"center", justifyContent:"center", padding:"1rem" }}>
       <div onClick={e => e.stopPropagation()} style={{ width:"100%", maxWidth:width,
-        background: T.modalBg, border:`1px solid ${T.border}`, borderRadius:20,
-        padding:"2rem", boxShadow: T.shadow, animation:"slideUp 0.22s cubic-bezier(0.16,1,0.3,1)" }}>
+        background:T.modalBg, border:`1px solid ${T.border}`, borderRadius:20,
+        padding:"2rem", boxShadow:T.shadow, animation:"slideUp 0.22s cubic-bezier(0.16,1,0.3,1)",
+        maxHeight:"90vh", overflowY:"auto" }}>
         {children}
       </div>
     </div>
   );
 }
 
-/* ─── ENTRY MODAL ─────────────────────────────────────────────────────── */
+/* ─── ENTRY MODAL ───────────────────────────────────────────────────── */
 
-const EMPTY_FORM = { date:"", project:"", earned:"", saved:"", given:"", givenTo:"Charity" };
-type FormState = typeof EMPTY_FORM & { id?: string };
+const EMPTY_FORM = { date:"", project:"", earned:"", saved:"", given:"", givenTo:"Charity", walletAddress:"", walletName:"" };
+type FormState = typeof EMPTY_FORM & { id?:string };
 
-function EntryModal({ initial, onSave, onClose, T }: {
-  initial?: Partial<FormState>; onSave: (e: Entry) => void; onClose: () => void; T: typeof DARK;
+function EntryModal({ initial, onSave, onClose, T, isWeb3 }: {
+  initial?:Partial<FormState>; onSave:(e:Entry)=>void; onClose:()=>void;
+  T:typeof DARK; isWeb3:boolean;
 }) {
   const [form, setForm] = useState<FormState>({ ...EMPTY_FORM, ...initial });
-  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm(f => ({ ...f, [k]: e.target.value }));
+  const set = (k:string) => (e:React.ChangeEvent<HTMLInputElement|HTMLSelectElement>) =>
+    setForm(f => ({ ...f, [k]:e.target.value }));
   const isEdit = Boolean(initial?.id);
   const submit = () => {
     if (!form.date || !form.project || !form.earned) return;
-    onSave({ ...form, id: form.id || uid(), earned:+form.earned||0, saved:+form.saved||0, given:+form.given||0 });
+    onSave({ ...form, id:form.id||uid(), earned:+form.earned||0, saved:+form.saved||0, given:+form.given||0 });
   };
   const hasEarned = parseFloat(form.earned as string) > 0;
+
+  const labels = isWeb3
+    ? { project:"Description", earned:"Received ($)", saved:"Staked ($)", given:"Sent ($)" }
+    : { project:"Project Name", earned:"Earned ($)", saved:"Saved ($)", given:"Given ($)" };
+
   return (
-    <Modal onClose={onClose} width={520} T={T}>
+    <Modal onClose={onClose} width={540} T={T}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"1.75rem" }}>
         <div>
-          <h2 style={{ margin:0, color:T.textPri, fontSize:"1.1rem", fontWeight:700 }}>{isEdit ? "Edit Entry" : "New Entry"}</h2>
-          <p style={{ margin:"4px 0 0", color:T.textMut, fontSize:13 }}>{isEdit ? "Update project details" : "Record a new transaction"}</p>
+          <h2 style={{ margin:0, color:T.textPri, fontSize:"1.1rem", fontWeight:700 }}>
+            {isEdit ? "Edit Entry" : "New Entry"}
+          </h2>
+          <p style={{ margin:"4px 0 0", color:T.textMut, fontSize:13 }}>
+            {isEdit ? "Update transaction details" : `Record a new ${isWeb3?"transaction":"project"}`}
+          </p>
         </div>
         <button onClick={onClose} style={{ background:T.btnGhost, border:`1px solid ${T.border}`,
           borderRadius:8, padding:6, cursor:"pointer", color:T.textMut, display:"flex" }}>
           <X size={16} />
         </button>
       </div>
+
       <div style={{ display:"grid", gap:"1.1rem" }}>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"1rem" }}>
           <Field label="Date" type="date" value={form.date} onChange={set("date")} T={T} />
-          <SelectF label="Given To" value={form.givenTo} onChange={set("givenTo")} options={Object.keys(CATEGORIES)} T={T} />
+          <SelectF label="Category" value={form.givenTo} onChange={set("givenTo")} options={Object.keys(CATEGORIES)} T={T} />
         </div>
-        <Field label="Project Name" value={form.project} onChange={set("project")} placeholder="e.g. Brand Identity — Client Name" T={T} />
+
+        <Field label={labels.project} value={form.project} onChange={set("project")}
+          placeholder={isWeb3 ? "e.g. ETH transfer to exchange" : "e.g. Brand Identity — Client Name"} T={T} />
+
+        {/* Web3: wallet fields */}
+        {isWeb3 && (
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"1rem" }}>
+            <Field label="Wallet Address (optional)" value={form.walletAddress??""} onChange={set("walletAddress")}
+              placeholder="0x..." T={T} mono />
+            <Field label="Wallet Name (optional)" value={form.walletName??""} onChange={set("walletName")}
+              placeholder="e.g. Main Wallet" T={T} />
+          </div>
+        )}
+
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"0.75rem" }}>
-          <Field label="Earned ($)" type="number" value={form.earned} onChange={set("earned")} placeholder="0" T={T} />
-          <Field label="Saved ($)"  type="number" value={form.saved}  onChange={set("saved")}  placeholder="0" T={T} />
-          <Field label="Given ($)"  type="number" value={form.given}  onChange={set("given")}  placeholder="0" T={T} />
+          <Field label={labels.earned} type="number" value={form.earned} onChange={set("earned")} placeholder="0" T={T} />
+          <Field label={labels.saved}  type="number" value={form.saved}  onChange={set("saved")}  placeholder="0" T={T} />
+          <Field label={labels.given}  type="number" value={form.given}  onChange={set("given")}  placeholder="0" T={T} />
         </div>
       </div>
+
       {hasEarned && (
         <div style={{ marginTop:"1.25rem", display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0.75rem" }}>
           {[
-            { label:"Save Rate", val:pct(+form.saved, +form.earned)+"%", color:T.primary },
-            { label:"Give Rate", val:pct(+form.given, +form.earned)+"%", color:T.rose },
+            { label: isWeb3 ? "Stake Rate" : "Save Rate", val:pct(+form.saved,+form.earned)+"%", color:T.primary },
+            { label: isWeb3 ? "Send Rate"  : "Give Rate", val:pct(+form.given,+form.earned)+"%", color:T.rose },
           ].map(r => (
             <div key={r.label} style={{ background:T.tagBg, borderRadius:10, padding:"10px 14px", border:`1px solid ${r.color}22` }}>
               <div style={{ fontSize:10, color:T.textMut, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.08em" }}>{r.label}</div>
@@ -378,6 +417,7 @@ function EntryModal({ initial, onSave, onClose, T }: {
           ))}
         </div>
       )}
+
       <div style={{ display:"flex", justifyContent:"flex-end", gap:"0.75rem", marginTop:"1.75rem",
         paddingTop:"1.5rem", borderTop:`1px solid ${T.border}` }}>
         <button onClick={onClose} style={{ background:T.btnGhost, border:`1px solid ${T.border}`,
@@ -385,7 +425,7 @@ function EntryModal({ initial, onSave, onClose, T }: {
           Cancel
         </button>
         <button onClick={submit} style={{ background:`linear-gradient(135deg, ${T.primary}, ${T.primary}cc)`,
-          border:"none", borderRadius:10, padding:"0.6rem 1.4rem", color: T === DARK ? "#021a14" : "#fff",
+          border:"none", borderRadius:10, padding:"0.6rem 1.4rem", color:T===DARK?"#021a14":"#fff",
           fontSize:14, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:7, fontFamily:"inherit" }}>
           <CheckCircle size={15} /> {isEdit ? "Update" : "Save Entry"}
         </button>
@@ -394,10 +434,10 @@ function EntryModal({ initial, onSave, onClose, T }: {
   );
 }
 
-/* ─── DELETE MODAL ────────────────────────────────────────────────────── */
+/* ─── DELETE MODAL ──────────────────────────────────────────────────── */
 
 function DeleteModal({ entry, onConfirm, onClose, T }: {
-  entry: Entry; onConfirm: () => void; onClose: () => void; T: typeof DARK;
+  entry:Entry; onConfirm:()=>void; onClose:()=>void; T:typeof DARK;
 }) {
   return (
     <Modal onClose={onClose} width={400} T={T}>
@@ -426,7 +466,7 @@ function DeleteModal({ entry, onConfirm, onClose, T }: {
   );
 }
 
-/* ─── GOOGLE SHEETS HOOK ──────────────────────────────────────────────── */
+/* ─── GOOGLE SHEETS HOOK ────────────────────────────────────────────── */
 
 const SCOPES = "https://www.googleapis.com/auth/spreadsheets";
 
@@ -435,24 +475,24 @@ function useGSheets() {
   const [sheetUrl, setSheetUrl] = useState<string|null>(null);
   const [errMsg, setErrMsg]     = useState<string|null>(null);
   const tokenRef  = useRef<string|null>(null);
-  const clientRef = useRef<{ requestAccessToken: () => void }|null>(null);
+  const clientRef = useRef<{ requestAccessToken:()=>void }|null>(null);
 
-  const loadGIS = () => new Promise<void>((res, rej) => {
-    if ((window as unknown as { google?: unknown }).google) { res(); return; }
+  const loadGIS = () => new Promise<void>((res,rej) => {
+    if ((window as unknown as { google?:unknown }).google) { res(); return; }
     const s = document.createElement("script");
     s.src = "https://accounts.google.com/gsi/client";
     s.onload = () => res(); s.onerror = () => rej();
     document.head.appendChild(s);
   });
 
-  const authorize = useCallback(async (clientId: string) => {
+  const authorize = useCallback(async (clientId:string) => {
     try {
       setStatus("loading"); setErrMsg(null);
       await loadGIS();
-      const google = (window as unknown as { google: { accounts: { oauth2: { initTokenClient: (opts: unknown) => { requestAccessToken: () => void } } } } }).google;
+      const google = (window as unknown as { google:{ accounts:{ oauth2:{ initTokenClient:(opts:unknown)=>{ requestAccessToken:()=>void } } } } }).google;
       clientRef.current = google.accounts.oauth2.initTokenClient({
         client_id: clientId, scope: SCOPES,
-        callback: (resp: { error?: string; access_token?: string }) => {
+        callback: (resp:{ error?:string; access_token?:string }) => {
           if (resp.error) { setStatus("error"); setErrMsg(resp.error); return; }
           tokenRef.current = resp.access_token || null;
           setStatus("authed");
@@ -462,13 +502,13 @@ function useGSheets() {
     } catch(e) { setStatus("error"); setErrMsg(String(e)); }
   }, []);
 
-  const pushToSheets = useCallback(async (entries: Entry[], goal: number) => {
+  const pushToSheets = useCallback(async (entries:Entry[], goal:number) => {
     if (!tokenRef.current) return;
     setStatus("exporting");
     try {
-      const strCell = (s: string | number) => ({ userEnteredValue:{ stringValue: String(s) } });
-      const numCell = (n: number) => ({ userEnteredValue:{ numberValue: n }, userEnteredFormat:{ numberFormat:{ type:"CURRENCY", pattern:"$#,##0" } } });
-      const boldRow = (vals: string[]) => ({ values: vals.map(v => ({ ...strCell(v), userEnteredFormat:{ textFormat:{ bold:true } } })) });
+      const strCell = (s:string|number) => ({ userEnteredValue:{ stringValue:String(s) } });
+      const numCell = (n:number) => ({ userEnteredValue:{ numberValue:n }, userEnteredFormat:{ numberFormat:{ type:"CURRENCY", pattern:"$#,##0" } } });
+      const boldRow = (vals:string[]) => ({ values: vals.map(v => ({ ...strCell(v), userEnteredFormat:{ textFormat:{ bold:true } } })) });
       const sorted = [...entries].sort((a,b) => new Date(a.date).getTime()-new Date(b.date).getTime());
       const totE = entries.reduce((s,e)=>s+e.earned,0);
       const totS = entries.reduce((s,e)=>s+e.saved,0);
@@ -480,14 +520,19 @@ function useGSheets() {
           properties:{ title:`Finance Dashboard — ${new Date().toLocaleDateString("en-US",{month:"long",year:"numeric"})}` },
           sheets:[{ properties:{ title:"Transactions", sheetId:0 },
             data:[{ rowData:[
-              boldRow(["Date","Project","Earned ($)","Saved ($)","Given ($)","Given To"]),
-              ...sorted.map(e => ({ values:[strCell(e.date),strCell(e.project),numCell(e.earned),numCell(e.saved),numCell(e.given),strCell(e.givenTo)] })),
+              boldRow(["Date","Project/Description","Earned/Received","Saved/Staked","Given/Sent","Category","Wallet Address","Wallet Name"]),
+              ...sorted.map(e => ({ values:[
+                strCell(e.date), strCell(e.project),
+                numCell(e.earned), numCell(e.saved), numCell(e.given),
+                strCell(e.givenTo),
+                strCell(e.walletAddress||""), strCell(e.walletName||""),
+              ]})),
               { values:[] },
               boldRow(["Summary",""]),
-              { values:[strCell("Total Earned"), numCell(totE)] },
-              { values:[strCell("Total Saved"),  numCell(totS)] },
-              { values:[strCell("Total Given"),  numCell(totG)] },
-              { values:[strCell("Yearly Goal"),  numCell(goal)] },
+              { values:[strCell("Total Earned/Assets"), numCell(totE)] },
+              { values:[strCell("Total Saved/Staked"),  numCell(totS)] },
+              { values:[strCell("Total Given/Sent"),    numCell(totG)] },
+              { values:[strCell("Yearly Goal"),          numCell(goal)] },
             ]}],
           }],
         }),
@@ -502,21 +547,21 @@ function useGSheets() {
   return { status, sheetUrl, errMsg, authorize, pushToSheets, reset };
 }
 
-/* ─── EXPORT MODAL ────────────────────────────────────────────────────── */
+/* ─── EXPORT MODAL ──────────────────────────────────────────────────── */
 
 function ExportModal({ entries, goal, onClose, onCsv, T }: {
-  entries: Entry[]; goal: number; onClose: () => void; onCsv: () => void; T: typeof DARK;
+  entries:Entry[]; goal:number; onClose:()=>void; onCsv:()=>void; T:typeof DARK;
 }) {
   const { status, sheetUrl, errMsg, authorize, pushToSheets, reset } = useGSheets();
-  const [clientId, setClientId] = useState(() => { try { return localStorage.getItem("goog_cid") || ""; } catch { return ""; } });
+  const [clientId, setClientId] = useState(() => { try { return localStorage.getItem("goog_cid")||""; } catch { return ""; } });
   const [view, setView] = useState<"choose"|"sheets">("choose");
-  useEffect(() => { if (status === "authed") pushToSheets(entries, goal); }, [status, entries, goal, pushToSheets]);
+  useEffect(() => { if (status==="authed") pushToSheets(entries,goal); }, [status,entries,goal,pushToSheets]);
   const handleConnect = () => {
     if (!clientId.trim()) return;
-    try { localStorage.setItem("goog_cid", clientId); } catch {}
+    try { localStorage.setItem("goog_cid",clientId); } catch {}
     authorize(clientId);
   };
-  const isLoading = status === "loading" || status === "authed" || status === "exporting";
+  const isLoading = status==="loading"||status==="authed"||status==="exporting";
 
   return (
     <Modal onClose={onClose} width={460} T={T}>
@@ -530,18 +575,19 @@ function ExportModal({ entries, goal, onClose, onCsv, T }: {
           <X size={16} />
         </button>
       </div>
-      {view === "choose" && (
+
+      {view==="choose" && (
         <div style={{ display:"grid", gap:"0.75rem" }}>
           {[
-            { label:"Download as CSV", sub:"Works with Excel, Numbers & Google Sheets", icon:FileText, color:T.amber, action:() => { onCsv(); onClose(); } },
-            { label:"Push to Google Sheets", sub:"Creates a formatted sheet in your Drive via OAuth", icon:FileSpreadsheet, color:T.primary, action:() => setView("sheets") },
+            { label:"Download as CSV", sub:"Works with Excel, Numbers & Google Sheets", icon:FileText, color:T.amber, action:()=>{ onCsv(); onClose(); } },
+            { label:"Push to Google Sheets", sub:"Creates a formatted sheet in your Drive via OAuth", icon:FileSpreadsheet, color:T.primary, action:()=>setView("sheets") },
           ].map(btn => (
             <button key={btn.label} onClick={btn.action}
               style={{ display:"flex", alignItems:"center", gap:"1rem", width:"100%", textAlign:"left",
                 background:T.btnGhost, border:`1px solid ${T.border}`,
                 borderRadius:14, padding:"1.1rem 1.25rem", cursor:"pointer", transition:"all 0.2s", fontFamily:"inherit" }}
-              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = btn.color+"55"; (e.currentTarget as HTMLButtonElement).style.background = `${btn.color}0a`; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = T.border; (e.currentTarget as HTMLButtonElement).style.background = T.btnGhost; }}>
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor=btn.color+"55"; (e.currentTarget as HTMLButtonElement).style.background=`${btn.color}0a`; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor=T.border; (e.currentTarget as HTMLButtonElement).style.background=T.btnGhost; }}>
               <div style={{ width:44, height:44, borderRadius:12, background:`${btn.color}18`, border:`1px solid ${btn.color}30`,
                 display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
                 <btn.icon size={20} style={{ color:btn.color }} />
@@ -554,14 +600,15 @@ function ExportModal({ entries, goal, onClose, onCsv, T }: {
           ))}
         </div>
       )}
-      {view === "sheets" && (
+
+      {view==="sheets" && (
         <div>
           <button onClick={() => { setView("choose"); reset(); }}
             style={{ background:"none", border:"none", color:T.textMut, fontSize:13,
               cursor:"pointer", display:"flex", alignItems:"center", gap:5, marginBottom:"1.25rem", padding:0, fontFamily:"inherit" }}>
             ← Back
           </button>
-          {(status === "idle" || status === "error") && (
+          {(status==="idle"||status==="error") && (
             <div>
               <div style={{ background:`${T.violet}0d`, border:`1px solid ${T.violet}30`, borderRadius:12, padding:"1rem", marginBottom:"1.25rem" }}>
                 <div style={{ display:"flex", gap:8, alignItems:"flex-start" }}>
@@ -576,10 +623,10 @@ function ExportModal({ entries, goal, onClose, onCsv, T }: {
               </div>
               <Field label="Google OAuth Client ID" value={clientId}
                 onChange={e => setClientId(e.target.value)} placeholder="xxxx.apps.googleusercontent.com" T={T} />
-              {status === "error" && <p style={{ color:T.rose, fontSize:12, marginTop:8 }}>Error: {errMsg}</p>}
+              {status==="error" && <p style={{ color:T.rose, fontSize:12, marginTop:8 }}>Error: {errMsg}</p>}
               <button onClick={handleConnect} disabled={!clientId.trim()}
                 style={{ width:"100%", marginTop:"1rem", background:`linear-gradient(135deg, ${T.primary}, ${T.primary}cc)`,
-                  border:"none", borderRadius:10, padding:"0.7rem", color: T === DARK ? "#021a14" : "#fff",
+                  border:"none", borderRadius:10, padding:"0.7rem", color:T===DARK?"#021a14":"#fff",
                   fontSize:14, fontWeight:700, cursor:clientId.trim()?"pointer":"not-allowed",
                   opacity:clientId.trim()?1:0.5, display:"flex", alignItems:"center", justifyContent:"center", gap:8, fontFamily:"inherit" }}>
                 <Link size={15} /> Connect & Export
@@ -592,11 +639,11 @@ function ExportModal({ entries, goal, onClose, onCsv, T }: {
                 border:`2px solid ${T.primary}`, borderTopColor:"transparent",
                 animation:"spin 0.8s linear infinite", margin:"0 auto 1rem" }} />
               <div style={{ color:T.textSec, fontSize:14 }}>
-                {status === "loading" ? "Connecting to Google…" : "Creating your spreadsheet…"}
+                {status==="loading"?"Connecting to Google…":"Creating your spreadsheet…"}
               </div>
             </div>
           )}
-          {status === "done" && (
+          {status==="done" && (
             <div style={{ textAlign:"center", padding:"1rem 0.5rem" }}>
               <div style={{ width:56, height:56, borderRadius:"50%", background:`${T.primary}18`,
                 border:`1px solid ${T.primary}33`, display:"flex", alignItems:"center",
@@ -608,7 +655,7 @@ function ExportModal({ entries, goal, onClose, onCsv, T }: {
               <a href={sheetUrl!} target="_blank" rel="noreferrer"
                 style={{ display:"inline-flex", alignItems:"center", gap:7,
                   background:`linear-gradient(135deg, ${T.primary}, ${T.primary}cc)`,
-                  borderRadius:10, padding:"0.65rem 1.4rem", color: T === DARK ? "#021a14" : "#fff",
+                  borderRadius:10, padding:"0.65rem 1.4rem", color:T===DARK?"#021a14":"#fff",
                   fontSize:14, fontWeight:700, textDecoration:"none" }}>
                 <ExternalLink size={15} /> Open in Google Sheets
               </a>
@@ -620,15 +667,17 @@ function ExportModal({ entries, goal, onClose, onCsv, T }: {
   );
 }
 
-/* ─── GOAL BAR ────────────────────────────────────────────────────────── */
+/* ─── GOAL BAR ──────────────────────────────────────────────────────── */
 
-function GoalBar({ goal, setGoal, totalEarned, T }: {
-  goal: number; setGoal: (n: number) => void; totalEarned: number; T: typeof DARK;
+function GoalBar({ goal, setGoal, totalEarned, T, isWeb3 }: {
+  goal:number; setGoal:(n:number)=>void; totalEarned:number; T:typeof DARK; isWeb3:boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [input, setInput]     = useState("");
-  const progress  = clamp((totalEarned / goal) * 100, 0, 100);
-  const remaining = Math.max(goal - totalEarned, 0);
+  const progress  = clamp((totalEarned/goal)*100, 0, 100);
+  const remaining = Math.max(goal-totalEarned, 0);
+  const goalLabel = isWeb3 ? "Portfolio Growth Goal" : "Yearly Earnings Goal";
+
   return (
     <div style={{ ...glassCard(T, { padding:"1.5rem 2rem", position:"relative", overflow:"hidden" }) }}>
       <div style={{ position:"absolute", inset:0, pointerEvents:"none",
@@ -636,7 +685,7 @@ function GoalBar({ goal, setGoal, totalEarned, T }: {
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"1.25rem", flexWrap:"wrap", gap:"0.75rem" }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <Target size={15} style={{ color:T.amber }} />
-          <span style={{ color:T.textPri, fontWeight:600, fontSize:14 }}>Yearly Earnings Goal</span>
+          <span style={{ color:T.textPri, fontWeight:600, fontSize:14 }}>{goalLabel}</span>
           <span style={{ fontFamily:"'DM Mono','Fira Mono',monospace", fontSize:12, color:T.textMut,
             background:T.tagBg, padding:"2px 10px", borderRadius:999 }}>
             {progress.toFixed(1)}%
@@ -663,14 +712,16 @@ function GoalBar({ goal, setGoal, totalEarned, T }: {
           </button>
         )}
       </div>
-      <div style={{ height:8, borderRadius:999, background: T === DARK ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.08)", overflow:"hidden", marginBottom:"0.75rem" }}>
+      <div style={{ height:8, borderRadius:999, background:T===DARK?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.08)", overflow:"hidden", marginBottom:"0.75rem" }}>
         <div style={{ height:"100%", width:`${progress}%`,
           background:`linear-gradient(90deg, #d97706, ${T.amber})`,
           borderRadius:999, transition:"width 0.9s cubic-bezier(0.22,1,0.36,1)" }} />
       </div>
       <div style={{ display:"flex", justifyContent:"space-between", flexWrap:"wrap", gap:"0.5rem" }}>
-        <span style={{ fontSize:12, color:T.textMut }}>Earned: <strong style={{ color:T.textSec }}>{fmt(totalEarned)}</strong></span>
-        {remaining > 0
+        <span style={{ fontSize:12, color:T.textMut }}>
+          {isWeb3 ? "Assets" : "Earned"}: <strong style={{ color:T.textSec }}>{fmt(totalEarned)}</strong>
+        </span>
+        {remaining>0
           ? <span style={{ fontSize:12, color:T.textMut }}>{fmt(remaining)} remaining · Goal: <strong style={{ color:T.amber }}>{fmt(goal)}</strong></span>
           : <span style={{ fontSize:12, color:T.primary, fontWeight:600 }}>Goal reached! 🎉</span>}
       </div>
@@ -678,80 +729,69 @@ function GoalBar({ goal, setGoal, totalEarned, T }: {
   );
 }
 
-/* ─── MONTHLY CHART (multi-type) ──────────────────────────────────────── */
+/* ─── MONTHLY CHART ─────────────────────────────────────────────────── */
 
-function MonthlyChart({ data, T }: {
-  data: { month: string; earned: number; saved: number; given: number }[];
-  T: typeof DARK;
+function MonthlyChart({ data, T, isWeb3 }: {
+  data:{ month:string; earned:number; saved:number; given:number }[];
+  T:typeof DARK; isWeb3:boolean;
 }) {
   const [chartType, setChartType] = useState<ChartType>("bar");
 
   const legend = [
-    { c: T.primary, l: "Earned" },
-    { c: T.blue,    l: "Saved"  },
-    { c: T.rose,    l: "Given"  },
+    { c:T.primary, l: isWeb3 ? "Received" : "Earned" },
+    { c:T.blue,    l: isWeb3 ? "Staked"   : "Saved"  },
+    { c:T.rose,    l: isWeb3 ? "Sent"     : "Given"  },
   ];
 
   const pieData = [
-    { name: "Earned", value: data.reduce((s,d) => s+d.earned, 0) },
-    { name: "Saved",  value: data.reduce((s,d) => s+d.saved,  0) },
-    { name: "Given",  value: data.reduce((s,d) => s+d.given,  0) },
+    { name: isWeb3?"Received":"Earned", value: data.reduce((s,d)=>s+d.earned,0) },
+    { name: isWeb3?"Staked":"Saved",    value: data.reduce((s,d)=>s+d.saved,0)  },
+    { name: isWeb3?"Sent":"Given",      value: data.reduce((s,d)=>s+d.given,0)  },
   ];
-
   const pieColors = [T.primary, T.blue, T.rose];
-
-  const axisStyle = { fill: T.textMut, fontSize: 10 };
+  const axisStyle = { fill:T.textMut, fontSize:10 };
   const gridStroke = T.chartGrid;
 
-  const renderPieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: {
-    cx: number; cy: number; midAngle?: number; innerRadius: number;
-    outerRadius: number; percent?: number;
+  const renderPieLabel = ({ cx,cy,midAngle,innerRadius,outerRadius,percent }: {
+    cx:number; cy:number; midAngle?:number; innerRadius:number; outerRadius:number; percent?:number;
   }) => {
-    if (!midAngle || !percent) return null;
-    const RADIAN = Math.PI / 180;
-    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-    const x = cx + radius * Math.cos(-midAngle * RADIAN);
-    const y = cy + radius * Math.sin(-midAngle * RADIAN);
-    if (percent < 0.05) return null;
-    return (
-      <text x={x} y={y} fill="#fff" textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight={600}>
-        {`${(percent * 100).toFixed(0)}%`}
-      </text>
-    );
+    if (!midAngle||!percent||percent<0.05) return null;
+    const RADIAN = Math.PI/180;
+    const radius = innerRadius+(outerRadius-innerRadius)*0.5;
+    const x = cx+radius*Math.cos(-midAngle*RADIAN);
+    const y = cy+radius*Math.sin(-midAngle*RADIAN);
+    return <text x={x} y={y} fill="#fff" textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight={600}>{`${(percent*100).toFixed(0)}%`}</text>;
   };
 
   return (
     <div style={{ ...glassCard(T, { padding:"1.5rem" }) }}>
-      {/* Header */}
       <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:"1rem", flexWrap:"wrap", gap:"0.75rem" }}>
         <div>
           <div style={{ fontSize:14, fontWeight:700, color:T.textPri }}>Monthly Breakdown</div>
-          <div style={{ fontSize:12, color:T.textMut, marginTop:3 }}>Earned · Saved · Given</div>
+          <div style={{ fontSize:12, color:T.textMut, marginTop:3 }}>
+            {isWeb3 ? "Received · Staked · Sent" : "Earned · Saved · Given"}
+          </div>
         </div>
-        {/* Chart type switcher */}
-        <div style={{ display:"flex", gap:4, background: T === DARK ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
+        <div style={{ display:"flex", gap:4, background:T===DARK?"rgba(255,255,255,0.05)":"rgba(0,0,0,0.05)",
           borderRadius:10, padding:4, border:`1px solid ${T.border}` }}>
           {CHART_TYPES.map(ct => {
-            const active = chartType === ct.id;
+            const active = chartType===ct.id;
             return (
               <button key={ct.id} title={ct.label} onClick={() => setChartType(ct.id)}
                 style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 10px",
                   borderRadius:7, border:"none", cursor:"pointer", fontFamily:"inherit",
                   fontSize:11, fontWeight:600, transition:"all 0.18s",
-                  background: active ? T.primary : "transparent",
-                  color: active ? (T === DARK ? "#021a14" : "#fff") : T.textMut,
-                  boxShadow: active ? `0 2px 8px ${T.primary}44` : "none",
-                }}>
-                <ct.icon size={12} />
-                {ct.label}
+                  background: active?T.primary:"transparent",
+                  color: active?(T===DARK?"#021a14":"#fff"):T.textMut,
+                  boxShadow: active?`0 2px 8px ${T.primary}44`:"none" }}>
+                <ct.icon size={12} />{ct.label}
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Legend (hidden for pie/radar since they have their own) */}
-      {(chartType === "bar" || chartType === "line") && (
+      {(chartType==="bar"||chartType==="line") && (
         <div style={{ display:"flex", gap:"0.85rem", marginBottom:"0.75rem" }}>
           {legend.map(x => (
             <div key={x.l} style={{ display:"flex", alignItems:"center", gap:5 }}>
@@ -762,77 +802,68 @@ function MonthlyChart({ data, T }: {
         </div>
       )}
 
-      {/* Bar chart */}
-      {chartType === "bar" && (
+      {chartType==="bar" && (
         <ResponsiveContainer width="100%" height={230}>
           <BarChart data={data} barCategoryGap="32%" barGap={2}>
             <CartesianGrid strokeDasharray="2 4" stroke={gridStroke} vertical={false} />
             <XAxis dataKey="month" tick={axisStyle} axisLine={false} tickLine={false} />
-            <YAxis tick={axisStyle} axisLine={false} tickLine={false}
-              tickFormatter={v=>`$${(v/1000).toFixed(0)}k`} width={36} />
+            <YAxis tick={axisStyle} axisLine={false} tickLine={false} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`} width={36} />
             <Tooltip content={<ChartTip T={T} />} />
-            <Bar dataKey="earned" name="Earned" fill={T.primary} radius={[4,4,0,0]} opacity={0.9} />
-            <Bar dataKey="saved"  name="Saved"  fill={T.blue}    radius={[4,4,0,0]} opacity={0.9} />
-            <Bar dataKey="given"  name="Given"  fill={T.rose}    radius={[4,4,0,0]} opacity={0.9} />
+            <Bar dataKey="earned" name={legend[0].l} fill={T.primary} radius={[4,4,0,0]} opacity={0.9} />
+            <Bar dataKey="saved"  name={legend[1].l} fill={T.blue}    radius={[4,4,0,0]} opacity={0.9} />
+            <Bar dataKey="given"  name={legend[2].l} fill={T.rose}    radius={[4,4,0,0]} opacity={0.9} />
           </BarChart>
         </ResponsiveContainer>
       )}
 
-      {/* Line chart */}
-      {chartType === "line" && (
+      {chartType==="line" && (
         <ResponsiveContainer width="100%" height={230}>
           <LineChart data={data}>
             <CartesianGrid strokeDasharray="2 4" stroke={gridStroke} vertical={false} />
             <XAxis dataKey="month" tick={axisStyle} axisLine={false} tickLine={false} />
-            <YAxis tick={axisStyle} axisLine={false} tickLine={false}
-              tickFormatter={v=>`$${(v/1000).toFixed(0)}k`} width={36} />
+            <YAxis tick={axisStyle} axisLine={false} tickLine={false} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`} width={36} />
             <Tooltip content={<ChartTip T={T} />} />
-            <Line type="monotone" dataKey="earned" name="Earned" stroke={T.primary} strokeWidth={2.5} dot={{ r:3, fill:T.primary, strokeWidth:0 }} activeDot={{ r:5 }} />
-            <Line type="monotone" dataKey="saved"  name="Saved"  stroke={T.blue}    strokeWidth={2.5} dot={{ r:3, fill:T.blue,    strokeWidth:0 }} activeDot={{ r:5 }} />
-            <Line type="monotone" dataKey="given"  name="Given"  stroke={T.rose}    strokeWidth={2.5} dot={{ r:3, fill:T.rose,    strokeWidth:0 }} activeDot={{ r:5 }} />
+            <Line type="monotone" dataKey="earned" name={legend[0].l} stroke={T.primary} strokeWidth={2.5} dot={{ r:3, fill:T.primary, strokeWidth:0 }} activeDot={{ r:5 }} />
+            <Line type="monotone" dataKey="saved"  name={legend[1].l} stroke={T.blue}    strokeWidth={2.5} dot={{ r:3, fill:T.blue,    strokeWidth:0 }} activeDot={{ r:5 }} />
+            <Line type="monotone" dataKey="given"  name={legend[2].l} stroke={T.rose}    strokeWidth={2.5} dot={{ r:3, fill:T.rose,    strokeWidth:0 }} activeDot={{ r:5 }} />
           </LineChart>
         </ResponsiveContainer>
       )}
 
-      {/* Pie chart */}
-      {chartType === "pie" && (
+      {chartType==="pie" && (
         <ResponsiveContainer width="100%" height={230}>
           <PieChart>
             <Pie data={pieData} cx="50%" cy="50%" outerRadius={90} innerRadius={45}
               dataKey="value" labelLine={false} label={renderPieLabel}>
-              {pieData.map((_, i) => (
-                <Cell key={i} fill={pieColors[i % pieColors.length]} />
-              ))}
+              {pieData.map((_,i) => <Cell key={i} fill={pieColors[i%pieColors.length]} />)}
             </Pie>
-            <Tooltip formatter={(v: number | undefined) => v !== undefined ? fmt(v) : ''} contentStyle={{
-              background: T.tooltipBg, border:`1px solid ${T.border}`, borderRadius:10, fontSize:12, color:T.textPri
+            <Tooltip formatter={(v) => typeof v === 'number' ? fmt(v) : ""} contentStyle={{
+              background:T.tooltipBg, border:`1px solid ${T.border}`, borderRadius:10, fontSize:12, color:T.textPri
             }} />
           </PieChart>
         </ResponsiveContainer>
       )}
 
-      {/* Radar chart */}
-      {chartType === "radar" && (
+      {chartType==="radar" && (
         <ResponsiveContainer width="100%" height={230}>
-          <RadarChart data={data.filter(d => d.earned > 0 || d.saved > 0 || d.given > 0)}>
+          <RadarChart data={data.filter(d=>d.earned>0||d.saved>0||d.given>0)}>
             <PolarGrid stroke={gridStroke} />
             <PolarAngleAxis dataKey="month" tick={{ fill:T.textMut, fontSize:10 }} />
             <PolarRadiusAxis tick={{ fill:T.textMut, fontSize:9 }} axisLine={false}
-              tickFormatter={(v: number)=>`$${(v/1000).toFixed(0)}k`} />
-            <Radar name="Earned" dataKey="earned" stroke={T.primary} fill={T.primary} fillOpacity={0.25} />
-            <Radar name="Saved"  dataKey="saved"  stroke={T.blue}    fill={T.blue}    fillOpacity={0.2}  />
-            <Radar name="Given"  dataKey="given"  stroke={T.rose}    fill={T.rose}    fillOpacity={0.2}  />
-            <Tooltip formatter={(v: number) => fmt(v)} contentStyle={{
+              tickFormatter={(v:number)=>`$${(v/1000).toFixed(0)}k`} />
+            <Radar name={legend[0].l} dataKey="earned" stroke={T.primary} fill={T.primary} fillOpacity={0.25} />
+            <Radar name={legend[1].l} dataKey="saved"  stroke={T.blue}    fill={T.blue}    fillOpacity={0.2}  />
+            <Radar name={legend[2].l} dataKey="given"  stroke={T.rose}    fill={T.rose}    fillOpacity={0.2}  />
+            <Tooltip formatter={(v) => typeof v === 'number' ? fmt(v) : ""} contentStyle={{
               background:T.tooltipBg, border:`1px solid ${T.border}`, borderRadius:10, fontSize:12, color:T.textPri
             }} />
           </RadarChart>
         </ResponsiveContainer>
       )}
 
-      {/* Pie/Radar legend */}
-      {(chartType === "pie" || chartType === "radar") && (
+      {(chartType==="pie"||chartType==="radar") && (
         <div style={{ display:"flex", justifyContent:"center", gap:"1.25rem", marginTop:"0.75rem" }}>
-          {(chartType === "pie" ? pieData.map((d,i) => ({ l:d.name, c:pieColors[i] })) : legend.map(l => ({ l:l.l, c:l.c }))).map(x => (
+          {(chartType==="pie"?pieData.map((d,i)=>({l:d.name,c:pieColors[i]})):legend.map(l=>({l:l.l,c:l.c}))).map(x => (
             <div key={x.l} style={{ display:"flex", alignItems:"center", gap:5 }}>
               <div style={{ width:10, height:10, borderRadius:"50%", background:x.c }} />
               <span style={{ fontSize:11, color:T.textMut, fontWeight:600 }}>{x.l}</span>
@@ -844,103 +875,136 @@ function MonthlyChart({ data, T }: {
   );
 }
 
-/* ─── TABLE ROW ───────────────────────────────────────────────────────── */
+/* ─── ICON BUTTON ───────────────────────────────────────────────────── */
 
-function TableRow({ entry, index, onEdit, onDelete, T }: {
-  entry: Entry; index: number; onEdit: () => void; onDelete: () => void; T: typeof DARK;
-}) {
-  const [hov, setHov] = useState(false);
-  return (
-    <tr onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      style={{ borderBottom:`1px solid ${T.border}`,
-        background: hov ? T.tableHov : index%2===0 ? T.tableRow : "transparent",
-        transition:"background 0.15s" }}>
-      <td style={{ padding:"0.9rem 1.25rem", fontSize:12, color:T.textMut,
-        fontFamily:"'DM Mono','Fira Mono',monospace", whiteSpace:"nowrap" }}>{entry.date}</td>
-      <td style={{ padding:"0.9rem 1.25rem", fontSize:13, color:T.textPri, fontWeight:500,
-        maxWidth:240, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{entry.project}</td>
-      <td style={{ padding:"0.9rem 1.25rem", textAlign:"right", fontFamily:"'DM Mono','Fira Mono',monospace",
-        fontSize:13, fontWeight:600, color:T.primary, whiteSpace:"nowrap" }}>{fmt(entry.earned)}</td>
-      <td style={{ padding:"0.9rem 1.25rem", textAlign:"right", fontFamily:"'DM Mono','Fira Mono',monospace",
-        fontSize:13, color: T === DARK ? "#93c5fd" : T.blue, whiteSpace:"nowrap" }}>{fmt(entry.saved)}</td>
-      <td style={{ padding:"0.9rem 1.25rem", textAlign:"right", fontFamily:"'DM Mono','Fira Mono',monospace",
-        fontSize:13, color: T === DARK ? "#fda4af" : T.rose, whiteSpace:"nowrap" }}>{fmt(entry.given)}</td>
-      <td style={{ padding:"0.9rem 1.25rem" }}><Pill cat={entry.givenTo} /></td>
-      <td style={{ padding:"0.9rem 1.25rem" }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
-          {[
-            { I: Edit2,  c: T.blue, fn: onEdit,   t: "Edit"   },
-            { I: Trash2, c: T.rose, fn: onDelete,  t: "Delete" },
-          ].map(b => (
-            <IBtn key={b.t} icon={b.I} color={b.c} onClick={b.fn} title={b.t} T={T} />
-          ))}
-        </div>
-      </td>
-    </tr>
-  );
-}
-
-function IBtn({ icon: Icon, color, onClick, title }: {
-  icon: React.ElementType; color: string; onClick: () => void; title: string; T: typeof DARK;
+function IBtn({ icon:Icon, color, onClick, title, T }: {
+  icon:React.ElementType; color:string; onClick:()=>void; title:string; T:typeof DARK;
 }) {
   const [h, setH] = useState(false);
   return (
     <button title={title} onClick={onClick}
       onMouseEnter={() => setH(true)} onMouseLeave={() => setH(false)}
-      style={{ background: h ? `${color}22` : `${color}0f`,
-        border:`1px solid ${h ? color+"55" : color+"22"}`,
+      style={{ background:h?`${color}22`:`${color}0f`,
+        border:`1px solid ${h?color+"55":color+"22"}`,
         borderRadius:8, padding:"5px 8px", cursor:"pointer", color, display:"flex", transition:"all 0.15s" }}>
       <Icon size={13} />
     </button>
   );
 }
 
-/* ─── HEADER BTN ──────────────────────────────────────────────────────── */
+/* ─── TABLE ROW ─────────────────────────────────────────────────────── */
 
-function HeaderBtn({ onClick, label, icon: Icon, T }: {
-  onClick: () => void; label: string; icon: React.ElementType; T: typeof DARK;
+function TableRow({ entry, index, onEdit, onDelete, T, isWeb3 }: {
+  entry:Entry; index:number; onEdit:()=>void; onDelete:()=>void; T:typeof DARK; isWeb3:boolean;
+}) {
+  const [hov, setHov] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copyAddress = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!entry.walletAddress) return;
+    navigator.clipboard.writeText(entry.walletAddress).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {});
+  };
+
+  return (
+    <tr onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      style={{ borderBottom:`1px solid ${T.border}`,
+        background: hov?T.tableHov:index%2===0?T.tableRow:"transparent",
+        transition:"background 0.15s" }}>
+      <td style={{ padding:"0.9rem 1.25rem", fontSize:12, color:T.textMut,
+        fontFamily:"'DM Mono','Fira Mono',monospace", whiteSpace:"nowrap" }}>{entry.date}</td>
+      <td style={{ padding:"0.9rem 1.25rem", fontSize:13, color:T.textPri, fontWeight:500,
+        maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{entry.project}</td>
+      {isWeb3 && (
+        <td style={{ padding:"0.9rem 1.25rem" }}>
+          {entry.walletAddress ? (
+            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+              <span style={{ fontFamily:"'DM Mono','Fira Mono',monospace", fontSize:11, color:T.textSec }}>
+                {entry.walletName ? (
+                  <span title={entry.walletAddress}>
+                    <span style={{ color:T.primary, fontWeight:600 }}>{entry.walletName}</span>
+                    <span style={{ color:T.textMut, marginLeft:4 }}>({shortAddr(entry.walletAddress)})</span>
+                  </span>
+                ) : shortAddr(entry.walletAddress)}
+              </span>
+              <button onClick={copyAddress} title={copied?"Copied!":"Copy address"}
+                style={{ background:"none", border:"none", cursor:"pointer", color:copied?T.primary:T.textMut,
+                  padding:2, display:"flex", transition:"color 0.2s" }}>
+                <Copy size={11} />
+              </button>
+            </div>
+          ) : (
+            <span style={{ color:T.textMut, fontSize:12 }}>—</span>
+          )}
+        </td>
+      )}
+      <td style={{ padding:"0.9rem 1.25rem", textAlign:"right", fontFamily:"'DM Mono','Fira Mono',monospace",
+        fontSize:13, fontWeight:600, color:T.primary, whiteSpace:"nowrap" }}>{fmt(entry.earned)}</td>
+      <td style={{ padding:"0.9rem 1.25rem", textAlign:"right", fontFamily:"'DM Mono','Fira Mono',monospace",
+        fontSize:13, color:T===DARK?"#93c5fd":T.blue, whiteSpace:"nowrap" }}>{fmt(entry.saved)}</td>
+      <td style={{ padding:"0.9rem 1.25rem", textAlign:"right", fontFamily:"'DM Mono','Fira Mono',monospace",
+        fontSize:13, color:T===DARK?"#fda4af":T.rose, whiteSpace:"nowrap" }}>{fmt(entry.given)}</td>
+      <td style={{ padding:"0.9rem 1.25rem" }}><Pill cat={entry.givenTo} /></td>
+      <td style={{ padding:"0.9rem 1.25rem" }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
+          <IBtn icon={Edit2}  color={T.blue} onClick={onEdit}   title="Edit"   T={T} />
+          <IBtn icon={Trash2} color={T.rose} onClick={onDelete} title="Delete" T={T} />
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+/* ─── HEADER BUTTON ─────────────────────────────────────────────────── */
+
+function HeaderBtn({ onClick, label, icon:Icon, T }: {
+  onClick:()=>void; label:string; icon:React.ElementType; T:typeof DARK;
 }) {
   const [h, setH] = useState(false);
   return (
     <button onClick={onClick}
       onMouseEnter={() => setH(true)} onMouseLeave={() => setH(false)}
       style={{ display:"flex", alignItems:"center", gap:7,
-        background: h ? (T === DARK ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)") : T.btnGhost,
-        border:`1px solid ${h ? T.borderHov : T.border}`,
+        background: h?(T===DARK?"rgba(255,255,255,0.08)":"rgba(0,0,0,0.07)"):T.btnGhost,
+        border:`1px solid ${h?T.borderHov:T.border}`,
         borderRadius:10, padding:"0.5rem 1rem",
-        color: h ? T.textPri : T.textSec,
+        color: h?T.textPri:T.textSec,
         fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit", transition:"all 0.2s" }}>
       <Icon size={14} />{label}
     </button>
   );
 }
 
-/* ─── ROOT COMPONENT ──────────────────────────────────────────────────── */
+/* ─── ROOT COMPONENT ─────────────────────────────────────────────────── */
 
 export default function FinanceDashboard() {
+  const { isWeb3, setMode, mode } = useWeb3();
   const [isDark, setIsDark]         = useState(true);
   const [entries, setEntries]       = useState<Entry[]>([]);
   const [goal, setGoal]             = useState(60000);
   const [loaded, setLoaded]         = useState(false);
   const [addModal, setAddModal]     = useState(false);
-  const [editEntry, setEditEntry]   = useState<Entry | null>(null);
-  const [deleteEntry, setDeleteEntry] = useState<Entry | null>(null);
+  const [editEntry, setEditEntry]   = useState<Entry|null>(null);
+  const [deleteEntry, setDeleteEntry] = useState<Entry|null>(null);
   const [exportModal, setExportModal] = useState(false);
 
   const T = isDark ? DARK : LIGHT;
 
-  /* persist theme */
+  /* ── theme persistence ── */
   useEffect(() => {
     try {
       const saved = localStorage.getItem("ledger_theme");
-      if (saved) setIsDark(saved === "dark");
+      if (saved) setIsDark(saved==="dark");
     } catch {}
   }, []);
   useEffect(() => {
-    try { localStorage.setItem("ledger_theme", isDark ? "dark" : "light"); } catch {}
+    try { localStorage.setItem("ledger_theme", isDark?"dark":"light"); } catch {}
   }, [isDark]);
 
-  /* load/save data */
+  /* ── data load/save ── */
   useEffect(() => {
     try {
       const e = localStorage.getItem("fd_entries");
@@ -953,25 +1017,25 @@ export default function FinanceDashboard() {
   useEffect(() => { if (loaded) try { localStorage.setItem("fd_entries", JSON.stringify(entries)); } catch {} }, [entries, loaded]);
   useEffect(() => { if (loaded) try { localStorage.setItem("fd_goal", String(goal)); } catch {} }, [goal, loaded]);
 
-  const save = useCallback((entry: Entry) => {
+  const save = useCallback((entry:Entry) => {
     setEntries(prev => {
-      const idx = prev.findIndex(e => e.id === entry.id);
-      if (idx >= 0) { const n = [...prev]; n[idx] = entry; return n; }
+      const idx = prev.findIndex(e => e.id===entry.id);
+      if (idx>=0) { const n=[...prev]; n[idx]=entry; return n; }
       return [...prev, entry];
     });
     setAddModal(false); setEditEntry(null);
   }, []);
 
-  const remove = useCallback((id: string) => {
-    setEntries(prev => prev.filter(e => e.id !== id));
+  const remove = useCallback((id:string) => {
+    setEntries(prev => prev.filter(e => e.id!==id));
     setDeleteEntry(null);
   }, []);
 
   const exportCsv = useCallback(() => {
-    const hdr  = ["Date","Project","Earned","Saved","Given","Given To"];
+    const hdr  = ["Date","Project/Description","Earned/Received","Saved/Staked","Given/Sent","Category","Wallet Address","Wallet Name"];
     const rows = [...entries].sort((a,b) => new Date(a.date).getTime()-new Date(b.date).getTime())
-      .map(e => [e.date, `"${e.project}"`, e.earned, e.saved, e.given, e.givenTo]);
-    const csv  = [hdr, ...rows].map(r => r.join(",")).join("\n");
+      .map(e => [e.date, `"${e.project}"`, e.earned, e.saved, e.given, e.givenTo, e.walletAddress||"", `"${e.walletName||""}"`]);
+    const csv = [hdr, ...rows].map(r => r.join(",")).join("\n");
     const a = Object.assign(document.createElement("a"), {
       href: URL.createObjectURL(new Blob([csv], { type:"text/csv" })),
       download: `ledger-${new Date().toISOString().slice(0,10)}.csv`,
@@ -979,7 +1043,7 @@ export default function FinanceDashboard() {
     a.click();
   }, [entries]);
 
-  /* computed */
+  /* ── computed ── */
   const totalEarned = entries.reduce((s,e) => s+e.earned, 0);
   const totalSaved  = entries.reduce((s,e) => s+e.saved,  0);
   const totalGiven  = entries.reduce((s,e) => s+e.given,  0);
@@ -988,29 +1052,30 @@ export default function FinanceDashboard() {
   const cumulative  = buildCumulative(entries);
   const sorted      = [...entries].sort((a,b) => new Date(b.date).getTime()-new Date(a.date).getTime());
 
-  const KPI = [
-    { icon:DollarSign, label:"Total Earned",  rawValue:totalEarned, sub:`${entries.length} projects tracked`, accent:T.primary },
-    { icon:PiggyBank,  label:"Total Saved",   rawValue:totalSaved,  sub:`${pct(totalSaved,totalEarned)}% save rate`, accent:T.blue   },
-    { icon:HandHeart,  label:"Total Given",   rawValue:totalGiven,  sub:`${pct(totalGiven,totalEarned)}% give rate`, accent:T.rose   },
-    { icon:Target,     label:"Goal Progress", rawValue:Math.round(progress), isPercent:true, sub:`${fmt(totalEarned)} of ${fmt(goal)}`, accent:T.amber },
-  ];
+  const KPI = isWeb3
+    ? [
+        { icon:Coins,    label:"Total Assets",    rawValue:totalEarned, sub:`${entries.length} transactions`,                        accent:T.primary },
+        { icon:Wallet,   label:"Total Staked",    rawValue:totalSaved,  sub:`${pct(totalSaved,totalEarned)}% stake rate`,            accent:T.blue    },
+        { icon:Send,     label:"Total Sent",      rawValue:totalGiven,  sub:`${pct(totalGiven,totalEarned)}% sent rate`,             accent:T.rose    },
+        { icon:Target,   label:"Portfolio Goal",  rawValue:Math.round(progress), isPercent:true, sub:`${fmt(totalEarned)} of ${fmt(goal)}`, accent:T.amber   },
+      ]
+    : [
+        { icon:DollarSign, label:"Total Earned",   rawValue:totalEarned, sub:`${entries.length} projects tracked`,              accent:T.primary },
+        { icon:PiggyBank,  label:"Total Saved",    rawValue:totalSaved,  sub:`${pct(totalSaved,totalEarned)}% save rate`,      accent:T.blue    },
+        { icon:HandHeart,  label:"Total Given",    rawValue:totalGiven,  sub:`${pct(totalGiven,totalEarned)}% give rate`,      accent:T.rose    },
+        { icon:Target,     label:"Goal Progress",  rawValue:Math.round(progress), isPercent:true, sub:`${fmt(totalEarned)} of ${fmt(goal)}`, accent:T.amber   },
+      ];
 
-  /* ─── LIGHT MODE BG GRADIENT ─── */
-  const bgStyle: React.CSSProperties = isDark
-    ? {
-        background:`
-          radial-gradient(ellipse 80% 50% at 20% -10%, rgba(0,201,167,0.07) 0%, transparent 55%),
-          radial-gradient(ellipse 60% 45% at 85% 90%,  rgba(139,92,246,0.06) 0%, transparent 55%),
-          ${T.bg}
-        `,
-      }
-    : {
-        background:`
-          radial-gradient(ellipse 80% 50% at 20% -10%, rgba(0,157,130,0.08) 0%, transparent 55%),
-          radial-gradient(ellipse 60% 45% at 85% 90%,  rgba(124,58,237,0.05) 0%, transparent 55%),
-          ${T.bg}
-        `,
-      };
+  /* ── bg gradient ── */
+  const bgStyle: React.CSSProperties = {
+    background: isDark
+      ? `radial-gradient(ellipse 80% 50% at 20% -10%, rgba(0,201,167,0.07) 0%, transparent 55%), radial-gradient(ellipse 60% 45% at 85% 90%, rgba(139,92,246,0.06) 0%, transparent 55%), ${T.bg}`
+      : `radial-gradient(ellipse 80% 50% at 20% -10%, rgba(0,157,130,0.08) 0%, transparent 55%), radial-gradient(ellipse 60% 45% at 85% 90%, rgba(124,58,237,0.05) 0%, transparent 55%), ${T.bg}`,
+  };
+
+  const tableHeaders = isWeb3
+    ? ["Date","Description","Wallet","Received","Staked","Sent","Category",""]
+    : ["Date","Project","Earned","Saved","Given","Category",""];
 
   return (
     <>
@@ -1030,47 +1095,80 @@ export default function FinanceDashboard() {
       `}</style>
 
       <div style={{ minHeight:"100vh", ...bgStyle,
-        fontFamily:"'Geist', 'Segoe UI', sans-serif", color:T.textPri,
+        fontFamily:"'Geist','Segoe UI',sans-serif", color:T.textPri,
         animation:"fadeIn 0.35s ease", transition:"background 0.4s ease" }}>
 
         {/* ── HEADER ── */}
         <header style={{ position:"sticky", top:0, zIndex:40,
           borderBottom:`1px solid ${T.border}`,
-          background: T.headerBg, backdropFilter:"blur(20px)", WebkitBackdropFilter:"blur(20px)",
+          background:T.headerBg, backdropFilter:"blur(20px)", WebkitBackdropFilter:"blur(20px)",
           transition:"background 0.4s, border-color 0.4s" }}>
           <div style={{ maxWidth:1380, margin:"0 auto", padding:"0 2rem", height:64,
             display:"flex", alignItems:"center", justifyContent:"space-between" }}>
 
-            {/* Logo */}
-            <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-              <div style={{ width:34, height:34, borderRadius:10,
-                background:`linear-gradient(135deg, ${T.primary}, ${T.primary}99)`,
-                display:"flex", alignItems:"center", justifyContent:"center" }}>
-                <Zap size={17} style={{ color: isDark ? "#021a14" : "#fff" }} />
+            {/* Logo + nav */}
+            <div style={{ display:"flex", alignItems:"center", gap:20 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                <div style={{ width:34, height:34, borderRadius:10,
+                  background:`linear-gradient(135deg, ${T.primary}, ${T.primary}99)`,
+                  display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  <Zap size={17} style={{ color:isDark?"#021a14":"#fff" }} />
+                </div>
+                <div>
+                  <div style={{ fontSize:15, fontWeight:800, color:T.textPri, letterSpacing:"-0.03em",
+                    fontFamily:"'Syne',sans-serif" }}>Ledger</div>
+                  <div style={{ fontSize:9, color:T.textMut, letterSpacing:"0.1em",
+                    textTransform:"uppercase", fontWeight:600 }}>Personal Finance</div>
+                </div>
               </div>
-              <div>
-                <div style={{ fontSize:15, fontWeight:800, color:T.textPri, letterSpacing:"-0.03em",
-                  fontFamily:"'Syne', sans-serif" }}>Ledger</div>
-                <div style={{ fontSize:9, color:T.textMut, letterSpacing:"0.1em",
-                  textTransform:"uppercase", fontWeight:600 }}>Personal Finance</div>
+              {/* Page links */}
+              <div style={{ display:"flex", gap:4 }}>
+                {[
+                  { href:"/",       icon:LayoutDashboard, label:"Dashboard" },
+                  { href:"/cards",  icon:isWeb3?Wallet:CreditCard, label:isWeb3?"Wallets":"Cards" },
+                ].map(link => (
+                  <a key={link.href} href={link.href}
+                    style={{ display:"flex", alignItems:"center", gap:6, padding:"5px 12px",
+                      borderRadius:8, textDecoration:"none", fontSize:13, fontWeight:600,
+                      color: link.href==="/"?T.primary:T.textMut,
+                      background: link.href==="/"?`${T.primary}12`:"transparent",
+                      transition:"all 0.2s" }}
+                    onMouseEnter={e => { if(link.href!=="/") (e.currentTarget as HTMLAnchorElement).style.color=T.textPri; }}
+                    onMouseLeave={e => { if(link.href!=="/") (e.currentTarget as HTMLAnchorElement).style.color=T.textMut; }}>
+                    <link.icon size={14} />{link.label}
+                  </a>
+                ))}
               </div>
             </div>
 
             {/* Actions */}
-            <div style={{ display:"flex", alignItems:"center", gap:"0.65rem" }}>
-              {/* Theme toggle */}
-              <button
-                onClick={() => setIsDark(d => !d)}
-                title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            <div style={{ display:"flex", alignItems:"center", gap:"0.5rem", flexWrap:"wrap" }}>
+              {/* Web2/Web3 toggle */}
+              <button onClick={() => setMode(isWeb3?"web2":"web3")}
                 style={{ display:"flex", alignItems:"center", gap:7,
-                  background: isDark ? "rgba(245,158,11,0.1)" : "rgba(139,92,246,0.1)",
-                  border:`1px solid ${isDark ? T.amber+"44" : T.violet+"44"}`,
+                  background: isWeb3
+                    ? "rgba(139,92,246,0.12)"
+                    : T===DARK?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.05)",
+                  border:`1px solid ${isWeb3?T.violet+"55":T.border}`,
                   borderRadius:10, padding:"0.5rem 1rem",
-                  color: isDark ? T.amber : T.violet,
-                  fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit",
-                  transition:"all 0.25s" }}>
-                {isDark ? <Sun size={14} /> : <Moon size={14} />}
-                {isDark ? "Light" : "Dark"}
+                  color: isWeb3?T.violet:T.textSec,
+                  fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit", transition:"all 0.25s" }}>
+                {isWeb3
+                  ? <><Wallet size={14} /> Web3</>
+                  : <><CreditCard size={14} /> Web2</>}
+              </button>
+
+              {/* Theme toggle */}
+              <button onClick={() => setIsDark(d => !d)}
+                title={isDark?"Switch to light mode":"Switch to dark mode"}
+                style={{ display:"flex", alignItems:"center", gap:7,
+                  background: isDark?"rgba(245,158,11,0.1)":"rgba(139,92,246,0.1)",
+                  border:`1px solid ${isDark?T.amber+"44":T.violet+"44"}`,
+                  borderRadius:10, padding:"0.5rem 1rem",
+                  color: isDark?T.amber:T.violet,
+                  fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit", transition:"all 0.25s" }}>
+                {isDark?<Sun size={14}/>:<Moon size={14}/>}
+                {isDark?"Light":"Dark"}
               </button>
 
               <HeaderBtn onClick={() => setExportModal(true)} label="Export" icon={Download} T={T} />
@@ -1079,7 +1177,7 @@ export default function FinanceDashboard() {
                 style={{ display:"flex", alignItems:"center", gap:7,
                   background:`linear-gradient(135deg, ${T.primary}, ${T.primary}bb)`,
                   border:"none", borderRadius:10, padding:"0.5rem 1.1rem",
-                  color: isDark ? "#021a14" : "#fff",
+                  color:isDark?"#021a14":"#fff",
                   fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
                 <Plus size={14} /> Add Entry
               </button>
@@ -1090,29 +1188,43 @@ export default function FinanceDashboard() {
         {/* ── MAIN ── */}
         <main style={{ maxWidth:1380, margin:"0 auto", padding:"2rem" }}>
 
+          {/* Mode banner */}
+          {isWeb3 && (
+            <div style={{ marginBottom:"1rem", padding:"0.75rem 1.25rem",
+              background:`${T.violet}0d`, border:`1px solid ${T.violet}22`,
+              borderRadius:12, display:"flex", alignItems:"center", gap:10 }}>
+              <Wallet size={15} style={{ color:T.violet }} />
+              <span style={{ fontSize:13, color:T.textSec }}>
+                <strong style={{ color:T.violet }}>Web3 Mode</strong> — tracking crypto assets, staking & transfers.
+                Go to <a href="/cards" style={{ color:T.primary, textDecoration:"none", fontWeight:600 }}>Wallets</a> to manage addresses.
+              </span>
+            </div>
+          )}
+
           {/* KPI Row */}
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(210px, 1fr))", gap:"1rem", marginBottom:"1.1rem" }}>
-            {KPI.map((k, i) => (
-              <MetricCard key={k.label} {...k} index={i} T={T} />
-            ))}
+            {KPI.map((k,i) => <MetricCard key={k.label} {...k} index={i} T={T} />)}
           </div>
 
           {/* Goal Bar */}
           <div style={{ marginBottom:"1.1rem" }}>
-            <GoalBar goal={goal} setGoal={setGoal} totalEarned={totalEarned} T={T} />
+            <GoalBar goal={goal} setGoal={setGoal} totalEarned={totalEarned} T={T} isWeb3={isWeb3} />
           </div>
 
           {/* Charts */}
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(360px, 1fr))", gap:"1rem", marginBottom:"1.1rem" }}>
 
-            {/* Monthly (with chart switcher) */}
-            <MonthlyChart data={monthly} T={T} />
+            <MonthlyChart data={monthly} T={T} isWeb3={isWeb3} />
 
             {/* Cumulative area */}
             <div style={{ ...glassCard(T, { padding:"1.5rem" }) }}>
               <div style={{ marginBottom:"1rem" }}>
-                <div style={{ fontSize:14, fontWeight:700, color:T.textPri }}>Cumulative Earnings</div>
-                <div style={{ fontSize:12, color:T.textMut, marginTop:3 }}>Running total across all projects</div>
+                <div style={{ fontSize:14, fontWeight:700, color:T.textPri }}>
+                  {isWeb3 ? "Cumulative Assets" : "Cumulative Earnings"}
+                </div>
+                <div style={{ fontSize:12, color:T.textMut, marginTop:3 }}>
+                  {isWeb3 ? "Running total across all transactions" : "Running total across all projects"}
+                </div>
               </div>
               <div style={{ fontFamily:"'DM Mono','Fira Mono',monospace", fontSize:"1.6rem",
                 fontWeight:700, color:T.primary, letterSpacing:"-0.03em", marginBottom:"1rem" }}>
@@ -1131,9 +1243,9 @@ export default function FinanceDashboard() {
                   <YAxis tick={{ fill:T.textMut, fontSize:10 }} axisLine={false} tickLine={false}
                     tickFormatter={v=>`$${(v/1000).toFixed(0)}k`} width={36} />
                   <Tooltip content={<ChartTip T={T} />} />
-                  <Area type="monotone" dataKey="cumulative" name="Total" stroke={T.primary} strokeWidth={2.5}
+                  <Area type="monotone" dataKey="cumulative" name={isWeb3?"Total Assets":"Total"} stroke={T.primary} strokeWidth={2.5}
                     fill="url(#ag)" dot={false}
-                    activeDot={{ r:5, fill:T.primary, strokeWidth:2, stroke: isDark ? "#06080f" : "#f0f4f8" }} />
+                    activeDot={{ r:5, fill:T.primary, strokeWidth:2, stroke:isDark?"#06080f":"#f0f4f8" }} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -1141,18 +1253,19 @@ export default function FinanceDashboard() {
 
           {/* Table */}
           <div style={{ ...glassCard(T, { padding:0, overflow:"hidden" }) }}>
-            {/* Table header */}
             <div style={{ padding:"1.25rem 1.75rem", borderBottom:`1px solid ${T.border}`,
               display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:"1rem" }}>
               <div>
-                <div style={{ fontSize:14, fontWeight:700, color:T.textPri }}>Recent Projects</div>
+                <div style={{ fontSize:14, fontWeight:700, color:T.textPri }}>
+                  {isWeb3 ? "Recent Transactions" : "Recent Projects"}
+                </div>
                 <div style={{ fontSize:12, color:T.textMut, marginTop:2 }}>{entries.length} transactions</div>
               </div>
               <div style={{ display:"flex", gap:"1.5rem" }}>
                 {[
-                  { l:"Earned", v:totalEarned, c:T.primary },
-                  { l:"Saved",  v:totalSaved,  c:T.blue    },
-                  { l:"Given",  v:totalGiven,  c:T.rose     },
+                  { l:isWeb3?"Received":"Earned", v:totalEarned, c:T.primary },
+                  { l:isWeb3?"Staked":"Saved",    v:totalSaved,  c:T.blue    },
+                  { l:isWeb3?"Sent":"Given",      v:totalGiven,  c:T.rose    },
                 ].map(s => (
                   <div key={s.l} style={{ textAlign:"right" }}>
                     <div style={{ fontSize:10, color:T.textMut, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.08em" }}>{s.l}</div>
@@ -1163,15 +1276,15 @@ export default function FinanceDashboard() {
             </div>
 
             <div style={{ overflowX:"auto" }}>
-              <table style={{ width:"100%", borderCollapse:"collapse", minWidth:680 }}>
+              <table style={{ width:"100%", borderCollapse:"collapse", minWidth: isWeb3?780:680 }}>
                 <thead>
                   <tr style={{ borderBottom:`1px solid ${T.border}` }}>
-                    {["Date","Project","Earned","Saved","Given","Category",""].map((h,i) => (
+                    {tableHeaders.map((h,i) => (
                       <th key={i} style={{ padding:"0.75rem 1.25rem",
-                        textAlign: i>=2&&i<=4 ? "right" : i===6 ? "center" : "left",
+                        textAlign: i>=3&&i<=5?"right":i===tableHeaders.length-1?"center":"left",
                         fontSize:10, fontWeight:700, letterSpacing:"0.09em", textTransform:"uppercase",
                         color:T.textMut,
-                        background: T === DARK ? "rgba(255,255,255,0.015)" : "rgba(0,0,0,0.02)",
+                        background:T===DARK?"rgba(255,255,255,0.015)":"rgba(0,0,0,0.02)",
                         whiteSpace:"nowrap" }}>
                         {h}
                       </th>
@@ -1183,10 +1296,10 @@ export default function FinanceDashboard() {
                     <TableRow key={e.id} entry={e} index={i}
                       onEdit={() => setEditEntry(e)}
                       onDelete={() => setDeleteEntry(e)}
-                      T={T} />
+                      T={T} isWeb3={isWeb3} />
                   ))}
-                  {entries.length === 0 && (
-                    <tr><td colSpan={7} style={{ padding:"4rem", textAlign:"center", color:T.textMut, fontSize:14 }}>
+                  {entries.length===0 && (
+                    <tr><td colSpan={tableHeaders.length} style={{ padding:"4rem", textAlign:"center", color:T.textMut, fontSize:14 }}>
                       No entries yet —{" "}
                       <button onClick={() => setAddModal(true)} style={{ background:"none", border:"none",
                         color:T.primary, cursor:"pointer", fontWeight:600, fontSize:14, fontFamily:"inherit" }}>
@@ -1201,11 +1314,11 @@ export default function FinanceDashboard() {
         </main>
       </div>
 
-      {/* Modals */}
-      {addModal     && <EntryModal onSave={save} onClose={() => setAddModal(false)} T={T} />}
-      {editEntry    && <EntryModal initial={editEntry} onSave={save} onClose={() => setEditEntry(null)} T={T} />}
-      {deleteEntry  && <DeleteModal entry={deleteEntry} onConfirm={() => remove(deleteEntry.id)} onClose={() => setDeleteEntry(null)} T={T} />}
-      {exportModal  && <ExportModal entries={entries} goal={goal} onClose={() => setExportModal(false)} onCsv={exportCsv} T={T} />}
+      {/* ── Modals ── */}
+      {addModal    && <EntryModal onSave={save} onClose={() => setAddModal(false)} T={T} isWeb3={isWeb3} />}
+      {editEntry   && <EntryModal initial={{ ...editEntry, earned: String(editEntry.earned), saved: String(editEntry.saved), given: String(editEntry.given) }} onSave={save} onClose={() => setEditEntry(null)} T={T} isWeb3={isWeb3} />}
+      {deleteEntry && <DeleteModal entry={deleteEntry} onConfirm={() => remove(deleteEntry.id)} onClose={() => setDeleteEntry(null)} T={T} />}
+      {exportModal && <ExportModal entries={entries} goal={goal} onClose={() => setExportModal(false)} onCsv={exportCsv} T={T} />}
     </>
   );
 }
