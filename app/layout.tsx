@@ -5,6 +5,9 @@ import { Web3Provider } from "./context/Web3Context";
 export const metadata: Metadata = {
   title: "Ledger — Personal Finance Dashboard",
   description: "Track your earnings, savings, and giving with beautiful charts and analytics",
+  icons: {
+    icon: "/brand/favicon.svg",
+  },
 };
 
 export const viewport: Viewport = {

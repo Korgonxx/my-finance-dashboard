@@ -111,10 +111,14 @@ const SEED_DATA = [
   { id:"c", date:"2025-12-05", project:"Year-End Retainer Fee",         earned:2200, saved:660,  given:220, givenTo:"Family",  walletAddress:"", walletName:"" },
 ];
 
+const SEED_DATA_WEB2 = SEED_DATA.filter(e => !e.walletAddress).map(e => ({ ...e, mode: "web2" as const }));
+const SEED_DATA_WEB3 = SEED_DATA.filter(e => e.walletAddress).map(e => ({ ...e, mode: "web3" as const }));
+
 interface Entry {
   id: string; date: string; project: string;
   earned: number; saved: number; given: number; givenTo: string;
   walletAddress?: string; walletName?: string;
+  mode: "web2" | "web3";
 }
 
 /* ─── HELPERS ──────────────────────────────────────────────────────── */
@@ -353,7 +357,7 @@ function EntryModal({ initial, onSave, onClose, T, isWeb3 }: {
   const isEdit = Boolean(initial?.id);
   const submit = () => {
     if (!form.date || !form.project || !form.earned) return;
-    onSave({ ...form, id:form.id||uid(), earned:+form.earned||0, saved:+form.saved||0, given:+form.given||0 });
+    onSave({ ...form, id:form.id||uid(), earned:+form.earned||0, saved:+form.saved||0, given:+form.given||0, mode: isWeb3 ? "web3" : "web2" });
   };
   const hasEarned = parseFloat(form.earned as string) > 0;
 
@@ -739,13 +743,13 @@ function MonthlyChart({ data, T, isWeb3 }: {
 
   const legend = [
     { c:T.primary, l: isWeb3 ? "Received" : "Earned" },
-    { c:T.blue,    l: isWeb3 ? "Staked"   : "Saved"  },
+    { c:T.blue,    l: "Saved" },
     { c:T.rose,    l: isWeb3 ? "Sent"     : "Given"  },
   ];
 
   const pieData = [
     { name: isWeb3?"Received":"Earned", value: data.reduce((s,d)=>s+d.earned,0) },
-    { name: isWeb3?"Staked":"Saved",    value: data.reduce((s,d)=>s+d.saved,0)  },
+    { name: "Saved",    value: data.reduce((s,d)=>s+d.saved,0)  },
     { name: isWeb3?"Sent":"Given",      value: data.reduce((s,d)=>s+d.given,0)  },
   ];
   const pieColors = [T.primary, T.blue, T.rose];
@@ -983,7 +987,8 @@ function HeaderBtn({ onClick, label, icon:Icon, T }: {
 export default function FinanceDashboard() {
   const { isWeb3, setMode, mode } = useWeb3();
   const [isDark, setIsDark]         = useState(true);
-  const [entries, setEntries]       = useState<Entry[]>([]);
+  const [web2Entries, setWeb2Entries] = useState<Entry[]>([]);
+  const [web3Entries, setWeb3Entries] = useState<Entry[]>([]);
   const [goal, setGoal]             = useState(60000);
   const [loaded, setLoaded]         = useState(false);
   const [addModal, setAddModal]     = useState(false);
@@ -1005,31 +1010,60 @@ export default function FinanceDashboard() {
   }, [isDark]);
 
   /* ── data load/save ── */
+  const entries = isWeb3 ? web3Entries : web2Entries;
+
   useEffect(() => {
     try {
-      const e = localStorage.getItem("fd_entries");
+      const savedWeb2 = localStorage.getItem("fd_web2_entries");
+      const savedWeb3 = localStorage.getItem("fd_web3_entries");
+      const legacy    = localStorage.getItem("fd_entries");
+
+      if (savedWeb2 || savedWeb3) {
+        setWeb2Entries(savedWeb2 ? JSON.parse(savedWeb2) : SEED_DATA_WEB2);
+        setWeb3Entries(savedWeb3 ? JSON.parse(savedWeb3) : SEED_DATA_WEB3);
+      } else if (legacy) {
+        const parsed: Entry[] = JSON.parse(legacy).map((entry: any) => ({
+          ...entry,
+          mode: entry.mode || (entry.walletAddress ? "web3" : "web2"),
+        }));
+        setWeb2Entries(parsed.filter(e => e.mode === "web2"));
+        setWeb3Entries(parsed.filter(e => e.mode === "web3"));
+      } else {
+        setWeb2Entries(SEED_DATA_WEB2);
+        setWeb3Entries(SEED_DATA_WEB3);
+      }
       const g = localStorage.getItem("fd_goal");
-      setEntries(e ? JSON.parse(e) : SEED_DATA);
       if (g) setGoal(parseFloat(g));
-    } catch { setEntries(SEED_DATA); }
+    } catch {
+      setWeb2Entries(SEED_DATA_WEB2);
+      setWeb3Entries(SEED_DATA_WEB3);
+    }
     setLoaded(true);
   }, []);
-  useEffect(() => { if (loaded) try { localStorage.setItem("fd_entries", JSON.stringify(entries)); } catch {} }, [entries, loaded]);
+
+  useEffect(() => { if (loaded) try { localStorage.setItem("fd_web2_entries", JSON.stringify(web2Entries)); } catch {} }, [web2Entries, loaded]);
+  useEffect(() => { if (loaded) try { localStorage.setItem("fd_web3_entries", JSON.stringify(web3Entries)); } catch {} }, [web3Entries, loaded]);
   useEffect(() => { if (loaded) try { localStorage.setItem("fd_goal", String(goal)); } catch {} }, [goal, loaded]);
 
   const save = useCallback((entry:Entry) => {
-    setEntries(prev => {
-      const idx = prev.findIndex(e => e.id===entry.id);
-      if (idx>=0) { const n=[...prev]; n[idx]=entry; return n; }
-      return [...prev, entry];
+    const modeKey: Entry["mode"] = isWeb3 ? "web3" : "web2";
+    const setter = isWeb3 ? setWeb3Entries : setWeb2Entries;
+    setter(prev => {
+      const updatedEntry = { ...entry, mode: modeKey };
+      const next = prev.map(e => e.id === entry.id ? updatedEntry : e);
+      if (!next.some(e => e.id === entry.id)) {
+        return [...next, updatedEntry];
+      }
+      return next;
     });
     setAddModal(false); setEditEntry(null);
-  }, []);
+  }, [isWeb3]);
 
   const remove = useCallback((id:string) => {
-    setEntries(prev => prev.filter(e => e.id!==id));
+    const setter = isWeb3 ? setWeb3Entries : setWeb2Entries;
+    setter(prev => prev.filter(e => e.id !== id));
     setDeleteEntry(null);
-  }, []);
+  }, [isWeb3]);
 
   const exportCsv = useCallback(() => {
     const hdr  = ["Date","Project/Description","Earned/Received","Saved/Staked","Given/Sent","Category","Wallet Address","Wallet Name"];
@@ -1055,7 +1089,7 @@ export default function FinanceDashboard() {
   const KPI = isWeb3
     ? [
         { icon:Coins,    label:"Total Assets",    rawValue:totalEarned, sub:`${entries.length} transactions`,                        accent:T.primary },
-        { icon:Wallet,   label:"Total Staked",    rawValue:totalSaved,  sub:`${pct(totalSaved,totalEarned)}% stake rate`,            accent:T.blue    },
+        { icon:Wallet,   label:"Total Saved",    rawValue:totalSaved,  sub:`${pct(totalSaved,totalEarned)}% save rate`,             accent:T.blue    },
         { icon:Send,     label:"Total Sent",      rawValue:totalGiven,  sub:`${pct(totalGiven,totalEarned)}% sent rate`,             accent:T.rose    },
         { icon:Target,   label:"Portfolio Goal",  rawValue:Math.round(progress), isPercent:true, sub:`${fmt(totalEarned)} of ${fmt(goal)}`, accent:T.amber   },
       ]
@@ -1074,7 +1108,7 @@ export default function FinanceDashboard() {
   };
 
   const tableHeaders = isWeb3
-    ? ["Date","Description","Wallet","Received","Staked","Sent","Category",""]
+    ? ["Date","Description","Wallet","Received","Saved","Sent","Category",""]
     : ["Date","Project","Earned","Saved","Given","Category",""];
 
   return (
@@ -1109,11 +1143,8 @@ export default function FinanceDashboard() {
             {/* Logo + nav */}
             <div style={{ display:"flex", alignItems:"center", gap:20 }}>
               <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                <div style={{ width:34, height:34, borderRadius:10,
-                  background:`linear-gradient(135deg, ${T.primary}, ${T.primary}99)`,
-                  display:"flex", alignItems:"center", justifyContent:"center" }}>
-                  <Zap size={17} style={{ color:isDark?"#021a14":"#fff" }} />
-                </div>
+                <img src="/brand/logo.svg" alt="Ledger logo" width={34} height={34}
+                  style={{ width:34, height:34, borderRadius:10, objectFit:"contain", background:T.card, padding:6 }} />
                 <div>
                   <div style={{ fontSize:15, fontWeight:800, color:T.textPri, letterSpacing:"-0.03em",
                     fontFamily:"'Syne',sans-serif" }}>Ledger</div>
