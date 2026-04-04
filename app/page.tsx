@@ -1295,7 +1295,7 @@ export default function FinanceDashboard() {
               <div style={{ display:"flex", gap:"1.5rem" }}>
                 {[
                   { l:isWeb3?"Received":"Earned", v:totalEarned, c:T.primary },
-                  { l:isWeb3?"Staked":"Saved",    v:totalSaved,  c:T.blue    },
+                  { l:"Saved",    v:totalSaved,  c:T.blue    },
                   { l:isWeb3?"Sent":"Given",      v:totalGiven,  c:T.rose    },
                 ].map(s => (
                   <div key={s.l} style={{ textAlign:"right" }}>
