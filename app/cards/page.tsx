@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import {
   Plus, Trash2, Copy, ExternalLink, Wallet, ArrowRight,
-  CheckCircle, X, Zap, CreditCard, Lock, Eye, EyeOff,
+  CheckCircle, X, Zap, CreditCard, Lock, Eye, EyeOff, Sun, Moon,
 } from "lucide-react";
 import { useWeb3 } from "../context/Web3Context";
 
@@ -317,22 +317,59 @@ function CardsPage() {
               </div>
             </div>
 
-            <a
-              href="/"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "5px 12px",
-                borderRadius: 8,
-                textDecoration: "none",
-                fontSize: 13,
-                fontWeight: 600,
-                color: T.textMut,
-              }}
-            >
-              ← Back to Dashboard
-            </a>
+            <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+              <button
+                onClick={() => {
+                  const newIsDark = !isDark;
+                  setIsDark(newIsDark);
+                  localStorage.setItem("theme", newIsDark ? "dark" : "light");
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "5px 12px",
+                  borderRadius: 8,
+                  textDecoration: "none",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  background: T.btnGhost,
+                  border: `1px solid ${T.border}`,
+                  color: T.textMut,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  transition: "all 0.2s",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.color = T.textPri;
+                  (e.currentTarget as HTMLButtonElement).style.background = `${T.primary}12`;
+                  (e.currentTarget as HTMLButtonElement).style.borderColor = T.primary;
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.color = T.textMut;
+                  (e.currentTarget as HTMLButtonElement).style.background = T.btnGhost;
+                  (e.currentTarget as HTMLButtonElement).style.borderColor = T.border;
+                }}
+              >
+                {isDark ? <Sun size={14} /> : <Moon size={14} />}
+              </button>
+              <a
+                href="/"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "5px 12px",
+                  borderRadius: 8,
+                  textDecoration: "none",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: T.textMut,
+                }}
+              >
+                ← Back to Dashboard
+              </a>
+            </div>
           </div>
         </header>
 
