@@ -277,19 +277,8 @@ function CardsPage() {
           >
             <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div
-                  style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: 10,
-                    background: `linear-gradient(135deg, ${T.primary}, ${T.primary}99)`,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Zap size={17} style={{ color: "#021a14" }} />
-                </div>
+                <img src="/brand/logo.png" alt="Ledger logo" width={34} height={34}
+                  style={{ width: 34, height: 34, borderRadius: 10, objectFit: "contain", background: T.card, padding: 6 }} />
                 <div>
                   <div
                     style={{

@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: "Ledger — Personal Finance Dashboard",
   description: "Track your earnings, savings, and giving with beautiful charts and analytics",
   icons: {
-    icon: "/brand/favicon.svg",
+    icon: "/brand/favicon.png",
   },
 };
 

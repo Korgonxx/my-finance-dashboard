@@ -1143,7 +1143,7 @@ export default function FinanceDashboard() {
             {/* Logo + nav */}
             <div style={{ display:"flex", alignItems:"center", gap:20 }}>
               <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                <img src="/brand/logo.svg" alt="Ledger logo" width={34} height={34}
+                <img src="/brand/logo.png" alt="Ledger logo" width={34} height={34}
                   style={{ width:34, height:34, borderRadius:10, objectFit:"contain", background:T.card, padding:6 }} />
                 <div>
                   <div style={{ fontSize:15, fontWeight:800, color:T.textPri, letterSpacing:"-0.03em",
