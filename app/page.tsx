@@ -362,7 +362,7 @@ function EntryModal({ initial, onSave, onClose, T, isWeb3 }: {
   const hasEarned = parseFloat(form.earned as string) > 0;
 
   const labels = isWeb3
-    ? { project:"Description", earned:"Received ($)", saved:"Staked ($)", given:"Sent ($)" }
+    ? { project:"Description", earned:"Received ($)", saved:"Saved ($)", given:"Sent ($)" }
     : { project:"Project Name", earned:"Earned ($)", saved:"Saved ($)", given:"Given ($)" };
 
   return (
@@ -773,7 +773,7 @@ function MonthlyChart({ data, T, isWeb3 }: {
         <div>
           <div style={{ fontSize:14, fontWeight:700, color:T.textPri }}>Monthly Breakdown</div>
           <div style={{ fontSize:12, color:T.textMut, marginTop:3 }}>
-            {isWeb3 ? "Received · Staked · Sent" : "Earned · Saved · Given"}
+            {isWeb3 ? "Received · Saved · Sent" : "Earned · Saved · Given"}
           </div>
         </div>
         <div style={{ display:"flex", gap:4, background:T===DARK?"rgba(255,255,255,0.05)":"rgba(0,0,0,0.05)",
