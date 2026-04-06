@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Web3Provider } from "./context/Web3Context";
+import { AppSettingsProvider } from "./context/AppSettingsContext";
 
 export const metadata: Metadata = {
   title: "Ledger — Personal Finance Dashboard",
@@ -24,7 +25,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body suppressHydrationWarning>
         <Web3Provider>
-          {children}
+          <AppSettingsProvider>
+            {children}
+          </AppSettingsProvider>
         </Web3Provider>
       </body>
     </html>

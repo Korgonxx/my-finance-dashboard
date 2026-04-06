@@ -43,22 +43,22 @@ const SEED_WALLETS: WalletAddress[] = [
 const uid = () => Math.random().toString(36).slice(2, 9);
 
 export function Web3Provider({ children }: { children: ReactNode }) {
-  const [mode, setModeState]       = useState<AppMode>("web2");
-  const [wallets, setWalletsState] = useState<WalletAddress[]>([]);
-
-  /* ── hydrate from localStorage (client-only) ── */
-  useEffect(() => {
+  const [mode, setModeState] = useState<AppMode>(() => {
     try {
       const m = localStorage.getItem("app_mode") as AppMode | null;
-      if (m === "web2" || m === "web3") setModeState(m);
-    } catch {}
+      return (m === "web2" || m === "web3") ? m : "web2";
+    } catch {
+      return "web2";
+    }
+  });
+  const [wallets, setWalletsState] = useState<WalletAddress[]>(() => {
     try {
       const raw = localStorage.getItem("wallet_addresses");
-      setWalletsState(raw ? JSON.parse(raw) : SEED_WALLETS);
+      return raw ? JSON.parse(raw) : SEED_WALLETS;
     } catch {
-      setWalletsState(SEED_WALLETS);
+      return SEED_WALLETS;
     }
-  }, []);
+  });
 
   /* ── persist wallets ── */
   useEffect(() => {

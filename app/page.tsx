@@ -14,8 +14,12 @@ import {
   Link, AlertCircle, ExternalLink, Sun, Moon,
   BarChart2, TrendingUp, PieChart as PieIcon, Activity,
   Wallet, Coins, Send, Copy, CreditCard, LayoutDashboard,
+  Eye, EyeOff,
 } from "lucide-react";
 import { useWeb3 } from "./context/Web3Context";
+import { useAppSettings, CURRENCY_SYMBOLS, type Currency } from "./context/AppSettingsContext";
+import { MasterPasscodeGuard } from "./components/MasterPasscodeGuard";
+import { FloatingToolsWindow } from "./components/FloatingToolsWindow";
 
 /* ─── THEME TOKENS ─────────────────────────────────────────────────── */
 
@@ -128,6 +132,7 @@ const fmt   = (n: number) => new Intl.NumberFormat("en-US", { style:"currency", 
 const pct   = (a: number, b: number) => b > 0 ? ((a / b) * 100).toFixed(1) : "0.0";
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
 const shortAddr = (addr: string) => addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : "";
+const GOAL_CURRENCIES: Currency[] = ["USD", "EUR", "GBP", "JPY", "AUD", "CAD", "CHF", "CNY", "INR"];
 
 function buildMonthly(entries: Entry[]) {
   const map: Record<string, { month:string; earned:number; saved:number; given:number }> = {};
@@ -673,11 +678,10 @@ function ExportModal({ entries, goal, onClose, onCsv, T }: {
 
 /* ─── GOAL BAR ──────────────────────────────────────────────────────── */
 
-function GoalBar({ goal, setGoal, totalEarned, T, isWeb3 }: {
-  goal:number; setGoal:(n:number)=>void; totalEarned:number; T:typeof DARK; isWeb3:boolean;
+function GoalBar({ goal, totalEarned, T, isWeb3, currency, onEditGoal, formatCurrency }: {
+  goal:number; totalEarned:number; T:typeof DARK; isWeb3:boolean; currency:Currency;
+  onEditGoal:()=>void; formatCurrency:(n:number)=>string;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [input, setInput]     = useState("");
   const progress  = clamp((totalEarned/goal)*100, 0, 100);
   const remaining = Math.max(goal-totalEarned, 0);
   const goalLabel = isWeb3 ? "Portfolio Growth Goal" : "Yearly Earnings Goal";
@@ -695,26 +699,12 @@ function GoalBar({ goal, setGoal, totalEarned, T, isWeb3 }: {
             {progress.toFixed(1)}%
           </span>
         </div>
-        {editing ? (
-          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <input autoFocus type="number" value={input} onChange={e=>setInput(e.target.value)}
-              style={{ background:T.inputBg, border:`1px solid ${T.amber}55`, borderRadius:9,
-                padding:"5px 11px", color:T.textPri, fontSize:13, outline:"none", width:130, fontFamily:"inherit" }} />
-            <button onClick={() => { const v=parseFloat(input); if(v>0) setGoal(v); setEditing(false); }}
-              style={{ background:T.amber, border:"none", borderRadius:8, padding:"5px 14px",
-                color:"#1a0e00", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>Set</button>
-            <button onClick={() => setEditing(false)}
-              style={{ background:T.btnGhost, border:`1px solid ${T.border}`, borderRadius:8,
-                padding:"5px 10px", color:T.textMut, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>×</button>
-          </div>
-        ) : (
-          <button onClick={() => { setInput(String(goal)); setEditing(true); }}
-            style={{ display:"flex", alignItems:"center", gap:6, background:`${T.amber}10`,
-              border:`1px solid ${T.amber}33`, borderRadius:9, padding:"5px 14px",
-              color:T.amber, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
-            <Edit2 size={12} /> Edit Goal
-          </button>
-        )}
+        <button onClick={onEditGoal}
+          style={{ display:"flex", alignItems:"center", gap:6, background:`${T.amber}10`,
+            border:`1px solid ${T.amber}33`, borderRadius:9, padding:"5px 14px",
+            color:T.amber, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
+          <Edit2 size={12} /> Set Goal
+        </button>
       </div>
       <div style={{ height:8, borderRadius:999, background:T===DARK?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.08)", overflow:"hidden", marginBottom:"0.75rem" }}>
         <div style={{ height:"100%", width:`${progress}%`,
@@ -723,12 +713,17 @@ function GoalBar({ goal, setGoal, totalEarned, T, isWeb3 }: {
       </div>
       <div style={{ display:"flex", justifyContent:"space-between", flexWrap:"wrap", gap:"0.5rem" }}>
         <span style={{ fontSize:12, color:T.textMut }}>
-          {isWeb3 ? "Assets" : "Earned"}: <strong style={{ color:T.textSec }}>{fmt(totalEarned)}</strong>
+          {isWeb3 ? "Assets" : "Earned"}: <strong style={{ color:T.textSec }}>{formatCurrency(totalEarned)}</strong>
         </span>
         {remaining>0
-          ? <span style={{ fontSize:12, color:T.textMut }}>{fmt(remaining)} remaining · Goal: <strong style={{ color:T.amber }}>{fmt(goal)}</strong></span>
+          ? <span style={{ fontSize:12, color:T.textMut }}>{formatCurrency(remaining)} remaining · Goal: <strong style={{ color:T.amber }}>{formatCurrency(goal)}</strong></span>
           : <span style={{ fontSize:12, color:T.primary, fontWeight:600 }}>Goal reached! 🎉</span>}
       </div>
+      {!isWeb3 && (
+        <div style={{ marginTop:"1rem", fontSize:11, color:T.textMut }}>
+          Current currency: <strong style={{ color:T.textPri }}>{currency}</strong>
+        </div>
+      )}
     </div>
   );
 }
@@ -986,60 +981,160 @@ function HeaderBtn({ onClick, label, icon:Icon, T }: {
 
 export default function FinanceDashboard() {
   const { isWeb3, setMode, mode } = useWeb3();
-  const [isDark, setIsDark]         = useState(true);
-  const [web2Entries, setWeb2Entries] = useState<Entry[]>([]);
-  const [web3Entries, setWeb3Entries] = useState<Entry[]>([]);
-  const [goal, setGoal]             = useState(60000);
-  const [loaded, setLoaded]         = useState(false);
-  const [addModal, setAddModal]     = useState(false);
-  const [editEntry, setEditEntry]   = useState<Entry|null>(null);
-  const [deleteEntry, setDeleteEntry] = useState<Entry|null>(null);
+  const { setCurrentPage, currency, setCurrency, hideBalances } = useAppSettings();
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      const saved = localStorage.getItem("ledger_theme");
+      return saved ? saved === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    } catch {
+      return true;
+    }
+  });
+  const [goal, setGoal] = useState(() => {
+    if (typeof window === "undefined") return 60000;
+    try {
+      const saved = localStorage.getItem("fd_goal");
+      return saved ? parseFloat(saved) : 60000;
+    } catch {
+      return 60000;
+    }
+  });
+  const [showGoalModal, setShowGoalModal] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return !isWeb3 && !localStorage.getItem("fd_goal");
+    } catch {
+      return false;
+    }
+  });
+  const [web2Entries, setWeb2Entries] = useState<Entry[]>(() => {
+    if (typeof window === "undefined") return SEED_DATA_WEB2;
+    try {
+      const savedWeb2 = localStorage.getItem("fd_web2_entries");
+      const savedWeb3 = localStorage.getItem("fd_web3_entries");
+      const legacy = localStorage.getItem("fd_entries");
+      if (savedWeb2 || savedWeb3) {
+        return savedWeb2 ? JSON.parse(savedWeb2) : SEED_DATA_WEB2;
+      }
+      if (legacy) {
+        const legacyEntries = JSON.parse(legacy) as Array<Record<string, unknown>>;
+        return legacyEntries
+          .map((entry) => ({
+            id: String(entry.id ?? uid()),
+            date: String(entry.date ?? ""),
+            project: String(entry.project ?? ""),
+            earned: Number(entry.earned ?? 0),
+            saved: Number(entry.saved ?? 0),
+            given: Number(entry.given ?? 0),
+            givenTo: String(entry.givenTo ?? ""),
+            walletAddress: typeof entry.walletAddress === "string" ? entry.walletAddress : "",
+            walletName: typeof entry.walletName === "string" ? entry.walletName : "",
+            mode: entry.mode === "web3" ? "web3" : "web2",
+          }))
+          .filter((entry) => entry.mode === "web2");
+      }
+      return SEED_DATA_WEB2;
+    } catch {
+      return SEED_DATA_WEB2;
+    }
+  });
+  const [web3Entries, setWeb3Entries] = useState<Entry[]>(() => {
+    if (typeof window === "undefined") return SEED_DATA_WEB3;
+    try {
+      const savedWeb2 = localStorage.getItem("fd_web2_entries");
+      const savedWeb3 = localStorage.getItem("fd_web3_entries");
+      const legacy = localStorage.getItem("fd_entries");
+      if (savedWeb2 || savedWeb3) {
+        return savedWeb3 ? JSON.parse(savedWeb3) : SEED_DATA_WEB3;
+      }
+      if (legacy) {
+        const legacyEntries = JSON.parse(legacy) as Array<Record<string, unknown>>;
+        return legacyEntries
+          .map((entry) => ({
+            id: String(entry.id ?? uid()),
+            date: String(entry.date ?? ""),
+            project: String(entry.project ?? ""),
+            earned: Number(entry.earned ?? 0),
+            saved: Number(entry.saved ?? 0),
+            given: Number(entry.given ?? 0),
+            givenTo: String(entry.givenTo ?? ""),
+            walletAddress: typeof entry.walletAddress === "string" ? entry.walletAddress : "",
+            walletName: typeof entry.walletName === "string" ? entry.walletName : "",
+            mode: entry.mode === "web3" ? "web3" : "web2",
+          }))
+          .filter((entry) => entry.mode === "web3");
+      }
+      return SEED_DATA_WEB3;
+    } catch {
+      return SEED_DATA_WEB3;
+    }
+  });
+  const loaded = true;
+  const [addModal, setAddModal] = useState(false);
+  const [editEntry, setEditEntry] = useState<Entry | null>(null);
+  const [deleteEntry, setDeleteEntry] = useState<Entry | null>(null);
   const [exportModal, setExportModal] = useState(false);
+  const [goalInput, setGoalInput] = useState(String(goal));
+  const [goalCurrency, setGoalCurrency] = useState<Currency>(currency);
+  const [goalError, setGoalError] = useState("");
 
   const T = isDark ? DARK : LIGHT;
 
+  /* ── update the page indicator for floating window ── */
+  useEffect(() => {
+    setCurrentPage("home");
+  }, [setCurrentPage]);
+
+  const openGoalModal = () => {
+    setGoalInput(String(goal));
+    setGoalCurrency(currency);
+    setGoalError("");
+    setShowGoalModal(true);
+  };
+
+  const handleGoalSave = () => {
+    const parsed = parseFloat(goalInput.replace(/[^0-9.]/g, ""));
+    if (!parsed || parsed <= 0) {
+      setGoalError("Enter a valid yearly goal");
+      return;
+    }
+    setGoal(parsed);
+    setCurrency(goalCurrency);
+    setShowGoalModal(false);
+    setGoalError("");
+  };
+
+  const exchangeRates: Record<string, number> = {
+    USD: 1,
+    EUR: 0.92,
+    GBP: 0.80,
+    JPY: 145,
+    AUD: 1.55,
+    CAD: 1.35,
+    CHF: 0.92,
+    CNY: 7.28,
+    INR: 83,
+  };
+
+  const convertCurrency = (value: number) => value * (exchangeRates[currency] ?? 1);
+  const formatCurrency = (value: number) => {
+    if (hideBalances) return "****";
+    const formattedValue = isWeb3 ? value : convertCurrency(value);
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: isWeb3 ? "USD" : currency,
+      maximumFractionDigits: 0,
+    }).format(formattedValue);
+  };
+
   /* ── theme persistence ── */
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("ledger_theme");
-      if (saved) setIsDark(saved==="dark");
-    } catch {}
-  }, []);
-  useEffect(() => {
-    try { localStorage.setItem("ledger_theme", isDark?"dark":"light"); } catch {}
+    try { localStorage.setItem("ledger_theme", isDark ? "dark" : "light"); } catch {}
   }, [isDark]);
 
   /* ── data load/save ── */
   const entries = isWeb3 ? web3Entries : web2Entries;
-
-  useEffect(() => {
-    try {
-      const savedWeb2 = localStorage.getItem("fd_web2_entries");
-      const savedWeb3 = localStorage.getItem("fd_web3_entries");
-      const legacy    = localStorage.getItem("fd_entries");
-
-      if (savedWeb2 || savedWeb3) {
-        setWeb2Entries(savedWeb2 ? JSON.parse(savedWeb2) : SEED_DATA_WEB2);
-        setWeb3Entries(savedWeb3 ? JSON.parse(savedWeb3) : SEED_DATA_WEB3);
-      } else if (legacy) {
-        const parsed: Entry[] = JSON.parse(legacy).map((entry: any) => ({
-          ...entry,
-          mode: entry.mode || (entry.walletAddress ? "web3" : "web2"),
-        }));
-        setWeb2Entries(parsed.filter(e => e.mode === "web2"));
-        setWeb3Entries(parsed.filter(e => e.mode === "web3"));
-      } else {
-        setWeb2Entries(SEED_DATA_WEB2);
-        setWeb3Entries(SEED_DATA_WEB3);
-      }
-      const g = localStorage.getItem("fd_goal");
-      if (g) setGoal(parseFloat(g));
-    } catch {
-      setWeb2Entries(SEED_DATA_WEB2);
-      setWeb3Entries(SEED_DATA_WEB3);
-    }
-    setLoaded(true);
-  }, []);
 
   useEffect(() => { if (loaded) try { localStorage.setItem("fd_web2_entries", JSON.stringify(web2Entries)); } catch {} }, [web2Entries, loaded]);
   useEffect(() => { if (loaded) try { localStorage.setItem("fd_web3_entries", JSON.stringify(web3Entries)); } catch {} }, [web3Entries, loaded]);
@@ -1088,16 +1183,16 @@ export default function FinanceDashboard() {
 
   const KPI = isWeb3
     ? [
-        { icon:Coins,    label:"Total Assets",    rawValue:totalEarned, sub:`${entries.length} transactions`,                        accent:T.primary },
+        { icon:Coins,    label:"Total Assets",    rawValue:totalEarned, sub:`${formatCurrency(totalEarned)} of ${formatCurrency(goal)}`, accent:T.primary },
         { icon:Wallet,   label:"Total Saved",    rawValue:totalSaved,  sub:`${pct(totalSaved,totalEarned)}% save rate`,             accent:T.blue    },
         { icon:Send,     label:"Total Sent",      rawValue:totalGiven,  sub:`${pct(totalGiven,totalEarned)}% sent rate`,             accent:T.rose    },
-        { icon:Target,   label:"Portfolio Goal",  rawValue:Math.round(progress), isPercent:true, sub:`${fmt(totalEarned)} of ${fmt(goal)}`, accent:T.amber   },
+        { icon:Target,   label:"Portfolio Goal",  rawValue:Math.round(progress), isPercent:true, sub:`${formatCurrency(totalEarned)} of ${formatCurrency(goal)}`, accent:T.amber   },
       ]
     : [
         { icon:DollarSign, label:"Total Earned",   rawValue:totalEarned, sub:`${entries.length} projects tracked`,              accent:T.primary },
         { icon:PiggyBank,  label:"Total Saved",    rawValue:totalSaved,  sub:`${pct(totalSaved,totalEarned)}% save rate`,      accent:T.blue    },
         { icon:HandHeart,  label:"Total Given",    rawValue:totalGiven,  sub:`${pct(totalGiven,totalEarned)}% give rate`,      accent:T.rose    },
-        { icon:Target,     label:"Goal Progress",  rawValue:Math.round(progress), isPercent:true, sub:`${fmt(totalEarned)} of ${fmt(goal)}`, accent:T.amber   },
+        { icon:Target,     label:"Goal Progress",  rawValue:Math.round(progress), isPercent:true, sub:`${formatCurrency(totalEarned)} of ${formatCurrency(goal)}`, accent:T.amber   },
       ];
 
   /* ── bg gradient ── */
@@ -1112,7 +1207,8 @@ export default function FinanceDashboard() {
     : ["Date","Project","Earned","Saved","Given","Category",""];
 
   return (
-    <>
+    <MasterPasscodeGuard isDark={isDark}>
+      <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&family=Geist:wght@400;500;600;700&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1239,7 +1335,15 @@ export default function FinanceDashboard() {
 
           {/* Goal Bar */}
           <div style={{ marginBottom:"1.1rem" }}>
-            <GoalBar goal={goal} setGoal={setGoal} totalEarned={totalEarned} T={T} isWeb3={isWeb3} />
+            <GoalBar
+              goal={goal}
+              totalEarned={totalEarned}
+              T={T}
+              isWeb3={isWeb3}
+              currency={currency}
+              onEditGoal={openGoalModal}
+              formatCurrency={formatCurrency}
+            />
           </div>
 
           {/* Charts */}
@@ -1350,6 +1454,126 @@ export default function FinanceDashboard() {
       {editEntry   && <EntryModal initial={{ ...editEntry, earned: String(editEntry.earned), saved: String(editEntry.saved), given: String(editEntry.given) }} onSave={save} onClose={() => setEditEntry(null)} T={T} isWeb3={isWeb3} />}
       {deleteEntry && <DeleteModal entry={deleteEntry} onConfirm={() => remove(deleteEntry.id)} onClose={() => setDeleteEntry(null)} T={T} />}
       {exportModal && <ExportModal entries={entries} goal={goal} onClose={() => setExportModal(false)} onCsv={exportCsv} T={T} />}
-    </>
+      {showGoalModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+            padding: "1rem",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 460,
+              background: T.card,
+              border: `1px solid ${T.border}`,
+              borderRadius: 20,
+              padding: "2rem",
+              boxShadow: T.shadow,
+            }}
+          >
+            <div style={{ marginBottom: "1.25rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                <Target size={20} style={{ color: T.amber }} />
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: T.textPri }}>Set your yearly goal</div>
+                  <div style={{ fontSize: 12, color: T.textMut }}>Choose the target amount and currency for Web2 goals.</div>
+                </div>
+              </div>
+              <div style={{ display: "grid", gap: 14 }}>
+                <label style={{ display: "grid", gap: 6, fontSize: 12, color: T.textMut }}>
+                  Yearly goal
+                  <input
+                    type="number"
+                    value={goalInput}
+                    onChange={(e) => {
+                      setGoalInput(e.target.value);
+                      setGoalError("");
+                    }}
+                    style={{
+                      width: "100%",
+                      border: `1px solid ${T.border}`,
+                      borderRadius: 12,
+                      padding: "0.9rem 1rem",
+                      background: T.inputBg,
+                      color: T.textPri,
+                      fontSize: 14,
+                      fontFamily: "inherit",
+                    }}
+                  />
+                </label>
+                {!isWeb3 && (
+                  <label style={{ display: "grid", gap: 6, fontSize: 12, color: T.textMut }}>
+                    Currency
+                    <select
+                      value={goalCurrency}
+                      onChange={(e) => setGoalCurrency(e.target.value as Currency)}
+                      style={{
+                        width: "100%",
+                        border: `1px solid ${T.border}`,
+                        borderRadius: 12,
+                        padding: "0.9rem 1rem",
+                        background: T.inputBg,
+                        color: T.textPri,
+                        fontSize: 14,
+                        fontFamily: "inherit",
+                      }}
+                    >
+                      {GOAL_CURRENCIES.map((curr) => (
+                        <option key={curr} value={curr}>{curr} {CURRENCY_SYMBOLS[curr]}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {goalError && (
+                  <div style={{ color: T.rose, fontSize: 12, fontWeight: 600 }}>{goalError}</div>
+                )}
+              </div>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, flexWrap: "wrap", marginTop: 20 }}>
+              <button
+                onClick={() => setShowGoalModal(false)}
+                style={{
+                  background: T.btnGhost,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 12,
+                  padding: "0.9rem 1.25rem",
+                  color: T.textMut,
+                  fontSize: 13,
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleGoalSave}
+                style={{
+                  background: `linear-gradient(135deg, ${T.primary}, ${T.primary}cc)`,
+                  border: "none",
+                  borderRadius: 12,
+                  padding: "0.9rem 1.25rem",
+                  color: isDark ? "#021a14" : "#fff",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Save Goal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <FloatingToolsWindow isDark={isDark} />
+      </>
+    </MasterPasscodeGuard>
   );
 }

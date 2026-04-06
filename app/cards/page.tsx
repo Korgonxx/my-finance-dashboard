@@ -1,11 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Plus, Trash2, Copy, ExternalLink, Wallet, ArrowRight,
   CheckCircle, X, Zap, CreditCard, Lock, Eye, EyeOff, Sun, Moon,
+  AlertCircle, Shield,
 } from "lucide-react";
 import { useWeb3 } from "../context/Web3Context";
+import { useAppSettings } from "../context/AppSettingsContext";
+import { encryptData, decryptData, maskData, hashPasscode, verifyPasscode } from "../utils/encryption";
+import { FloatingToolsWindow } from "../components/FloatingToolsWindow";
+import { MasterPasscodeGuard } from "../components/MasterPasscodeGuard";
 
 const DARK = {
   bg: "#06080f",
@@ -52,6 +58,13 @@ interface CryptoWallet {
   network: string;
   balance: number;
   createdAt: string;
+  isEncrypted?: boolean;
+  encryptedData?: {
+    address: string;
+    iv: string;
+    salt: string;
+  };
+  passcode?: string; // Hashed passcode
 }
 
 interface BankCard {
@@ -63,6 +76,13 @@ interface BankCard {
   balance: number;
   limit?: number;
   createdAt: string;
+  isEncrypted?: boolean;
+  encryptedData?: {
+    number: string;
+    iv: string;
+    salt: string;
+  };
+  passcode?: string; // Hashed passcode
 }
 
 const NETWORKS = [
@@ -88,6 +108,7 @@ const glassCard = (T: typeof DARK, extra: React.CSSProperties = {}): React.CSSPr
 
 function CardsPage() {
   const { mode } = useWeb3();
+  const { setCurrentPage, hideBalances } = useAppSettings();
   const isWeb3 = mode === "web3";
   const [isDark, setIsDark] = useState(true);
 
@@ -99,6 +120,12 @@ function CardsPage() {
       setIsDark(window.matchMedia("(prefers-color-scheme: dark)").matches);
     }
   }, []);
+
+  // Update page indicator for floating window
+  useEffect(() => {
+    setCurrentPage("cards");
+  }, [setCurrentPage]);
+  
   const T = isDark ? DARK : LIGHT;
 
   // Web3: Wallets
@@ -172,52 +199,283 @@ function CardsPage() {
     limit: "",
   });
 
+  // Encryption modal states
+  const [showEncryptModal, setShowEncryptModal] = useState(false);
+  const [encryptionPasscode, setEncryptionPasscode] = useState("");
+  const [encryptionPasscodeConfirm, setEncryptionPasscodeConfirm] = useState("");
+  const [encryptionError, setEncryptionError] = useState("");
+  const [encryptionLoading, setEncryptionLoading] = useState(false);
+
+  // Decryption modal states
+  const [showDecryptModal, setShowDecryptModal] = useState(false);
+  const [decryptPasscode, setDecryptPasscode] = useState("");
+  const [decryptError, setDecryptError] = useState("");
+  const [decryptItemId, setDecryptItemId] = useState<string | null>(null);
+  const [decryptedData, setDecryptedData] = useState<{ [key: string]: string }>({});
+  const [decryptLoading, setDecryptLoading] = useState(false);
+
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showDeletePasscodeModal, setShowDeletePasscodeModal] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [deleteTargetType, setDeleteTargetType] = useState<"wallet" | "card" | null>(null);
+  const [deleteTargetName, setDeleteTargetName] = useState("");
+  const [deletePasscode, setDeletePasscode] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
   const handleAddWallet = () => {
     if (!formData.name || !formData.address) return;
-
-    const newWallet: CryptoWallet = {
-      id: Date.now().toString(),
-      name: formData.name,
-      address: formData.address,
-      network: formData.network,
-      balance: 0,
-      createdAt: new Date().toISOString().split("T")[0],
-    };
-
-    setWallets([...wallets, newWallet]);
-    setFormData({ name: "", address: "", network: "Ethereum", number: "", type: "debit", bank: "", limit: "" });
+    // Close the add form and show the encryption modal to avoid layering issues
     setShowModal(false);
+    setEncryptionError("");
+    setEncryptionPasscode("");
+    setEncryptionPasscodeConfirm("");
+    setShowEncryptModal(true);
   };
 
   const handleAddCard = () => {
     if (!formData.name || !formData.number || !formData.bank) return;
-
-    const newCard: BankCard = {
-      id: Date.now().toString(),
-      name: formData.name,
-      number: formData.number,
-      type: formData.type,
-      bank: formData.bank,
-      balance: 0,
-      limit: formData.type === "credit" ? (formData.limit ? parseFloat(formData.limit) : undefined) : undefined,
-      createdAt: new Date().toISOString().split("T")[0],
-    };
-
-    setCards([...cards, newCard]);
-    setFormData({ name: "", address: "", network: "Ethereum", number: "", type: "debit", bank: "", limit: "" });
+    // Close the add form and show the encryption modal to avoid layering issues
     setShowModal(false);
+    setEncryptionError("");
+    setEncryptionPasscode("");
+    setEncryptionPasscodeConfirm("");
+    setShowEncryptModal(true);
+  };
+
+  const requestDeleteItem = (type: "wallet" | "card", id: string, name: string) => {
+    setDeleteTargetId(id);
+    setDeleteTargetType(type);
+    setDeleteTargetName(name);
+    setDeletePasscode("");
+    setDeleteError("");
+    setShowDeleteConfirm(true);
+  };
+
+  const performDeleteItem = () => {
+    if (!deleteTargetId || !deleteTargetType) {
+      return;
+    }
+
+    if (deleteTargetType === "wallet") {
+      setWallets(wallets.filter((w) => w.id !== deleteTargetId));
+    } else {
+      setCards(cards.filter((c) => c.id !== deleteTargetId));
+    }
+
+    setShowDeleteConfirm(false);
+    setShowDeletePasscodeModal(false);
+    setDeleteTargetId(null);
+    setDeleteTargetType(null);
+    setDeleteTargetName("");
+    setDeletePasscode("");
+    setDeleteError("");
+    setDeleteLoading(false);
+  };
+
+  const confirmDeleteRequest = () => {
+    setShowDeleteConfirm(false);
+
+    const targetItem = deleteTargetType === "wallet"
+      ? wallets.find((w) => w.id === deleteTargetId)
+      : cards.find((c) => c.id === deleteTargetId);
+
+    if (targetItem?.passcode) {
+      setShowDeletePasscodeModal(true);
+      return;
+    }
+
+    performDeleteItem();
+  };
+
+  const handleDeletePasscodeConfirm = async () => {
+    if (!deletePasscode) {
+      setDeleteError("Please enter the passcode to delete.");
+      return;
+    }
+
+    if (!deleteTargetId || !deleteTargetType) return;
+
+    setDeleteLoading(true);
+
+    try {
+      const targetItem = deleteTargetType === "wallet"
+        ? wallets.find((w) => w.id === deleteTargetId)
+        : cards.find((c) => c.id === deleteTargetId);
+
+      if (!targetItem) {
+        throw new Error("Item not found");
+      }
+
+      if (!targetItem.passcode) {
+        performDeleteItem();
+        return;
+      }
+
+      const valid = await verifyPasscode(deletePasscode, targetItem.passcode);
+      if (!valid) {
+        setDeleteError("Passcode incorrect");
+        setDeleteLoading(false);
+        return;
+      }
+
+      performDeleteItem();
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Unable to delete item");
+      setDeleteLoading(false);
+    }
   };
 
   const handleDeleteWallet = (id: string) => {
-    setWallets(wallets.filter((w) => w.id !== id));
+    const wallet = wallets.find((w) => w.id === id);
+    requestDeleteItem("wallet", id, wallet?.name || "wallet");
   };
 
   const handleDeleteCard = (id: string) => {
-    setCards(cards.filter((c) => c.id !== id));
+    const card = cards.find((c) => c.id === id);
+    requestDeleteItem("card", id, card?.name || "card");
   };
 
   const handleCopyAddress = (address: string) => {
     navigator.clipboard.writeText(address);
+  };
+
+  // Encryption handlers
+  const handleEncryptionConfirm = async () => {
+    if (!encryptionPasscode || !encryptionPasscodeConfirm) {
+      setEncryptionError("Please enter and confirm the passcode");
+      return;
+    }
+
+    if (encryptionPasscode !== encryptionPasscodeConfirm) {
+      setEncryptionError("Passcodes do not match");
+      return;
+    }
+
+    if (encryptionPasscode.length < 6) {
+      setEncryptionError("Passcode must be at least 6 digits");
+      return;
+    }
+
+    if (!/^\d+$/.test(encryptionPasscode)) {
+      setEncryptionError("Passcode must contain only numbers");
+      return;
+    }
+
+    setEncryptionLoading(true);
+    try {
+      // Hash the passcode for verification
+      const hashedPasscode = await hashPasscode(encryptionPasscode);
+
+      if (isWeb3) {
+        // Encrypt wallet address
+        const encryptedAddr = await encryptData(formData.address, encryptionPasscode);
+        const newWallet: CryptoWallet = {
+          id: Date.now().toString(),
+          name: formData.name,
+          address: maskData(formData.address), // Display masked version
+          network: formData.network,
+          balance: 0,
+          createdAt: new Date().toISOString().split("T")[0],
+          isEncrypted: true,
+          encryptedData: {
+            address: encryptedAddr.encryptedData,
+            iv: encryptedAddr.iv,
+            salt: encryptedAddr.salt,
+          },
+          passcode: hashedPasscode,
+        };
+        setWallets([...wallets, newWallet]);
+      } else {
+        // Encrypt card number
+        const encryptedNum = await encryptData(formData.number, encryptionPasscode);
+        const newCard: BankCard = {
+          id: Date.now().toString(),
+          name: formData.name,
+          number: maskData(formData.number), // Display masked version
+          type: formData.type,
+          bank: formData.bank,
+          balance: 0,
+          limit: formData.type === "credit" ? (formData.limit ? parseFloat(formData.limit) : undefined) : undefined,
+          createdAt: new Date().toISOString().split("T")[0],
+          isEncrypted: true,
+          encryptedData: {
+            number: encryptedNum.encryptedData,
+            iv: encryptedNum.iv,
+            salt: encryptedNum.salt,
+          },
+          passcode: hashedPasscode,
+        };
+        setCards([...cards, newCard]);
+      }
+
+      setFormData({ name: "", address: "", network: "Ethereum", number: "", type: "debit", bank: "", limit: "" });
+      setShowModal(false);
+      setShowEncryptModal(false);
+      setEncryptionPasscode("");
+      setEncryptionPasscodeConfirm("");
+    } catch (error) {
+      setEncryptionError(error instanceof Error ? error.message : "Encryption failed");
+    } finally {
+      setEncryptionLoading(false);
+    }
+  };
+
+  // Decryption handlers
+  const handleDecryptStart = (itemId: string) => {
+    setDecryptItemId(itemId);
+    setDecryptPasscode("");
+    setDecryptError("");
+    setShowDecryptModal(true);
+  };
+
+  const handleDecryptConfirm = async () => {
+    if (!decryptPasscode || !decryptItemId) {
+      setDecryptError("Please enter passcode");
+      return;
+    }
+
+    if (!/^\d+$/.test(decryptPasscode)) {
+      setDecryptError("Passcode must contain only numbers");
+      return;
+    }
+
+    setDecryptLoading(true);
+    try {
+      let itemData = null;
+
+      if (isWeb3) {
+        itemData = wallets.find((w) => w.id === decryptItemId);
+      } else {
+        itemData = cards.find((c) => c.id === decryptItemId);
+      }
+
+      if (!itemData || !itemData.encryptedData) {
+        throw new Error("Item not found or not encrypted");
+      }
+
+      // Verify passcode by decrypting
+      const keyToDecrypt = isWeb3 ? "address" : "number";
+      const dataToDecrypt = (itemData.encryptedData as Record<string, string>)[keyToDecrypt];
+      const decrypted = await decryptData(
+        dataToDecrypt,
+        decryptPasscode,
+        itemData.encryptedData.salt,
+        itemData.encryptedData.iv
+      );
+
+      // Store decrypted data temporarily
+      setDecryptedData((prev) => ({
+        ...prev,
+        [decryptItemId]: decrypted,
+      }));
+
+      setShowDecryptModal(false);
+    } catch (error) {
+      setDecryptError(error instanceof Error ? error.message : "Failed to decrypt - incorrect passcode");
+    } finally {
+      setDecryptLoading(false);
+    }
   };
 
   const totalBalance = isWeb3
@@ -241,17 +499,19 @@ function CardsPage() {
         * { margin: 0; padding: 0; box-sizing: border-box; }
         @keyframes slideUp { from { opacity:0; transform:translateY(18px); } to { opacity:1; } }
         @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
       `}</style>
 
-      <div
-        style={{
-          minHeight: "100vh",
-          ...bgStyle,
-          fontFamily: "'Geist','Segoe UI',sans-serif",
-          color: T.textPri,
-          animation: "fadeIn 0.35s ease",
-        }}
-      >
+      <MasterPasscodeGuard isDark={isDark}>
+        <div
+          style={{
+            minHeight: "100vh",
+            ...bgStyle,
+            fontFamily: "'Geist','Segoe UI',sans-serif",
+            color: T.textPri,
+            animation: "fadeIn 0.35s ease",
+          }}
+        >
         {/* Header */}
         <header
           style={{
@@ -342,7 +602,7 @@ function CardsPage() {
               >
                 {isDark ? <Sun size={14} /> : <Moon size={14} />}
               </button>
-              <a
+              <Link
                 href="/"
                 style={{
                   display: "flex",
@@ -357,7 +617,7 @@ function CardsPage() {
                 }}
               >
                 ← Back to Dashboard
-              </a>
+              </Link>
             </div>
           </div>
         </header>
@@ -535,7 +795,7 @@ function CardsPage() {
                       fontWeight: 600,
                     }}
                   >
-                    Address
+                    Address {wallet.isEncrypted && <Lock size={10} style={{ display: "inline", marginLeft: 4 }} />}
                   </div>
                   <div
                     style={{
@@ -552,21 +812,67 @@ function CardsPage() {
                     }}
                   >
                     <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {shortAddr(wallet.address)}
+                      {wallet.isEncrypted && decryptedData[wallet.id]
+                        ? shortAddr(decryptedData[wallet.id])
+                        : wallet.isEncrypted
+                        ? wallet.address
+                        : shortAddr(wallet.address)}
                     </span>
-                    <button
-                      onClick={() => handleCopyAddress(wallet.address)}
-                      style={{
-                        background: "transparent",
-                        border: "none",
-                        color: T.primary,
-                        cursor: "pointer",
-                        padding: 4,
-                        display: "flex",
-                      }}
-                    >
-                      <Copy size={12} />
-                    </button>
+                    {wallet.isEncrypted && !decryptedData[wallet.id] ? (
+                      <button
+                        onClick={() => handleDecryptStart(wallet.id)}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: T.blue,
+                          cursor: "pointer",
+                          padding: 4,
+                          display: "flex",
+                          fontSize: 12,
+                          fontWeight: 600,
+                        }}
+                        title="Decrypt address"
+                      >
+                        <Eye size={14} />
+                      </button>
+                    ) : wallet.isEncrypted && decryptedData[wallet.id] ? (
+                      <button
+                        onClick={() => {
+                          setDecryptedData((prev) => {
+                            const next = { ...prev };
+                            delete next[wallet.id];
+                            return next;
+                          });
+                        }}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: T.primary,
+                          cursor: "pointer",
+                          padding: 4,
+                          display: "flex",
+                          fontSize: 12,
+                          fontWeight: 600,
+                        }}
+                        title="Hide address"
+                      >
+                        <EyeOff size={14} />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleCopyAddress(wallet.address)}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: T.primary,
+                          cursor: "pointer",
+                          padding: 4,
+                          display: "flex",
+                        }}
+                      >
+                        <Copy size={12} />
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -592,10 +898,10 @@ function CardsPage() {
                       color: T.primary,
                     }}
                   >
-                    ${wallet.balance.toLocaleString("en-US", {
+                    {hideBalances ? "****" : `$${wallet.balance.toLocaleString("en-US", {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,
-                    })}
+                    })}`}
                   </div>
                 </div>
 
@@ -709,18 +1015,73 @@ function CardsPage() {
                         fontWeight: 600,
                       }}
                     >
-                      Card Number
+                      Card Number {card.isEncrypted && <Lock size={10} style={{ display: "inline", marginLeft: 4 }} />}
                     </div>
                     <div
                       style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
                         fontFamily: "'DM Mono','Fira Mono',monospace",
                         fontSize: 14,
                         letterSpacing: "0.15em",
                         color: T.textPri,
                         fontWeight: 600,
+                        padding: "0.5rem 0.75rem",
+                        background: card.isEncrypted ? T.inputBg : "transparent",
+                        borderRadius: card.isEncrypted ? 8 : 0,
+                        border: card.isEncrypted ? `1px solid ${T.border}` : "none",
                       }}
                     >
-                      {card.number}
+                      <span>
+                        {card.isEncrypted && decryptedData[card.id]
+                          ? decryptedData[card.id]
+                          : card.number}
+                      </span>
+                      {card.isEncrypted && !decryptedData[card.id] && (
+                        <button
+                          onClick={() => handleDecryptStart(card.id)}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            color: T.blue,
+                            cursor: "pointer",
+                            padding: 4,
+                            display: "flex",
+                            marginLeft: "auto",
+                            fontSize: 12,
+                            fontWeight: 600,
+                          }}
+                          title="Decrypt card number"
+                        >
+                          <Eye size={14} />
+                        </button>
+                      )}
+                      {card.isEncrypted && decryptedData[card.id] && (
+                        <button
+                          onClick={() => {
+                            setDecryptedData((prev) => {
+                              const next = { ...prev };
+                              delete next[card.id];
+                              return next;
+                            });
+                          }}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            color: T.primary,
+                            cursor: "pointer",
+                            padding: 4,
+                            display: "flex",
+                            marginLeft: "auto",
+                            fontSize: 12,
+                            fontWeight: 600,
+                          }}
+                          title="Hide card number"
+                        >
+                          <EyeOff size={14} />
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -746,10 +1107,10 @@ function CardsPage() {
                         color: card.type === "credit" ? T.violet : T.primary,
                       }}
                     >
-                      ${card.balance.toLocaleString("en-US", {
+                      {hideBalances ? "****" : `$${card.balance.toLocaleString("en-US", {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
-                      })}
+                      })}`}
                     </div>
                   </div>
 
@@ -776,10 +1137,10 @@ function CardsPage() {
                           color: T.violet,
                         }}
                       >
-                        ${card.limit.toLocaleString("en-US", {
+                        {hideBalances ? "****" : `$${card.limit.toLocaleString("en-US", {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,
-                        })}
+                        })}`}
                       </div>
                     </div>
                   )}
@@ -875,6 +1236,734 @@ function CardsPage() {
         </main>
       </div>
 
+      {/* Encryption Passcode Modal */}
+      {showEncryptModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem",
+            zIndex: 200,
+          }}
+          onClick={() => {
+            if (!encryptionLoading) {
+              setShowEncryptModal(false);
+              setShowModal(true);
+            }
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 420,
+              background: T.card,
+              border: `1px solid ${T.border}`,
+              borderRadius: 20,
+              padding: "2rem",
+              boxShadow: T.shadow,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: "1.5rem",
+              }}
+            >
+              <h2 style={{ color: T.textPri, fontWeight: 700, fontSize: "1.1rem", display: "flex", alignItems: "center", gap: 8 }}>
+                <Lock size={18} style={{ color: T.primary }} />
+                Encrypt {isWeb3 ? "Wallet" : "Card"}
+              </h2>
+              <button
+                onClick={() => {
+                  if (!encryptionLoading) {
+                    setShowEncryptModal(false);
+                    setShowModal(true);
+                  }
+                }}
+                disabled={encryptionLoading}
+                style={{
+                  background: T.btnGhost,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 8,
+                  padding: 6,
+                  cursor: encryptionLoading ? "not-allowed" : "pointer",
+                  color: T.textMut,
+                  display: "flex",
+                  opacity: encryptionLoading ? 0.5 : 1,
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <p style={{ color: T.textMut, fontSize: 13, marginBottom: "1.5rem" }}>
+              Create a 6-digit passcode to encrypt your {isWeb3 ? "wallet address" : "card number"}. You&apos;ll need this passcode to view it later.
+            </p>
+
+            <div style={{ display: "grid", gap: "1rem", marginBottom: "1.5rem" }}>
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.1em",
+                    color: T.textMut,
+                    marginBottom: 6,
+                  }}
+                >
+                  Passcode (6 digits)
+                </label>
+                <input
+                  type="password"
+                  maxLength={6}
+                  inputMode="numeric"
+                  value={encryptionPasscode}
+                  onChange={(e) => {
+                    setEncryptionPasscode(e.target.value.replace(/\D/g, "").slice(0, 6));
+                    setEncryptionError("");
+                  }}
+                  placeholder="000000"
+                  disabled={encryptionLoading}
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    background: T.inputBg,
+                    border: `1px solid ${T.border}`,
+                    borderRadius: 10,
+                    padding: "0.6rem 0.9rem",
+                    fontSize: 20,
+                    letterSpacing: "0.4em",
+                    color: T.textPri,
+                    textAlign: "center",
+                    fontFamily: "'DM Mono','Fira Mono',monospace",
+                    outline: "none",
+                    opacity: encryptionLoading ? 0.5 : 1,
+                  }}
+                />
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.1em",
+                    color: T.textMut,
+                    marginBottom: 6,
+                  }}
+                >
+                  Confirm Passcode
+                </label>
+                <input
+                  type="password"
+                  maxLength={6}
+                  inputMode="numeric"
+                  value={encryptionPasscodeConfirm}
+                  onChange={(e) => {
+                    setEncryptionPasscodeConfirm(e.target.value.replace(/\D/g, "").slice(0, 6));
+                    setEncryptionError("");
+                  }}
+                  onKeyPress={(e) => {
+                    if (e.key === "Enter" && !encryptionLoading) {
+                      handleEncryptionConfirm();
+                    }
+                  }}
+                  placeholder="000000"
+                  disabled={encryptionLoading}
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    background: T.inputBg,
+                    border: `1px solid ${encryptionError ? T.rose : T.border}`,
+                    borderRadius: 10,
+                    padding: "0.6rem 0.9rem",
+                    fontSize: 20,
+                    letterSpacing: "0.4em",
+                    color: T.textPri,
+                    textAlign: "center",
+                    fontFamily: "'DM Mono','Fira Mono',monospace",
+                    outline: "none",
+                    opacity: encryptionLoading ? 0.5 : 1,
+                  }}
+                />
+              </div>
+
+              {encryptionError && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "0.75rem",
+                    background: `${T.rose}15`,
+                    border: `1px solid ${T.rose}40`,
+                    borderRadius: 8,
+                    color: T.rose,
+                    fontSize: 13,
+                  }}
+                >
+                  <AlertCircle size={14} />
+                  {encryptionError}
+                </div>
+              )}
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "0.75rem",
+                paddingTop: "1.5rem",
+                borderTop: `1px solid ${T.border}`,
+              }}
+            >
+              <button
+                onClick={() => {
+                  if (!encryptionLoading) {
+                    setShowEncryptModal(false);
+                    setShowModal(true);
+                  }
+                }}
+                disabled={encryptionLoading}
+                style={{
+                  background: T.btnGhost,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 10,
+                  padding: "0.6rem 1.2rem",
+                  color: T.textSec,
+                  fontSize: 14,
+                  cursor: encryptionLoading ? "not-allowed" : "pointer",
+                  fontFamily: "inherit",
+                  opacity: encryptionLoading ? 0.5 : 1,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEncryptionConfirm}
+                disabled={encryptionLoading}
+                style={{
+                  background: `linear-gradient(135deg, ${T.primary}, ${T.primary}cc)`,
+                  border: "none",
+                  borderRadius: 10,
+                  padding: "0.6rem 1.4rem",
+                  color: isDark ? "#021a14" : "#fff",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  cursor: encryptionLoading ? "not-allowed" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 7,
+                  fontFamily: "inherit",
+                  opacity: encryptionLoading ? 0.7 : 1,
+                }}
+              >
+                <Lock size={15} /> {encryptionLoading ? "Encrypting..." : "Encrypt"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Decryption Modal */}
+      {showDecryptModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem",
+            zIndex: 200,
+          }}
+          onClick={() => !decryptLoading && setShowDecryptModal(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 420,
+              background: T.card,
+              border: `1px solid ${T.border}`,
+              borderRadius: 20,
+              padding: "2rem",
+              boxShadow: T.shadow,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: "1.5rem",
+              }}
+            >
+              <h2 style={{ color: T.textPri, fontWeight: 700, fontSize: "1.1rem", display: "flex", alignItems: "center", gap: 8 }}>
+                <Eye size={18} style={{ color: T.blue }} />
+                Decrypt Data
+              </h2>
+              <button
+                onClick={() => !decryptLoading && setShowDecryptModal(false)}
+                disabled={decryptLoading}
+                style={{
+                  background: T.btnGhost,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 8,
+                  padding: 6,
+                  cursor: decryptLoading ? "not-allowed" : "pointer",
+                  color: T.textMut,
+                  display: "flex",
+                  opacity: decryptLoading ? 0.5 : 1,
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <p style={{ color: T.textMut, fontSize: 13, marginBottom: "1.5rem" }}>
+              Enter your passcode to view this encrypted {isWeb3 ? "wallet address" : "card number"}.
+            </p>
+
+            <div style={{ marginBottom: "1.5rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.1em",
+                  color: T.textMut,
+                  marginBottom: 6,
+                }}
+              >
+                Passcode (6 digits)
+              </label>
+              <input
+                type="password"
+                maxLength={6}
+                inputMode="numeric"
+                value={decryptPasscode}
+                onChange={(e) => {
+                  setDecryptPasscode(e.target.value.replace(/\D/g, "").slice(0, 6));
+                  setDecryptError("");
+                }}
+                onKeyPress={(e) => {
+                  if (e.key === "Enter" && !decryptLoading) {
+                    handleDecryptConfirm();
+                  }
+                }}
+                placeholder="000000"
+                disabled={decryptLoading}
+                autoFocus
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  background: T.inputBg,
+                  border: `1px solid ${decryptError ? T.rose : T.border}`,
+                  borderRadius: 10,
+                  padding: "0.6rem 0.9rem",
+                  fontSize: 20,
+                  letterSpacing: "0.4em",
+                  color: T.textPri,
+                  textAlign: "center",
+                  fontFamily: "'DM Mono','Fira Mono',monospace",
+                  outline: "none",
+                  opacity: decryptLoading ? 0.5 : 1,
+                }}
+              />
+
+              {decryptError && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    marginTop: 8,
+                    padding: "0.75rem",
+                    background: `${T.rose}15`,
+                    border: `1px solid ${T.rose}40`,
+                    borderRadius: 8,
+                    color: T.rose,
+                    fontSize: 13,
+                  }}
+                >
+                  <AlertCircle size={14} />
+                  {decryptError}
+                </div>
+              )}
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "0.75rem",
+                paddingTop: "1.5rem",
+                borderTop: `1px solid ${T.border}`,
+              }}
+            >
+              <button
+                onClick={() => !decryptLoading && setShowDecryptModal(false)}
+                disabled={decryptLoading}
+                style={{
+                  background: T.btnGhost,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 10,
+                  padding: "0.6rem 1.2rem",
+                  color: T.textSec,
+                  fontSize: 14,
+                  cursor: decryptLoading ? "not-allowed" : "pointer",
+                  fontFamily: "inherit",
+                  opacity: decryptLoading ? 0.5 : 1,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDecryptConfirm}
+                disabled={decryptLoading}
+                style={{
+                  background: `linear-gradient(135deg, ${T.blue}, ${T.blue}cc)`,
+                  border: "none",
+                  borderRadius: 10,
+                  padding: "0.6rem 1.4rem",
+                  color: isDark ? "#021a14" : "#fff",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  cursor: decryptLoading ? "not-allowed" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 7,
+                  fontFamily: "inherit",
+                  opacity: decryptLoading ? 0.7 : 1,
+                }}
+              >
+                <Eye size={15} /> {decryptLoading ? "Decrypting..." : "Decrypt"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem",
+            zIndex: 220,
+          }}
+          onClick={() => setShowDeleteConfirm(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 420,
+              background: T.card,
+              border: `1px solid ${T.border}`,
+              borderRadius: 20,
+              padding: "2rem",
+              boxShadow: T.shadow,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: "1.5rem",
+              }}
+            >
+              <h2 style={{ color: T.textPri, fontWeight: 700, fontSize: "1.1rem" }}>
+                Confirm Delete
+              </h2>
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                style={{
+                  background: T.btnGhost,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 8,
+                  padding: 6,
+                  cursor: "pointer",
+                  color: T.textMut,
+                  display: "flex",
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <p style={{ color: T.textMut, fontSize: 13, marginBottom: "1.5rem" }}>
+              Are you sure you want to delete <strong>{deleteTargetName || (deleteTargetType === "wallet" ? "wallet" : "card")}</strong>? This action cannot be undone.
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "0.75rem",
+                paddingTop: "1rem",
+                borderTop: `1px solid ${T.border}`,
+              }}
+            >
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                style={{
+                  background: T.btnGhost,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 10,
+                  padding: "0.6rem 1.2rem",
+                  color: T.textSec,
+                  fontSize: 14,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteRequest}
+                style={{
+                  background: `linear-gradient(135deg, ${T.rose}, ${T.rose}cc)`,
+                  border: "none",
+                  borderRadius: 10,
+                  padding: "0.6rem 1.4rem",
+                  color: "#fff",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 7,
+                  fontFamily: "inherit",
+                }}
+              >
+                Yes, delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Passcode Modal */}
+      {showDeletePasscodeModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem",
+            zIndex: 230,
+          }}
+          onClick={() => {
+            if (!deleteLoading) {
+              setShowDeletePasscodeModal(false);
+              setDeletePasscode("");
+              setDeleteError("");
+            }
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 420,
+              background: T.card,
+              border: `1px solid ${T.border}`,
+              borderRadius: 20,
+              padding: "2rem",
+              boxShadow: T.shadow,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: "1.5rem",
+              }}
+            >
+              <h2 style={{ color: T.textPri, fontWeight: 700, fontSize: "1.1rem", display: "flex", alignItems: "center", gap: 8 }}>
+                <Lock size={18} style={{ color: T.rose }} />
+                Confirm Passcode
+              </h2>
+              <button
+                onClick={() => {
+                  if (!deleteLoading) {
+                    setShowDeletePasscodeModal(false);
+                    setDeletePasscode("");
+                    setDeleteError("");
+                  }
+                }}
+                disabled={deleteLoading}
+                style={{
+                  background: T.btnGhost,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 8,
+                  padding: 6,
+                  cursor: deleteLoading ? "not-allowed" : "pointer",
+                  color: T.textMut,
+                  display: "flex",
+                  opacity: deleteLoading ? 0.5 : 1,
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <p style={{ color: T.textMut, fontSize: 13, marginBottom: "1.5rem" }}>
+              Enter the passcode for <strong>{deleteTargetName || (deleteTargetType === "wallet" ? "wallet" : "card")}</strong> to delete it.
+            </p>
+
+            <div style={{ marginBottom: "1.5rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.1em",
+                  color: T.textMut,
+                  marginBottom: 6,
+                }}
+              >
+                Passcode (6 digits)
+              </label>
+              <input
+                type="password"
+                maxLength={6}
+                inputMode="numeric"
+                value={deletePasscode}
+                onChange={(e) => {
+                  setDeletePasscode(e.target.value.replace(/\D/g, "").slice(0, 6));
+                  setDeleteError("");
+                }}
+                onKeyPress={(e) => {
+                  if (e.key === "Enter" && !deleteLoading) {
+                    handleDeletePasscodeConfirm();
+                  }
+                }}
+                placeholder="000000"
+                disabled={deleteLoading}
+                autoFocus
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  background: T.inputBg,
+                  border: `1px solid ${deleteError ? T.rose : T.border}`,
+                  borderRadius: 10,
+                  padding: "0.6rem 0.9rem",
+                  fontSize: 20,
+                  letterSpacing: "0.4em",
+                  color: T.textPri,
+                  textAlign: "center",
+                  fontFamily: "'DM Mono','Fira Mono',monospace",
+                  outline: "none",
+                  opacity: deleteLoading ? 0.5 : 1,
+                }}
+              />
+
+              {deleteError && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    marginTop: 8,
+                    padding: "0.75rem",
+                    background: `${T.rose}15`,
+                    border: `1px solid ${T.rose}40`,
+                    borderRadius: 8,
+                    color: T.rose,
+                    fontSize: 13,
+                  }}
+                >
+                  <AlertCircle size={14} />
+                  {deleteError}
+                </div>
+              )}
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "0.75rem",
+                paddingTop: "1.5rem",
+                borderTop: `1px solid ${T.border}`,
+              }}
+            >
+              <button
+                onClick={() => {
+                  if (!deleteLoading) {
+                    setShowDeletePasscodeModal(false);
+                    setDeletePasscode("");
+                    setDeleteError("");
+                  }
+                }}
+                disabled={deleteLoading}
+                style={{
+                  background: T.btnGhost,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 10,
+                  padding: "0.6rem 1.2rem",
+                  color: T.textSec,
+                  fontSize: 14,
+                  cursor: deleteLoading ? "not-allowed" : "pointer",
+                  fontFamily: "inherit",
+                  opacity: deleteLoading ? 0.5 : 1,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeletePasscodeConfirm}
+                disabled={deleteLoading}
+                style={{
+                  background: `linear-gradient(135deg, ${T.rose}, ${T.rose}cc)`,
+                  border: "none",
+                  borderRadius: 10,
+                  padding: "0.6rem 1.4rem",
+                  color: "#fff",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  cursor: deleteLoading ? "not-allowed" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 7,
+                  fontFamily: "inherit",
+                  opacity: deleteLoading ? 0.7 : 1,
+                }}
+              >
+                <Lock size={15} /> {deleteLoading ? "Verifying..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Add Wallet/Card Modal */}
       {showModal && (
         <div
@@ -886,7 +1975,7 @@ function CardsPage() {
             alignItems: "center",
             justifyContent: "center",
             padding: "1rem",
-            zIndex: 50,
+            zIndex: 150,
           }}
           onClick={() => setShowModal(false)}
         >
@@ -1279,6 +2368,9 @@ function CardsPage() {
           </div>
         </div>
       )}
+
+      <FloatingToolsWindow isDark={isDark} />
+      </MasterPasscodeGuard>
     </>
   );
 }
