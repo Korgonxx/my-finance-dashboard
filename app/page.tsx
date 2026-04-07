@@ -19,7 +19,7 @@ import {
 import { useWeb3 } from "./context/Web3Context";
 import { useAppSettings, CURRENCY_SYMBOLS, type Currency } from "./context/AppSettingsContext";
 import { MasterPasscodeGuard } from "./components/MasterPasscodeGuard";
-import { FloatingToolsWindow } from "./components/FloatingToolsWindow";
+import { BottomToolsBar } from "./components/BottomToolsBar";
 
 /* ─── THEME TOKENS ─────────────────────────────────────────────────── */
 
@@ -106,12 +106,12 @@ const SEED_DATA = [
   { id:"3", date:"2025-03-22", project:"Dashboard — FinFlow",           earned:4500, saved:1350, given:450, givenTo:"Charity", walletAddress:"", walletName:"" },
   { id:"4", date:"2025-04-10", project:"Logo Suite — Terra Labs",       earned:2100, saved:630,  given:210, givenTo:"Gift",    walletAddress:"", walletName:"" },
   { id:"5", date:"2025-05-05", project:"Motion Pack — Bloom Studio",    earned:2800, saved:840,  given:280, givenTo:"Self",    walletAddress:"", walletName:"" },
-  { id:"6", date:"2025-06-18", project:"Rebrand — Cobalt Systems",      earned:5200, saved:1560, given:520, givenTo:"Charity", walletAddress:"0x71C7656EC7ab88b098defB751B7401B5f6d8976F", walletName:"Main Wallet" },
-  { id:"7", date:"2025-07-29", project:"App Screens — Lumos Health",    earned:3600, saved:1080, given:360, givenTo:"Family",  walletAddress:"0x3A76Bff1aA3c56E9f0E96c8B23B3a61B3f0c21D", walletName:"DeFi Wallet" },
+  { id:"6", date:"2025-06-18", project:"Rebrand — Cobalt Systems",      earned:5200, saved:1560, given:520, givenTo:"Charity", walletAddress:"0x71C7656EC7ab88b098defB751B7401B5f6d8976F", walletName:"Main Wallet", investmentAmount:2500, currentValue:4250 },
+  { id:"7", date:"2025-07-29", project:"App Screens — Lumos Health",    earned:3600, saved:1080, given:360, givenTo:"Family",  walletAddress:"0x3A76Bff1aA3c56E9f0E96c8B23B3a61B3f0c21D", walletName:"DeFi Wallet", investmentAmount:1800, currentValue:2100 },
   { id:"8", date:"2025-08-14", project:"Icon Set — Meridian Bank",      earned:1500, saved:450,  given:150, givenTo:"Gift",    walletAddress:"", walletName:"" },
-  { id:"9", date:"2025-09-08", project:"Web Design — Arcadia Foods",    earned:3900, saved:1170, given:390, givenTo:"Charity", walletAddress:"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", walletName:"Trading Wallet" },
+  { id:"9", date:"2025-09-08", project:"Web Design — Arcadia Foods",    earned:3900, saved:1170, given:390, givenTo:"Charity", walletAddress:"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", walletName:"Trading Wallet", investmentAmount:3200, currentValue:3840 },
   { id:"a", date:"2025-10-20", project:"Pitch Deck — Vertex AI",        earned:4800, saved:1440, given:480, givenTo:"Work",    walletAddress:"", walletName:"" },
-  { id:"b", date:"2025-11-11", project:"Brand Book — Solaris Tech",     earned:6100, saved:1830, given:610, givenTo:"Charity", walletAddress:"0x71C7656EC7ab88b098defB751B7401B5f6d8976F", walletName:"Main Wallet" },
+  { id:"b", date:"2025-11-11", project:"Brand Book — Solaris Tech",     earned:6100, saved:1830, given:610, givenTo:"Charity", walletAddress:"0x71C7656EC7ab88b098defB751B7401B5f6d8976F", walletName:"Main Wallet", investmentAmount:4000, currentValue:5200 },
   { id:"c", date:"2025-12-05", project:"Year-End Retainer Fee",         earned:2200, saved:660,  given:220, givenTo:"Family",  walletAddress:"", walletName:"" },
 ];
 
@@ -123,12 +123,13 @@ interface Entry {
   earned: number; saved: number; given: number; givenTo: string;
   walletAddress?: string; walletName?: string;
   mode: "web2" | "web3";
+  investmentAmount?: number; // Web3: initial investment
+  currentValue?: number; // Web3: current value
 }
 
 /* ─── HELPERS ──────────────────────────────────────────────────────── */
 
 const uid   = () => Math.random().toString(36).slice(2, 9);
-const fmt   = (n: number) => new Intl.NumberFormat("en-US", { style:"currency", currency:"USD", maximumFractionDigits:0 }).format(n ?? 0);
 const pct   = (a: number, b: number) => b > 0 ? ((a / b) * 100).toFixed(1) : "0.0";
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
 const shortAddr = (addr: string) => addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : "";
@@ -182,9 +183,9 @@ const glassCard = (T: typeof DARK, extra: React.CSSProperties = {}): React.CSSPr
 
 /* ─── METRIC CARD ──────────────────────────────────────────────────── */
 
-function MetricCard({ icon:Icon, label, rawValue, isPercent, sub, accent, index, T }: {
+function MetricCard({ icon:Icon, label, rawValue, isPercent, sub, accent, index, T, fmt }: {
   icon:React.ElementType; label:string; rawValue:number; isPercent?:boolean;
-  sub:string; accent:string; index:number; T:typeof DARK;
+  sub:string; accent:string; index:number; T:typeof DARK; fmt:(n:number)=>string;
 }) {
   const counted = useCounter(rawValue, 700 + index * 100);
   const [hov, setHov] = useState(false);
@@ -254,9 +255,9 @@ function NetworkBadge({ network }: { network: string }) {
 
 /* ─── CUSTOM TOOLTIP ────────────────────────────────────────────────── */
 
-function ChartTip({ active, payload, label, T }: {
+function ChartTip({ active, payload, label, T, fmt }: {
   active?:boolean; payload?:Array<{ name:string; value:number; color:string }>;
-  label?:string; T:typeof DARK;
+  label?:string; T:typeof DARK; fmt:(n:number)=>string;
 }) {
   if (!active || !payload?.length) return null;
   return (
@@ -349,7 +350,7 @@ function Modal({ children, onClose, width=520, T }: {
 
 /* ─── ENTRY MODAL ───────────────────────────────────────────────────── */
 
-const EMPTY_FORM = { date:"", project:"", earned:"", saved:"", given:"", givenTo:"Charity", walletAddress:"", walletName:"" };
+const EMPTY_FORM = { date:"", project:"", earned:"", saved:"", given:"", givenTo:"Charity", walletAddress:"", walletName:"", investmentAmount:"", currentValue:"" };
 type FormState = typeof EMPTY_FORM & { id?:string };
 
 function EntryModal({ initial, onSave, onClose, T, isWeb3 }: {
@@ -362,7 +363,28 @@ function EntryModal({ initial, onSave, onClose, T, isWeb3 }: {
   const isEdit = Boolean(initial?.id);
   const submit = () => {
     if (!form.date || !form.project || !form.earned) return;
-    onSave({ ...form, id:form.id||uid(), earned:+form.earned||0, saved:+form.saved||0, given:+form.given||0, mode: isWeb3 ? "web3" : "web2" });
+    const baseEntry = {
+      id: form.id || uid(),
+      date: form.date,
+      project: form.project,
+      earned: +form.earned || 0,
+      saved: +form.saved || 0,
+      given: +form.given || 0,
+      givenTo: form.givenTo,
+      walletAddress: form.walletAddress,
+      walletName: form.walletName,
+      mode: isWeb3 ? "web3" as const : "web2" as const,
+    };
+    
+    const entry: Entry = {
+      ...baseEntry,
+      ...(isWeb3 && form.investmentAmount ? {
+        investmentAmount: +form.investmentAmount,
+        currentValue: +form.currentValue || +form.investmentAmount,
+      } : {}),
+    };
+    
+    onSave(entry);
   };
   const hasEarned = parseFloat(form.earned as string) > 0;
 
@@ -398,12 +420,21 @@ function EntryModal({ initial, onSave, onClose, T, isWeb3 }: {
 
         {/* Web3: wallet fields */}
         {isWeb3 && (
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"1rem" }}>
-            <Field label="Wallet Address (optional)" value={form.walletAddress??""} onChange={set("walletAddress")}
-              placeholder="0x..." T={T} mono />
-            <Field label="Wallet Name (optional)" value={form.walletName??""} onChange={set("walletName")}
-              placeholder="e.g. Main Wallet" T={T} />
-          </div>
+          <>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"1rem" }}>
+              <Field label="Wallet Address (optional)" value={form.walletAddress??""} onChange={set("walletAddress")}
+                placeholder="0x..." T={T} mono />
+              <Field label="Wallet Name (optional)" value={form.walletName??""} onChange={set("walletName")}
+                placeholder="e.g. Main Wallet" T={T} />
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"1rem" }}>
+              <Field label="Investment Amount ($)" type="number" value={form.investmentAmount??""} onChange={set("investmentAmount")}
+                placeholder="e.g. 1000" T={T} />
+              <Field label="Current Value ($)" type="number" value={form.currentValue??""} onChange={set("currentValue")}
+                placeholder="e.g. 1200" T={T} />
+            </div>
+          </>
         )}
 
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"0.75rem" }}>
@@ -448,8 +479,19 @@ function EntryModal({ initial, onSave, onClose, T, isWeb3 }: {
 function DeleteModal({ entry, onConfirm, onClose, T }: {
   entry:Entry; onConfirm:()=>void; onClose:()=>void; T:typeof DARK;
 }) {
+  const [confirmText, setConfirmText] = useState("");
+  const [error, setError] = useState("");
+
+  const handleDelete = () => {
+    if (confirmText.trim().toLowerCase() !== entry?.project?.toLowerCase()) {
+      setError("Project name doesn't match");
+      return;
+    }
+    onConfirm();
+  };
+
   return (
-    <Modal onClose={onClose} width={400} T={T}>
+    <Modal onClose={onClose} width={450} T={T}>
       <div style={{ textAlign:"center", padding:"0.5rem" }}>
         <div style={{ width:56, height:56, borderRadius:"50%", background:"rgba(244,63,94,0.12)",
           border:"1px solid rgba(244,63,94,0.25)", display:"flex", alignItems:"center",
@@ -458,15 +500,69 @@ function DeleteModal({ entry, onConfirm, onClose, T }: {
         </div>
         <h2 style={{ color:T.textPri, fontSize:"1.05rem", fontWeight:700, margin:"0 0 8px" }}>Delete Entry?</h2>
         <p style={{ color:T.textSec, fontSize:13, marginBottom:"0.4rem" }}>{entry?.project}</p>
-        <p style={{ color:T.textMut, fontSize:13, marginBottom:"1.75rem" }}>This cannot be undone.</p>
+        <p style={{ color:T.textMut, fontSize:13, marginBottom:"1rem" }}>This cannot be undone.</p>
+
+        <div style={{ marginBottom: "1.5rem" }}>
+          <label style={{ display: "block", fontSize: 12, color: T.textPri, marginBottom: 8, textAlign: "left" }}>
+            Type the project name to confirm deletion:
+          </label>
+          <input
+            type="text"
+            value={confirmText}
+            onChange={(e) => {
+              setConfirmText(e.target.value);
+              setError("");
+            }}
+            placeholder="Enter project name..."
+            style={{
+              width: "100%",
+              background: T.inputBg,
+              border: `2px solid ${error ? "#f43f5e" : T.border}`,
+              borderRadius: 8,
+              padding: "0.75rem",
+              color: T.textPri,
+              fontSize: 14,
+              outline: "none",
+              boxSizing: "border-box",
+            }}
+            autoFocus
+          />
+          {error && (
+            <p style={{ color: "#f43f5e", fontSize: 12, margin: "4px 0 0 0", textAlign: "left" }}>
+              {error}
+            </p>
+          )}
+        </div>
+
         <div style={{ display:"flex", gap:"0.75rem", justifyContent:"center" }}>
           <button onClick={onClose} style={{ background:T.btnGhost, border:`1px solid ${T.border}`,
             borderRadius:10, padding:"0.6rem 1.25rem", color:T.textSec, fontSize:14, cursor:"pointer", fontFamily:"inherit" }}>
             Cancel
           </button>
-          <button onClick={onConfirm} style={{ background:"linear-gradient(135deg, #be123c, #f43f5e)",
-            border:"none", borderRadius:10, padding:"0.6rem 1.4rem", color:"#fff",
-            fontSize:14, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:7, fontFamily:"inherit" }}>
+          <button
+            onClick={handleDelete}
+            disabled={!confirmText.trim() || confirmText.trim().toLowerCase() !== entry?.project?.toLowerCase()}
+            style={{
+              background: confirmText.trim() && confirmText.trim().toLowerCase() === entry?.project?.toLowerCase()
+                ? "linear-gradient(135deg, #be123c, #f43f5e)"
+                : T.btnGhost,
+              border:"none",
+              borderRadius:10,
+              padding:"0.6rem 1.4rem",
+              color: confirmText.trim() && confirmText.trim().toLowerCase() === entry?.project?.toLowerCase()
+                ? "#fff"
+                : T.textMut,
+              fontSize:14,
+              fontWeight:700,
+              cursor: confirmText.trim() && confirmText.trim().toLowerCase() === entry?.project?.toLowerCase()
+                ? "pointer"
+                : "not-allowed",
+              display:"flex",
+              alignItems:"center",
+              gap:7,
+              fontFamily:"inherit"
+            }}
+          >
             <Trash2 size={14} /> Delete
           </button>
         </div>
@@ -730,9 +826,9 @@ function GoalBar({ goal, totalEarned, T, isWeb3, currency, onEditGoal, formatCur
 
 /* ─── MONTHLY CHART ─────────────────────────────────────────────────── */
 
-function MonthlyChart({ data, T, isWeb3 }: {
+function MonthlyChart({ data, T, isWeb3, fmt }: {
   data:{ month:string; earned:number; saved:number; given:number }[];
-  T:typeof DARK; isWeb3:boolean;
+  T:typeof DARK; isWeb3:boolean; fmt:(n:number)=>string;
 }) {
   const [chartType, setChartType] = useState<ChartType>("bar");
 
@@ -807,7 +903,7 @@ function MonthlyChart({ data, T, isWeb3 }: {
             <CartesianGrid strokeDasharray="2 4" stroke={gridStroke} vertical={false} />
             <XAxis dataKey="month" tick={axisStyle} axisLine={false} tickLine={false} />
             <YAxis tick={axisStyle} axisLine={false} tickLine={false} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`} width={36} />
-            <Tooltip content={<ChartTip T={T} />} />
+            <Tooltip content={<ChartTip T={T} fmt={fmt} />} />
             <Bar dataKey="earned" name={legend[0].l} fill={T.primary} radius={[4,4,0,0]} opacity={0.9} />
             <Bar dataKey="saved"  name={legend[1].l} fill={T.blue}    radius={[4,4,0,0]} opacity={0.9} />
             <Bar dataKey="given"  name={legend[2].l} fill={T.rose}    radius={[4,4,0,0]} opacity={0.9} />
@@ -821,7 +917,7 @@ function MonthlyChart({ data, T, isWeb3 }: {
             <CartesianGrid strokeDasharray="2 4" stroke={gridStroke} vertical={false} />
             <XAxis dataKey="month" tick={axisStyle} axisLine={false} tickLine={false} />
             <YAxis tick={axisStyle} axisLine={false} tickLine={false} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`} width={36} />
-            <Tooltip content={<ChartTip T={T} />} />
+            <Tooltip content={<ChartTip T={T} fmt={fmt} />} />
             <Line type="monotone" dataKey="earned" name={legend[0].l} stroke={T.primary} strokeWidth={2.5} dot={{ r:3, fill:T.primary, strokeWidth:0 }} activeDot={{ r:5 }} />
             <Line type="monotone" dataKey="saved"  name={legend[1].l} stroke={T.blue}    strokeWidth={2.5} dot={{ r:3, fill:T.blue,    strokeWidth:0 }} activeDot={{ r:5 }} />
             <Line type="monotone" dataKey="given"  name={legend[2].l} stroke={T.rose}    strokeWidth={2.5} dot={{ r:3, fill:T.rose,    strokeWidth:0 }} activeDot={{ r:5 }} />
@@ -893,8 +989,8 @@ function IBtn({ icon:Icon, color, onClick, title, T }: {
 
 /* ─── TABLE ROW ─────────────────────────────────────────────────────── */
 
-function TableRow({ entry, index, onEdit, onDelete, T, isWeb3 }: {
-  entry:Entry; index:number; onEdit:()=>void; onDelete:()=>void; T:typeof DARK; isWeb3:boolean;
+function TableRow({ entry, index, onEdit, onDelete, T, isWeb3, fmt }: {
+  entry:Entry; index:number; onEdit:()=>void; onDelete:()=>void; T:typeof DARK; isWeb3:boolean; fmt:(n:number)=>string;
 }) {
   const [hov, setHov] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -946,6 +1042,23 @@ function TableRow({ entry, index, onEdit, onDelete, T, isWeb3 }: {
         fontSize:13, color:T===DARK?"#93c5fd":T.blue, whiteSpace:"nowrap" }}>{fmt(entry.saved)}</td>
       <td style={{ padding:"0.9rem 1.25rem", textAlign:"right", fontFamily:"'DM Mono','Fira Mono',monospace",
         fontSize:13, color:T===DARK?"#fda4af":T.rose, whiteSpace:"nowrap" }}>{fmt(entry.given)}</td>
+      {isWeb3 && (
+        <td style={{ padding:"0.9rem 1.25rem", textAlign:"right", fontFamily:"'DM Mono','Fira Mono',monospace",
+          fontSize:13, fontWeight:600, whiteSpace:"nowrap" }}>
+          {entry.investmentAmount && entry.currentValue !== undefined ? (
+            <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:2 }}>
+              <div style={{ color: entry.currentValue >= entry.investmentAmount ? T.primary : T.rose, fontWeight:700 }}>
+                {entry.currentValue >= entry.investmentAmount ? "+" : ""}{fmt(entry.currentValue - entry.investmentAmount)}
+              </div>
+              <div style={{ fontSize:10, color: entry.currentValue >= entry.investmentAmount ? T.primary : T.rose, fontWeight:600, opacity:0.8 }}>
+                {((entry.currentValue / entry.investmentAmount - 1) * 100).toFixed(1)}%
+              </div>
+            </div>
+          ) : (
+            <span style={{ color:T.textMut }}>—</span>
+          )}
+        </td>
+      )}
       <td style={{ padding:"0.9rem 1.25rem" }}><Pill cat={entry.givenTo} /></td>
       <td style={{ padding:"0.9rem 1.25rem" }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
@@ -982,15 +1095,8 @@ function HeaderBtn({ onClick, label, icon:Icon, T }: {
 export default function FinanceDashboard() {
   const { isWeb3, setMode, mode } = useWeb3();
   const { setCurrentPage, currency, setCurrency, hideBalances } = useAppSettings();
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof window === "undefined") return true;
-    try {
-      const saved = localStorage.getItem("ledger_theme");
-      return saved ? saved === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
-    } catch {
-      return true;
-    }
-  });
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [isDark, setIsDark] = useState(true);
   const [goal, setGoal] = useState(() => {
     if (typeof window === "undefined") return 60000;
     try {
@@ -1080,6 +1186,31 @@ export default function FinanceDashboard() {
   const [goalError, setGoalError] = useState("");
 
   const T = isDark ? DARK : LIGHT;
+
+  // Currency-aware formatter
+  const fmt = (n: number) => {
+    const exchangeRates: Record<string, number> = {
+      USD: 1, EUR: 0.92, GBP: 0.80, JPY: 145, AUD: 1.55,
+      CAD: 1.35, CHF: 0.92, CNY: 7.28, INR: 83,
+    };
+    const convertedValue = isWeb3 ? n : n * (exchangeRates[currency] ?? 1);
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: isWeb3 ? "USD" : currency,
+      maximumFractionDigits: 0,
+    }).format(convertedValue ?? 0);
+  };
+
+  /* ── hydration effect ── */
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("ledger_theme");
+      setIsDark(saved ? saved === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches);
+    } catch {
+      setIsDark(true);
+    }
+    setIsHydrated(true);
+  }, []);
 
   /* ── update the page indicator for floating window ── */
   useEffect(() => {
@@ -1203,13 +1334,13 @@ export default function FinanceDashboard() {
   };
 
   const tableHeaders = isWeb3
-    ? ["Date","Description","Wallet","Received","Saved","Sent","Category",""]
+    ? ["Date","Description","Wallet","Received","Saved","Sent","P&L","Category",""]
     : ["Date","Project","Earned","Saved","Given","Category",""];
 
   return (
     <MasterPasscodeGuard isDark={isDark}>
       <>
-      <style>{`
+      <style suppressHydrationWarning>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&family=Geist:wght@400;500;600;700&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         @keyframes slideUp { from { opacity:0; transform:translateY(18px) scale(0.975); } to { opacity:1; transform:none; } }
@@ -1249,10 +1380,11 @@ export default function FinanceDashboard() {
                 </div>
               </div>
               {/* Page links */}
-              <div style={{ display:"flex", gap:4 }}>
+              <div style={{ display:"flex", gap:4, flexWrap: "wrap" }}>
                 {[
-                  { href:"/",       icon:LayoutDashboard, label:"Dashboard" },
-                  { href:"/cards",  icon:isWeb3?Wallet:CreditCard, label:isWeb3?"Wallets":"Cards" },
+                  { href:"/",            icon:LayoutDashboard, label:"Dashboard" },
+                  { href:"/cards",       icon:isWeb3?Wallet:CreditCard, label:isWeb3?"Wallets":"Cards" },
+                  { href:"/performance", icon:TrendingUp, label:"Performance" },
                 ].map(link => (
                   <a key={link.href} href={link.href}
                     style={{ display:"flex", alignItems:"center", gap:6, padding:"5px 12px",
@@ -1313,7 +1445,7 @@ export default function FinanceDashboard() {
         </header>
 
         {/* ── MAIN ── */}
-        <main style={{ maxWidth:1380, margin:"0 auto", padding:"2rem" }}>
+        <main style={{ maxWidth:1380, margin:"0 auto", padding:"2rem 2rem 6rem 2rem" }}>
 
           {/* Mode banner */}
           {isWeb3 && (
@@ -1330,7 +1462,7 @@ export default function FinanceDashboard() {
 
           {/* KPI Row */}
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(210px, 1fr))", gap:"1rem", marginBottom:"1.1rem" }}>
-            {KPI.map((k,i) => <MetricCard key={k.label} {...k} index={i} T={T} />)}
+            {KPI.map((k,i) => <MetricCard key={k.label} {...k} index={i} T={T} fmt={fmt} />)}
           </div>
 
           {/* Goal Bar */}
@@ -1349,7 +1481,7 @@ export default function FinanceDashboard() {
           {/* Charts */}
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(360px, 1fr))", gap:"1rem", marginBottom:"1.1rem" }}>
 
-            <MonthlyChart data={monthly} T={T} isWeb3={isWeb3} />
+            <MonthlyChart data={monthly} T={T} isWeb3={isWeb3} fmt={fmt} />
 
             {/* Cumulative area */}
             <div style={{ ...glassCard(T, { padding:"1.5rem" }) }}>
@@ -1377,7 +1509,7 @@ export default function FinanceDashboard() {
                   <XAxis dataKey="date" tick={{ fill:T.textMut, fontSize:9 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fill:T.textMut, fontSize:10 }} axisLine={false} tickLine={false}
                     tickFormatter={v=>`$${(v/1000).toFixed(0)}k`} width={36} />
-                  <Tooltip content={<ChartTip T={T} />} />
+                  <Tooltip content={<ChartTip T={T} fmt={fmt} />} />
                   <Area type="monotone" dataKey="cumulative" name={isWeb3?"Total Assets":"Total"} stroke={T.primary} strokeWidth={2.5}
                     fill="url(#ag)" dot={false}
                     activeDot={{ r:5, fill:T.primary, strokeWidth:2, stroke:isDark?"#06080f":"#f0f4f8" }} />
@@ -1392,7 +1524,7 @@ export default function FinanceDashboard() {
               display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:"1rem" }}>
               <div>
                 <div style={{ fontSize:14, fontWeight:700, color:T.textPri }}>
-                  {isWeb3 ? "Recent Transactions" : "Recent Projects"}
+                  Recent Transactions
                 </div>
                 <div style={{ fontSize:12, color:T.textMut, marginTop:2 }}>{entries.length} transactions</div>
               </div>
@@ -1431,7 +1563,7 @@ export default function FinanceDashboard() {
                     <TableRow key={e.id} entry={e} index={i}
                       onEdit={() => setEditEntry(e)}
                       onDelete={() => setDeleteEntry(e)}
-                      T={T} isWeb3={isWeb3} />
+                      T={T} isWeb3={isWeb3} fmt={fmt} />
                   ))}
                   {entries.length===0 && (
                     <tr><td colSpan={tableHeaders.length} style={{ padding:"4rem", textAlign:"center", color:T.textMut, fontSize:14 }}>
@@ -1451,7 +1583,7 @@ export default function FinanceDashboard() {
 
       {/* ── Modals ── */}
       {addModal    && <EntryModal onSave={save} onClose={() => setAddModal(false)} T={T} isWeb3={isWeb3} />}
-      {editEntry   && <EntryModal initial={{ ...editEntry, earned: String(editEntry.earned), saved: String(editEntry.saved), given: String(editEntry.given) }} onSave={save} onClose={() => setEditEntry(null)} T={T} isWeb3={isWeb3} />}
+      {editEntry   && <EntryModal initial={{ ...editEntry, earned: String(editEntry.earned), saved: String(editEntry.saved), given: String(editEntry.given), investmentAmount: editEntry.investmentAmount ? String(editEntry.investmentAmount) : "", currentValue: editEntry.currentValue ? String(editEntry.currentValue) : "" }} onSave={save} onClose={() => setEditEntry(null)} T={T} isWeb3={isWeb3} />}
       {deleteEntry && <DeleteModal entry={deleteEntry} onConfirm={() => remove(deleteEntry.id)} onClose={() => setDeleteEntry(null)} T={T} />}
       {exportModal && <ExportModal entries={entries} goal={goal} onClose={() => setExportModal(false)} onCsv={exportCsv} T={T} />}
       {showGoalModal && (
@@ -1572,7 +1704,7 @@ export default function FinanceDashboard() {
           </div>
         </div>
       )}
-      <FloatingToolsWindow isDark={isDark} />
+      <BottomToolsBar isDark={isDark} />
       </>
     </MasterPasscodeGuard>
   );

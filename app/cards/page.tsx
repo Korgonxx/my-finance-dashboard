@@ -10,7 +10,7 @@ import {
 import { useWeb3 } from "../context/Web3Context";
 import { useAppSettings } from "../context/AppSettingsContext";
 import { encryptData, decryptData, maskData, hashPasscode, verifyPasscode } from "../utils/encryption";
-import { FloatingToolsWindow } from "../components/FloatingToolsWindow";
+import { BottomToolsBar } from "../components/BottomToolsBar";
 import { MasterPasscodeGuard } from "../components/MasterPasscodeGuard";
 
 const DARK = {
@@ -494,7 +494,7 @@ function CardsPage() {
 
   return (
     <>
-      <style>{`
+      <style suppressHydrationWarning>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&family=Geist:wght@400;500;600;700&display=swap');
         * { margin: 0; padding: 0; box-sizing: border-box; }
         @keyframes slideUp { from { opacity:0; transform:translateY(18px); } to { opacity:1; } }
@@ -504,6 +504,7 @@ function CardsPage() {
 
       <MasterPasscodeGuard isDark={isDark}>
         <div
+          suppressHydrationWarning
           style={{
             minHeight: "100vh",
             ...bgStyle,
@@ -623,7 +624,7 @@ function CardsPage() {
         </header>
 
         {/* Main Content */}
-        <main style={{ maxWidth: 1380, margin: "0 auto", padding: "2rem" }}>
+        <main style={{ maxWidth: 1380, margin: "0 auto", padding: "2rem 2rem 6rem 2rem" }}>
           {/* Title & Stats */}
           <div style={{ marginBottom: "2.5rem" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
@@ -2369,7 +2370,7 @@ function CardsPage() {
         </div>
       )}
 
-      <FloatingToolsWindow isDark={isDark} />
+      <BottomToolsBar isDark={isDark} />
       </MasterPasscodeGuard>
     </>
   );

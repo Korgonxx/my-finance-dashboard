@@ -80,6 +80,7 @@ export function MasterPasscodeGuard({ isDark, children }: MasterPasscodeGuardPro
     <div style={{ position: "relative" }}>
       {/* Blurred Background Content */}
       <div
+        suppressHydrationWarning
         inert
         aria-hidden="true"
         style={{

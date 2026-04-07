@@ -10,6 +10,7 @@ interface AppSettingsContextType {
   appPasscodeVerified: boolean;
   verifyAppPasscode: (passcode: string) => boolean;
   lockApp: () => void;
+  changeAppPasscode: (currentPasscode: string, newPasscode: string) => boolean;
   
   // Currency
   currency: Currency;
@@ -28,6 +29,7 @@ const AppSettingsContext = createContext<AppSettingsContextType>({
   appPasscodeVerified: false,
   verifyAppPasscode: () => false,
   lockApp: () => {},
+  changeAppPasscode: () => false,
   currency: "USD",
   setCurrency: () => {},
   hideBalances: false,
@@ -36,7 +38,7 @@ const AppSettingsContext = createContext<AppSettingsContextType>({
   setCurrentPage: () => {},
 });
 
-const MASTER_PASSCODE = "888888";
+const DEFAULT_PASSCODE = "888888";
 const CURRENCY_SYMBOLS: Record<Currency, string> = {
   USD: "$",
   EUR: "€",
@@ -51,6 +53,14 @@ const CURRENCY_SYMBOLS: Record<Currency, string> = {
 
 export function AppSettingsProvider({ children }: { children: ReactNode }) {
   const [appPasscodeVerified, setAppPasscodeVerified] = useState(false);
+  const [masterPasscode, setMasterPasscode] = useState(() => {
+    try {
+      const saved = localStorage.getItem("app_master_passcode");
+      return saved || DEFAULT_PASSCODE;
+    } catch {
+      return DEFAULT_PASSCODE;
+    }
+  });
   const [currency, setCurrencyState] = useState<Currency>(() => {
     try {
       const saved = localStorage.getItem("app_currency") as Currency | null;
@@ -70,6 +80,14 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
   const [currentPage, setCurrentPageState] = useState<AppPage>("home");
   const [isHydrated, setIsHydrated] = useState(true);
 
+  // Persist master passcode
+  useEffect(() => {
+    if (!isHydrated) return;
+    try {
+      localStorage.setItem("app_master_passcode", masterPasscode);
+    } catch {}
+  }, [masterPasscode, isHydrated]);
+
   // Persist currency
   useEffect(() => {
     if (!isHydrated) return;
@@ -87,11 +105,22 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
   }, [hideBalances, isHydrated]);
 
   const verifyAppPasscode = (passcode: string): boolean => {
-    if (passcode === MASTER_PASSCODE) {
+    if (passcode === masterPasscode) {
       setAppPasscodeVerified(true);
       return true;
     }
     return false;
+  };
+
+  const changeAppPasscode = (currentPasscode: string, newPasscode: string): boolean => {
+    if (currentPasscode !== masterPasscode) {
+      return false;
+    }
+    if (newPasscode.length !== 6 || !/^\d+$/.test(newPasscode)) {
+      return false;
+    }
+    setMasterPasscode(newPasscode);
+    return true;
   };
 
   const lockApp = () => {
@@ -116,6 +145,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
         appPasscodeVerified,
         verifyAppPasscode,
         lockApp,
+        changeAppPasscode,
         currency,
         setCurrency,
         hideBalances,
