@@ -1,6 +1,6 @@
 "use client";
 
-import { useEntries } from "../lib/hooks/useEntries";
+import { useEntries } from "../../lib/hooks/useEntries";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
@@ -116,8 +116,6 @@ export default function PerformanceMetrics() {
     { label: "Avg ROI",      value: `${avgRoi}%`,                       icon: Target,     color: T.amber,   change: bestMonth ? `Best: ${bestMonth.month}` : "N/A" },
     { label: "Total Given",  value: `$${totalGiven.toLocaleString()}`,  icon: Activity,   color: T.rose,    change: totalEarned > 0 ? `${((totalGiven/totalEarned)*100).toFixed(1)}% rate` : "0%" },
   ];
-  const categoryPerformance = performanceMode === "web2" ? web2CategoryPerformance : web3CategoryPerformance;
-  const metricsData = performanceMode === "web2" ? web2MetricsData : web3MetricsData;
 
   return (
     <MasterPasscodeGuard isDark={isDark}>
