@@ -17,9 +17,12 @@ import {
   Eye, EyeOff,
 } from "lucide-react";
 import { useWeb3 } from "./context/Web3Context";
+import { useEntries, useGoal } from "@/lib/hooks/useEntries";
 import { useAppSettings, CURRENCY_SYMBOLS, type Currency } from "./context/AppSettingsContext";
 import { MasterPasscodeGuard } from "./components/MasterPasscodeGuard";
 import { BottomToolsBar } from "./components/BottomToolsBar";
+import { CloudSyncModal } from "./components/CloudSyncModal";
+import { loadDashboardState, saveDashboardState } from "./lib/cloudSync";
 
 /* ─── THEME TOKENS ─────────────────────────────────────────────────── */
 
@@ -134,6 +137,21 @@ const pct   = (a: number, b: number) => b > 0 ? ((a / b) * 100).toFixed(1) : "0.
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
 const shortAddr = (addr: string) => addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : "";
 const GOAL_CURRENCIES: Currency[] = ["USD", "EUR", "GBP", "JPY", "AUD", "CAD", "CHF", "CNY", "INR"];
+
+function getGoogleSheetId(raw: string) {
+  const value = raw.trim();
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.hostname.includes("docs.google.com")) {
+      const parts = url.pathname.split("/").filter(Boolean);
+      const idx = parts.indexOf("d");
+      if (idx !== -1 && parts.length > idx + 1) return parts[idx + 1];
+    }
+  } catch {}
+  const match = value.match(/[-\w]{25,}/);
+  return match ? match[0] : null;
+}
 
 function buildMonthly(entries: Entry[]) {
   const map: Record<string, { month:string; earned:number; saved:number; given:number }> = {};
@@ -576,7 +594,7 @@ function DeleteModal({ entry, onConfirm, onClose, T }: {
 const SCOPES = "https://www.googleapis.com/auth/spreadsheets";
 
 function useGSheets() {
-  const [status, setStatus]     = useState<"idle"|"loading"|"authed"|"exporting"|"done"|"error">("idle");
+  const [status, setStatus]     = useState<"idle"|"loading"|"authed"|"importing"|"exporting"|"done"|"error">("idle");
   const [sheetUrl, setSheetUrl] = useState<string|null>(null);
   const [errMsg, setErrMsg]     = useState<string|null>(null);
   const tokenRef  = useRef<string|null>(null);
@@ -648,25 +666,107 @@ function useGSheets() {
     } catch(e) { setStatus("error"); setErrMsg(String(e)); }
   }, []);
 
+  const pullFromSheets = useCallback(async (sheetId:string): Promise<{ entries: Entry[]; goal: number | null }> => {
+    if (!tokenRef.current) return { entries: [], goal: null };
+    setStatus("importing");
+    try {
+      const res = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}/values/Transactions!A2:H1000?majorDimension=ROWS&valueRenderOption=UNFORMATTED_VALUE`,
+        { headers: { Authorization: `Bearer ${tokenRef.current}` } },
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || JSON.stringify(data));
+      const rows = (data.values ?? []) as Array<Array<string|number>>;
+      const imported: Entry[] = [];
+      let goalValue: number | null = null;
+      for (const row of rows) {
+        const first = String(row[0] ?? "").trim();
+        if (!first) break;
+        const normalized = first.toLowerCase();
+        if (normalized === "summary" || normalized.startsWith("total ") || normalized.includes("goal")) {
+          if (normalized.includes("goal") && row[1] !== undefined) {
+            goalValue = Number(row[1]) || goalValue;
+          }
+          break;
+        }
+        imported.push({
+          id: uid(),
+          date: String(row[0] ?? ""),
+          project: String(row[1] ?? ""),
+          earned: Number(row[2] ?? 0),
+          saved: Number(row[3] ?? 0),
+          given: Number(row[4] ?? 0),
+          givenTo: String(row[5] ?? ""),
+          walletAddress: String(row[6] ?? ""),
+          walletName: String(row[7] ?? ""),
+          mode: "web2",
+        });
+      }
+      setStatus("done");
+      return { entries: imported, goal: goalValue };
+    } catch(e) {
+      setStatus("error"); setErrMsg(String(e));
+      return { entries: [], goal: null };
+    }
+  }, []);
+
   const reset = useCallback(() => { setStatus("idle"); setSheetUrl(null); setErrMsg(null); }, []);
-  return { status, sheetUrl, errMsg, authorize, pushToSheets, reset };
+  return { status, sheetUrl, errMsg, authorize, pushToSheets, pullFromSheets, reset };
 }
 
 /* ─── EXPORT MODAL ──────────────────────────────────────────────────── */
 
-function ExportModal({ entries, goal, onClose, onCsv, T }: {
-  entries:Entry[]; goal:number; onClose:()=>void; onCsv:()=>void; T:typeof DARK;
+function ExportModal({ entries, goal, onClose, onCsv, onImport, isWeb3, T }: {
+  entries:Entry[]; goal:number; onClose:()=>void; onCsv:()=>void; onImport:(entries:Entry[], goal?:number)=>void; isWeb3:boolean; T:typeof DARK;
 }) {
-  const { status, sheetUrl, errMsg, authorize, pushToSheets, reset } = useGSheets();
+  const { status, sheetUrl, errMsg, authorize, pushToSheets, pullFromSheets, reset } = useGSheets();
   const [clientId, setClientId] = useState(() => { try { return localStorage.getItem("goog_cid")||""; } catch { return ""; } });
-  const [view, setView] = useState<"choose"|"sheets">("choose");
-  useEffect(() => { if (status==="authed") pushToSheets(entries,goal); }, [status,entries,goal,pushToSheets]);
+  const [view, setView] = useState<"choose"|"sheets"|"import">("choose");
+  const [sheetAction, setSheetAction] = useState<"export"|"import"|null>(null);
+  const [sheetIdInput, setSheetIdInput] = useState("");
+  const [importedCount, setImportedCount] = useState<number|null>(null);
+  const [importGoal, setImportGoal] = useState<number | null>(null);
+  const [pendingSheetId, setPendingSheetId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (status !== "authed" || !sheetAction) return;
+    if (sheetAction === "export") {
+      pushToSheets(entries, goal);
+      setSheetAction(null);
+      return;
+    }
+    if (sheetAction === "import" && pendingSheetId) {
+      pullFromSheets(pendingSheetId).then(result => {
+        if (result.entries.length) {
+          const importedMode: Entry["mode"] = isWeb3 ? "web3" : "web2";
+          const imported = result.entries.map(e => ({ ...e, mode: importedMode }));
+          onImport(imported, result.goal ?? undefined);
+          setImportedCount(imported.length);
+          setImportGoal(result.goal);
+        }
+        setSheetAction(null);
+      });
+    }
+  }, [status, sheetAction, pendingSheetId, pullFromSheets, pushToSheets, entries, goal, isWeb3, onImport]);
+
   const handleConnect = () => {
+    if (!clientId.trim()) return;
+    try { localStorage.setItem("goog_cid",clientId); } catch {}
+    setSheetAction("export");
+    authorize(clientId);
+  };
+
+  const handleImport = () => {
+    const sheetId = getGoogleSheetId(sheetIdInput);
+    if (!sheetId) return;
+    setPendingSheetId(sheetId);
+    setSheetAction("import");
     if (!clientId.trim()) return;
     try { localStorage.setItem("goog_cid",clientId); } catch {}
     authorize(clientId);
   };
-  const isLoading = status==="loading"||status==="authed"||status==="exporting";
+
+  const isLoading = status==="loading"||status==="authed"||status==="exporting"||status==="importing";
 
   return (
     <Modal onClose={onClose} width={460} T={T}>
@@ -686,6 +786,7 @@ function ExportModal({ entries, goal, onClose, onCsv, T }: {
           {[
             { label:"Download as CSV", sub:"Works with Excel, Numbers & Google Sheets", icon:FileText, color:T.amber, action:()=>{ onCsv(); onClose(); } },
             { label:"Push to Google Sheets", sub:"Creates a formatted sheet in your Drive via OAuth", icon:FileSpreadsheet, color:T.primary, action:()=>setView("sheets") },
+            { label:"Import from Google Sheets", sub:"Load shared data from a spreadsheet to sync devices", icon:Zap, color:T.blue, action:()=>setView("import") },
           ].map(btn => (
             <button key={btn.label} onClick={btn.action}
               style={{ display:"flex", alignItems:"center", gap:"1rem", width:"100%", textAlign:"left",
@@ -703,6 +804,43 @@ function ExportModal({ entries, goal, onClose, onCsv, T }: {
               </div>
             </button>
           ))}
+        </div>
+      )}
+
+      {view==="import" && (
+        <div>
+          <button onClick={() => { setView("choose"); reset(); }}
+            style={{ background:"none", border:"none", color:T.textMut, fontSize:13,
+              cursor:"pointer", display:"flex", alignItems:"center", gap:5, marginBottom:"1.25rem", padding:0, fontFamily:"inherit" }}>
+            ← Back
+          </button>
+          <div style={{ background:`${T.blue}0d`, border:`1px solid ${T.blue}30`, borderRadius:12, padding:"1rem", marginBottom:"1.25rem" }}>
+            <div style={{ display:"flex", gap:8, alignItems:"flex-start" }}>
+              <AlertCircle size={15} style={{ color:T.blue, flexShrink:0, marginTop:1 }} />
+              <div style={{ fontSize:12, color:T.textSec, lineHeight:1.65 }}>
+                Paste the Google Sheets spreadsheet URL or ID used for export. This will replace current entries with the data from that sheet.
+              </div>
+            </div>
+          </div>
+          <Field label="Spreadsheet URL or ID" value={sheetIdInput}
+            onChange={e => setSheetIdInput(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/..." T={T} />
+          {status==="error" && <p style={{ color:T.rose, fontSize:12, marginTop:8 }}>Error: {errMsg}</p>}
+          <button onClick={handleImport} disabled={!sheetIdInput.trim() || !clientId.trim()}
+            style={{ width:"100%", marginTop:"1rem", background:`linear-gradient(135deg, ${T.primary}, ${T.primary}cc)`,
+              border:"none", borderRadius:10, padding:"0.7rem", color:T===DARK?"#021a14":"#fff",
+              fontSize:14, fontWeight:700, cursor:sheetIdInput.trim()&&clientId.trim()?"pointer":"not-allowed",
+              opacity:sheetIdInput.trim()&&clientId.trim()?1:0.5, display:"flex", alignItems:"center", justifyContent:"center", gap:8, fontFamily:"inherit" }}>
+            <Zap size={15} /> Connect & Import
+          </button>
+          <button onClick={() => setView("sheets")}
+            style={{ width:"100%", marginTop:"0.75rem", background:T.btnGhost, border:`1px solid ${T.border}`, borderRadius:10, padding:"0.7rem", color:T.textMut, fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
+            Use Sheets Export Instead
+          </button>
+          {importedCount !== null && (
+            <div style={{ marginTop:"1rem", padding:"0.9rem 1rem", borderRadius:12, background:T.tagBg, color:T.textPri, fontSize:13 }}>
+              Imported {importedCount} rows{importGoal ? ` and updated goal to ${importGoal}` : ""}.
+            </div>
+          )}
         </div>
       )}
 
@@ -744,11 +882,11 @@ function ExportModal({ entries, goal, onClose, onCsv, T }: {
                 border:`2px solid ${T.primary}`, borderTopColor:"transparent",
                 animation:"spin 0.8s linear infinite", margin:"0 auto 1rem" }} />
               <div style={{ color:T.textSec, fontSize:14 }}>
-                {status==="loading"?"Connecting to Google…":"Creating your spreadsheet…"}
+                {status==="loading" ? "Connecting to Google…" : status==="importing" ? "Importing data from Google Sheets…" : "Creating your spreadsheet…"}
               </div>
             </div>
           )}
-          {status==="done" && (
+          {status==="done" && sheetUrl && (
             <div style={{ textAlign:"center", padding:"1rem 0.5rem" }}>
               <div style={{ width:56, height:56, borderRadius:"50%", background:`${T.primary}18`,
                 border:`1px solid ${T.primary}33`, display:"flex", alignItems:"center",
@@ -1094,93 +1232,28 @@ function HeaderBtn({ onClick, label, icon:Icon, T }: {
 
 export default function FinanceDashboard() {
   const { isWeb3, setMode, mode } = useWeb3();
-  const { setCurrentPage, currency, setCurrency, hideBalances } = useAppSettings();
+  const { setCurrentPage, currency, setCurrency, hideBalances, setHideBalances } = useAppSettings();
   const [isHydrated, setIsHydrated] = useState(false);
   const [isDark, setIsDark] = useState(true);
-  const [goal, setGoal] = useState(() => {
-    if (typeof window === "undefined") return 60000;
-    try {
-      const saved = localStorage.getItem("fd_goal");
-      return saved ? parseFloat(saved) : 60000;
-    } catch {
-      return 60000;
-    }
-  });
-  const [showGoalModal, setShowGoalModal] = useState(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      return !isWeb3 && !localStorage.getItem("fd_goal");
-    } catch {
-      return false;
-    }
-  });
-  const [web2Entries, setWeb2Entries] = useState<Entry[]>(() => {
-    if (typeof window === "undefined") return SEED_DATA_WEB2;
-    try {
-      const savedWeb2 = localStorage.getItem("fd_web2_entries");
-      const savedWeb3 = localStorage.getItem("fd_web3_entries");
-      const legacy = localStorage.getItem("fd_entries");
-      if (savedWeb2 || savedWeb3) {
-        return savedWeb2 ? JSON.parse(savedWeb2) : SEED_DATA_WEB2;
-      }
-      if (legacy) {
-        const legacyEntries = JSON.parse(legacy) as Array<Record<string, unknown>>;
-        return legacyEntries
-          .map((entry) => ({
-            id: String(entry.id ?? uid()),
-            date: String(entry.date ?? ""),
-            project: String(entry.project ?? ""),
-            earned: Number(entry.earned ?? 0),
-            saved: Number(entry.saved ?? 0),
-            given: Number(entry.given ?? 0),
-            givenTo: String(entry.givenTo ?? ""),
-            walletAddress: typeof entry.walletAddress === "string" ? entry.walletAddress : "",
-            walletName: typeof entry.walletName === "string" ? entry.walletName : "",
-            mode: entry.mode === "web3" ? "web3" : "web2",
-          }))
-          .filter((entry) => entry.mode === "web2");
-      }
-      return SEED_DATA_WEB2;
-    } catch {
-      return SEED_DATA_WEB2;
-    }
-  });
-  const [web3Entries, setWeb3Entries] = useState<Entry[]>(() => {
-    if (typeof window === "undefined") return SEED_DATA_WEB3;
-    try {
-      const savedWeb2 = localStorage.getItem("fd_web2_entries");
-      const savedWeb3 = localStorage.getItem("fd_web3_entries");
-      const legacy = localStorage.getItem("fd_entries");
-      if (savedWeb2 || savedWeb3) {
-        return savedWeb3 ? JSON.parse(savedWeb3) : SEED_DATA_WEB3;
-      }
-      if (legacy) {
-        const legacyEntries = JSON.parse(legacy) as Array<Record<string, unknown>>;
-        return legacyEntries
-          .map((entry) => ({
-            id: String(entry.id ?? uid()),
-            date: String(entry.date ?? ""),
-            project: String(entry.project ?? ""),
-            earned: Number(entry.earned ?? 0),
-            saved: Number(entry.saved ?? 0),
-            given: Number(entry.given ?? 0),
-            givenTo: String(entry.givenTo ?? ""),
-            walletAddress: typeof entry.walletAddress === "string" ? entry.walletAddress : "",
-            walletName: typeof entry.walletName === "string" ? entry.walletName : "",
-            mode: entry.mode === "web3" ? "web3" : "web2",
-          }))
-          .filter((entry) => entry.mode === "web3");
-      }
-      return SEED_DATA_WEB3;
-    } catch {
-      return SEED_DATA_WEB3;
-    }
-  });
-  const loaded = true;
+  const currentMode = isWeb3 ? "web3" : "web2";
+  const { goal, setGoal: setGoalAndSync } = useGoal(currentMode);
+  const { web2Entries, web3Entries, setWeb2Entries, setWeb3Entries, loaded, save: saveEntry, remove: removeEntry } = useEntries(isWeb3);
+  const [showGoalModal, setShowGoalModal] = useState(false);
   const [addModal, setAddModal] = useState(false);
   const [editEntry, setEditEntry] = useState<Entry | null>(null);
   const [deleteEntry, setDeleteEntry] = useState<Entry | null>(null);
   const [exportModal, setExportModal] = useState(false);
+  const [cloudSyncModal, setCloudSyncModal] = useState(false);
+  const [cloudSyncId, setCloudSyncId] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try { return localStorage.getItem("cloud_sync_id") || ""; } catch { return ""; }
+  });
+  const [cloudSyncMessage, setCloudSyncMessage] = useState<string | null>(null);
+  const [cloudSyncLoading, setCloudSyncLoading] = useState(false);
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try { return localStorage.getItem("auto_sync_enabled") === "true"; } catch { return false; }
+  });
   const [goalInput, setGoalInput] = useState(String(goal));
   const [goalCurrency, setGoalCurrency] = useState<Currency>(currency);
   const [goalError, setGoalError] = useState("");
@@ -1230,7 +1303,7 @@ export default function FinanceDashboard() {
       setGoalError("Enter a valid yearly goal");
       return;
     }
-    setGoal(parsed);
+    setGoalAndSync(parsed, goalCurrency);
     setCurrency(goalCurrency);
     setShowGoalModal(false);
     setGoalError("");
@@ -1267,28 +1340,16 @@ export default function FinanceDashboard() {
   /* ── data load/save ── */
   const entries = isWeb3 ? web3Entries : web2Entries;
 
-  useEffect(() => { if (loaded) try { localStorage.setItem("fd_web2_entries", JSON.stringify(web2Entries)); } catch {} }, [web2Entries, loaded]);
-  useEffect(() => { if (loaded) try { localStorage.setItem("fd_web3_entries", JSON.stringify(web3Entries)); } catch {} }, [web3Entries, loaded]);
-  useEffect(() => { if (loaded) try { localStorage.setItem("fd_goal", String(goal)); } catch {} }, [goal, loaded]);
 
-  const save = useCallback((entry:Entry) => {
-    const modeKey: Entry["mode"] = isWeb3 ? "web3" : "web2";
-    const setter = isWeb3 ? setWeb3Entries : setWeb2Entries;
-    setter(prev => {
-      const updatedEntry = { ...entry, mode: modeKey };
-      const next = prev.map(e => e.id === entry.id ? updatedEntry : e);
-      if (!next.some(e => e.id === entry.id)) {
-        return [...next, updatedEntry];
-      }
-      return next;
-    });
-    setAddModal(false); setEditEntry(null);
-  }, [isWeb3]);
-
-  const remove = useCallback((id:string) => {
-    const setter = isWeb3 ? setWeb3Entries : setWeb2Entries;
-    setter(prev => prev.filter(e => e.id !== id));
+  const save = useCallback((entry: Entry) => {
+    saveEntry(entry);
+    setAddModal(false);
+    setEditEntry(null);
+  }, [saveEntry]);
+  const remove = useCallback((id: string) => {
+    removeEntry(id);
     setDeleteEntry(null);
+  }, [removeEntry]);
   }, [isWeb3]);
 
   const exportCsv = useCallback(() => {
@@ -1302,6 +1363,83 @@ export default function FinanceDashboard() {
     });
     a.click();
   }, [entries]);
+
+  const generateCloudSyncId = useCallback(() => `${uid()}${uid()}`, []);
+
+  const saveCloudSync = useCallback(async (id:string) => {
+    if (!id) return;
+    setCloudSyncLoading(true);
+    setCloudSyncMessage("Syncing...");
+    try {
+      const payload = {
+        entries: [...web2Entries, ...web3Entries],
+        goal,
+        currency,
+        hideBalances,
+        mode,
+      };
+      await saveDashboardState(id, payload);
+      try { localStorage.setItem("cloud_sync_id", id); } catch {}
+      setCloudSyncId(id);
+      setCloudSyncMessage(`Synced dashboard to cloud ID: ${id}`);
+    } catch (error) {
+      setCloudSyncMessage(`Failed to sync cloud. ${String(error)}`);
+    } finally {
+      setCloudSyncLoading(false);
+    }
+  }, [currency, goal, hideBalances, mode, web2Entries, web3Entries]);
+
+  const loadCloudSync = useCallback(async (id:string) => {
+    if (!id) return;
+    setCloudSyncLoading(true);
+    setCloudSyncMessage("Syncing...");
+    try {
+      const data = await loadDashboardState(id);
+      if (!data) {
+        setCloudSyncMessage("No dashboard found for that sync ID.");
+        return;
+      }
+      const loadedEntries = Array.isArray(data.entries) ? data.entries : [];
+      const web2 = loadedEntries.filter((entry): entry is Entry =>
+        typeof entry === "object" && entry !== null && "mode" in entry && (entry as any).mode === "web2"
+      );
+      const web3 = loadedEntries.filter((entry): entry is Entry =>
+        typeof entry === "object" && entry !== null && "mode" in entry && (entry as any).mode === "web3"
+      );
+      setWeb2Entries(web2);
+      setWeb3Entries(web3);
+      setGoal(typeof data.goal === "number" ? data.goal : 60000);
+      setCurrency((data.currency as Currency) || "USD");
+      setHideBalances(Boolean(data.hideBalances));
+      setMode(data.mode === "web3" ? "web3" : "web2");
+      try { localStorage.setItem("cloud_sync_id", id); } catch {}
+      setCloudSyncId(id);
+      setCloudSyncMessage(`Synced dashboard from cloud ID: ${id}`);
+    } catch (error) {
+      setCloudSyncMessage(`Failed to sync cloud. ${String(error)}`);
+    } finally {
+      setCloudSyncLoading(false);
+    }
+  }, [setCurrency, setHideBalances, setMode]);
+
+  // Auto-sync every 1 minute if enabled and sync ID exists
+  useEffect(() => {
+    if (!autoSyncEnabled || !cloudSyncId) return;
+    const interval = setInterval(() => {
+      // Save current state to cloud
+      saveCloudSync(cloudSyncId);
+      // Load latest state from cloud (will only update if data exists)
+      loadCloudSync(cloudSyncId);
+    }, 60000); // 1 minute
+    return () => clearInterval(interval);
+  }, [autoSyncEnabled, cloudSyncId, saveCloudSync, loadCloudSync]);
+
+  const handleImportEntries = useCallback((importedEntries: Entry[], importedGoal?: number) => {
+    const setter = isWeb3 ? setWeb3Entries : setWeb2Entries;
+    setter(importedEntries);
+    if (importedGoal && importedGoal > 0) setGoal(importedGoal);
+    setExportModal(false);
+  }, [isWeb3]);
 
   /* ── computed ── */
   const totalEarned = entries.reduce((s,e) => s+e.earned, 0);
@@ -1363,24 +1501,24 @@ export default function FinanceDashboard() {
         <header style={{ position:"sticky", top:0, zIndex:40,
           borderBottom:`1px solid ${T.border}`,
           background:T.headerBg, backdropFilter:"blur(20px)", WebkitBackdropFilter:"blur(20px)",
-          transition:"background 0.4s, border-color 0.4s" }}>
-          <div style={{ maxWidth:1380, margin:"0 auto", padding:"0 2rem", height:64,
-            display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          overflowX:"auto", transition:"background 0.4s, border-color 0.4s" }}>
+          <div style={{ maxWidth:1380, margin:"0 auto", padding:"0 max(0.75rem, 2vw)", minHeight:64,
+            display:"flex", alignItems:"center", justifyContent:"space-between", gap:"0.75rem" }}>
 
             {/* Logo + nav */}
-            <div style={{ display:"flex", alignItems:"center", gap:20 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:"max(0.75rem, 3vw)", minWidth:0, flexShrink:0 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                 <img src="/brand/logo.png" alt="Ledger logo" width={34} height={34}
-                  style={{ width:34, height:34, borderRadius:10, objectFit:"contain", background:T.card, padding:6 }} />
-                <div>
+                  style={{ width:34, height:34, borderRadius:10, objectFit:"contain", background:T.card, padding:6, flexShrink:0 }} />
+                <div style={{ display:"none" }}>
                   <div style={{ fontSize:15, fontWeight:800, color:T.textPri, letterSpacing:"-0.03em",
                     fontFamily:"'Syne',sans-serif" }}>Ledger</div>
                   <div style={{ fontSize:9, color:T.textMut, letterSpacing:"0.1em",
                     textTransform:"uppercase", fontWeight:600 }}>Personal Finance</div>
                 </div>
               </div>
-              {/* Page links */}
-              <div style={{ display:"flex", gap:4, flexWrap: "wrap" }}>
+              {/* Page links - hidden on mobile */}
+              <div style={{ display:"none", gap:2 }}>
                 {[
                   { href:"/",            icon:LayoutDashboard, label:"Dashboard" },
                   { href:"/cards",       icon:isWeb3?Wallet:CreditCard, label:isWeb3?"Wallets":"Cards" },
@@ -1391,7 +1529,7 @@ export default function FinanceDashboard() {
                       borderRadius:8, textDecoration:"none", fontSize:13, fontWeight:600,
                       color: link.href==="/"?T.primary:T.textMut,
                       background: link.href==="/"?`${T.primary}12`:"transparent",
-                      transition:"all 0.2s" }}
+                      transition:"all 0.2s", whiteSpace:"nowrap" }}
                     onMouseEnter={e => { if(link.href!=="/") (e.currentTarget as HTMLAnchorElement).style.color=T.textPri; }}
                     onMouseLeave={e => { if(link.href!=="/") (e.currentTarget as HTMLAnchorElement).style.color=T.textMut; }}>
                     <link.icon size={14} />{link.label}
@@ -1401,26 +1539,26 @@ export default function FinanceDashboard() {
             </div>
 
             {/* Actions */}
-            <div style={{ display:"flex", alignItems:"center", gap:"0.5rem", flexWrap:"wrap" }}>
-              {/* Web2/Web3 toggle */}
+            <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"nowrap", overflowX:"auto", scrollBehavior:"smooth" }}>
+              {/* Web2/Web3 toggle - hidden on mobile */}
               <button onClick={() => setMode(isWeb3?"web2":"web3")}
-                style={{ display:"flex", alignItems:"center", gap:7,
+                style={{ display:"none", alignItems:"center", gap:7,
                   background: isWeb3
                     ? "rgba(139,92,246,0.12)"
                     : T===DARK?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.05)",
                   border:`1px solid ${isWeb3?T.violet+"55":T.border}`,
                   borderRadius:10, padding:"0.5rem 1rem",
                   color: isWeb3?T.violet:T.textSec,
-                  fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit", transition:"all 0.25s" }}>
+                  fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit", transition:"all 0.25s", whiteSpace:"nowrap" }}>
                 {isWeb3
                   ? <><Wallet size={14} /> Web3</>
                   : <><CreditCard size={14} /> Web2</>}
               </button>
 
-              {/* Theme toggle */}
+              {/* Theme toggle - hidden on mobile */}
               <button onClick={() => setIsDark(d => !d)}
                 title={isDark?"Switch to light mode":"Switch to dark mode"}
-                style={{ display:"flex", alignItems:"center", gap:7,
+                style={{ display:"none", alignItems:"center", gap:7,
                   background: isDark?"rgba(245,158,11,0.1)":"rgba(139,92,246,0.1)",
                   border:`1px solid ${isDark?T.amber+"44":T.violet+"44"}`,
                   borderRadius:10, padding:"0.5rem 1rem",
@@ -1430,15 +1568,23 @@ export default function FinanceDashboard() {
                 {isDark?"Light":"Dark"}
               </button>
 
+              <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                <HeaderBtn onClick={() => setCloudSyncModal(true)} label="Sync" icon={Zap} T={T} />
+                {autoSyncEnabled && cloudSyncId && (
+                  <span style={{ fontSize:10, color:T.textMut, fontWeight:600, letterSpacing:"0.05em", textTransform:"uppercase" }}>
+                    Auto • 1min
+                  </span>
+                )}
+              </div>
               <HeaderBtn onClick={() => setExportModal(true)} label="Export" icon={Download} T={T} />
 
               <button onClick={() => setAddModal(true)}
-                style={{ display:"flex", alignItems:"center", gap:7,
+                style={{ display:"flex", alignItems:"center", gap:4,
                   background:`linear-gradient(135deg, ${T.primary}, ${T.primary}bb)`,
-                  border:"none", borderRadius:10, padding:"0.5rem 1.1rem",
+                  border:"none", borderRadius:10, padding:"0.5rem 0.85rem",
                   color:isDark?"#021a14":"#fff",
-                  fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
-                <Plus size={14} /> Add Entry
+                  fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }}>
+                <Plus size={14} /> Add
               </button>
             </div>
           </div>
@@ -1585,7 +1731,21 @@ export default function FinanceDashboard() {
       {addModal    && <EntryModal onSave={save} onClose={() => setAddModal(false)} T={T} isWeb3={isWeb3} />}
       {editEntry   && <EntryModal initial={{ ...editEntry, earned: String(editEntry.earned), saved: String(editEntry.saved), given: String(editEntry.given), investmentAmount: editEntry.investmentAmount ? String(editEntry.investmentAmount) : "", currentValue: editEntry.currentValue ? String(editEntry.currentValue) : "" }} onSave={save} onClose={() => setEditEntry(null)} T={T} isWeb3={isWeb3} />}
       {deleteEntry && <DeleteModal entry={deleteEntry} onConfirm={() => remove(deleteEntry.id)} onClose={() => setDeleteEntry(null)} T={T} />}
-      {exportModal && <ExportModal entries={entries} goal={goal} onClose={() => setExportModal(false)} onCsv={exportCsv} T={T} />}
+      {exportModal && <ExportModal entries={entries} goal={goal} onClose={() => setExportModal(false)} onCsv={exportCsv} onImport={handleImportEntries} isWeb3={isWeb3} T={T} />}
+      {cloudSyncModal && (
+        <CloudSyncModal
+          cloudSyncId={cloudSyncId}
+          onClose={() => setCloudSyncModal(false)}
+          onGenerateId={generateCloudSyncId}
+          onSave={saveCloudSync}
+          onLoad={loadCloudSync}
+          loading={cloudSyncLoading}
+          message={cloudSyncMessage}
+          autoSyncEnabled={autoSyncEnabled}
+          setAutoSyncEnabled={setAutoSyncEnabled}
+          T={T}
+        />
+      )}
       {showGoalModal && (
         <div
           style={{
@@ -1704,7 +1864,7 @@ export default function FinanceDashboard() {
           </div>
         </div>
       )}
-      <BottomToolsBar isDark={isDark} />
+      <BottomToolsBar isDark={isDark} setIsDark={setIsDark} />
       </>
     </MasterPasscodeGuard>
   );

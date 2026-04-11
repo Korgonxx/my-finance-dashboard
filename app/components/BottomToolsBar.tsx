@@ -3,15 +3,17 @@
 import { useState } from "react";
 import {
   Eye, EyeOff, Globe, Settings, Shield, CreditCard, Lock,
-  Key, Check, X,
+  Key, Check, X, Sun, Moon, Wallet,
 } from "lucide-react";
 import { useAppSettings, CURRENCY_SYMBOLS, type Currency } from "../context/AppSettingsContext";
+import { useWeb3 } from "../context/Web3Context";
 
 const DARK = {
   bg: "rgba(6,8,15,0.95)",
   border: "rgba(255,255,255,0.075)",
   primary: "#00c9a7",
   violet: "#8b5cf6",
+  amber: "#f59e0b",
   blue: "#60a5fa",
   textPri: "#f0f4ff",
   textMut: "rgba(240,244,255,0.28)",
@@ -25,6 +27,7 @@ const LIGHT = {
   border: "rgba(0,0,0,0.08)",
   primary: "#009d82",
   violet: "#7c3aed",
+  amber: "#d97706",
   blue: "#2563eb",
   textPri: "#0d1117",
   textMut: "rgba(13,17,23,0.38)",
@@ -33,7 +36,7 @@ const LIGHT = {
   inputBg: "rgba(0,0,0,0.04)",
 };
 
-export function BottomToolsBar({ isDark }: { isDark: boolean }) {
+export function BottomToolsBar({ isDark, setIsDark }: { isDark: boolean; setIsDark: (dark: boolean) => void }) {
   const {
     hideBalances,
     setHideBalances,
@@ -43,6 +46,7 @@ export function BottomToolsBar({ isDark }: { isDark: boolean }) {
     lockApp,
     changeAppPasscode,
   } = useAppSettings();
+  const { isWeb3, setMode } = useWeb3();
 
   const [showPasscodeModal, setShowPasscodeModal] = useState(false);
   const [currentPasscode, setCurrentPasscode] = useState("");
@@ -165,6 +169,49 @@ export function BottomToolsBar({ isDark }: { isDark: boolean }) {
 
           {/* Right Section - Settings */}
           <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+            {/* Theme Toggle */}
+            <button
+              onClick={() => setIsDark(!isDark)}
+              title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              style={{
+                background: T.btnGhost,
+                border: `1px solid ${T.border}`,
+                borderRadius: 6,
+                padding: "0.25rem 0.4rem",
+                color: isDark ? T.amber : T.violet,
+                cursor: "pointer",
+                fontSize: 10,
+                fontWeight: 600,
+                display: "flex",
+                alignItems: "center",
+                gap: 3,
+              }}
+            >
+              {isDark ? <Sun size={11} /> : <Moon size={11} />}
+              <span>{isDark ? "Light" : "Dark"}</span>
+            </button>
+
+            {/* Web2/Web3 Toggle */}
+            <button
+              onClick={() => setMode(isWeb3 ? "web2" : "web3")}
+              style={{
+                background: T.btnGhost,
+                border: `1px solid ${T.border}`,
+                borderRadius: 6,
+                padding: "0.25rem 0.4rem",
+                color: isWeb3 ? T.violet : T.textMut,
+                cursor: "pointer",
+                fontSize: 10,
+                fontWeight: 600,
+                display: "flex",
+                alignItems: "center",
+                gap: 3,
+              }}
+            >
+              {isWeb3 ? <Wallet size={11} /> : <CreditCard size={11} />}
+              <span>{isWeb3 ? "Web3" : "Web2"}</span>
+            </button>
+
             {currentPage === "home" && (
               <button
                 onClick={() => window.location.href = "/"}

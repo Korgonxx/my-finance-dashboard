@@ -107,7 +107,7 @@ const glassCard = (T: typeof DARK, extra: React.CSSProperties = {}): React.CSSPr
 });
 
 function CardsPage() {
-  const { mode } = useWeb3();
+  const { mode, setMode } = useWeb3();
   const { setCurrentPage, hideBalances } = useAppSettings();
   const isWeb3 = mode === "web3";
   const [isDark, setIsDark] = useState(true);
@@ -2370,7 +2370,7 @@ function CardsPage() {
         </div>
       )}
 
-      <BottomToolsBar isDark={isDark} />
+      <BottomToolsBar isDark={isDark} setIsDark={setIsDark} />
       </MasterPasscodeGuard>
     </>
   );

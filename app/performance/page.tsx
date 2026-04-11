@@ -63,7 +63,7 @@ const glassCard = (T: typeof DARK, extra: React.CSSProperties = {}): React.CSSPr
 });
 
 export default function PerformanceMetrics() {
-  const { mode } = useWeb3();
+  const { mode, setMode } = useWeb3();
   const { hideBalances } = useAppSettings();
   const defaultMode = mode === "web3" ? "web3" : "web2";
   const [isDark, setIsDark] = useState(true);
@@ -479,7 +479,7 @@ export default function PerformanceMetrics() {
           </main>
         </div>
 
-        <BottomToolsBar isDark={isDark} />
+        <BottomToolsBar isDark={isDark} setIsDark={setIsDark} />
       </>
     </MasterPasscodeGuard>
   );
