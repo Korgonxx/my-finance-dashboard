@@ -1,0 +1,34 @@
+import { NextRequest, NextResponse } from "next/server";
+import db from "@/lib/db";
+
+export async function GET() {
+  const rows = await db.account.findMany({
+    where: { type: "CRYPTO_WALLET", deletedAt: null },
+    orderBy: { createdAt: "desc" },
+  });
+  return NextResponse.json(rows.map(r => ({
+    id: r.id,
+    name: r.name,
+    address: r.walletAddress ?? "",
+    network: r.network ?? "Ethereum",
+    balance: Number(r.currentBalance),
+    createdAt: r.createdAt.toISOString().slice(0,10),
+  })));
+}
+
+export async function POST(req: NextRequest) {
+  const body = await req.json();
+  const row = await db.account.create({
+    data: {
+      userId: "default",
+      name: body.name,
+      type: "CRYPTO_WALLET",
+      network: body.network ?? "Ethereum",
+      walletAddress: body.address ?? null,
+      currentBalance: body.balance ?? 0,
+      availableBalance: body.balance ?? 0,
+      color: "#8b5cf6",
+    },
+  });
+  return NextResponse.json({ id: row.id, name: row.name, address: row.walletAddress ?? "", network: row.network ?? "Ethereum", balance: Number(row.currentBalance), createdAt: row.createdAt.toISOString().slice(0,10) }, { status: 201 });
+}

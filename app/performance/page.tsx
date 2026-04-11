@@ -1,5 +1,6 @@
 "use client";
 
+import { useEntries } from "../lib/hooks/useEntries";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
@@ -68,6 +69,7 @@ export default function PerformanceMetrics() {
   const defaultMode = mode === "web3" ? "web3" : "web2";
   const [isDark, setIsDark] = useState(true);
   const [performanceMode, setPerformanceMode] = useState<"web2" | "web3">(defaultMode);
+  const { web2Entries, web3Entries } = useEntries(performanceMode === "web3");
 
   useEffect(() => {
     try {
@@ -86,107 +88,34 @@ export default function PerformanceMetrics() {
       : `radial-gradient(ellipse 80% 50% at 20% -10%, rgba(0,157,130,0.08) 0%, transparent 55%), radial-gradient(ellipse 60% 45% at 85% 90%, rgba(124,58,237,0.05) 0%, transparent 55%), ${T.bg}`,
   };
 
-  // Web2 Performance Data
-  const web2PerformanceData = [
-    { month: "Jan", roi: 2.5, earned: 2400, saved: 2210 },
-    { month: "Feb", roi: 3.2, earned: 2210, saved: 2290 },
-    { month: "Mar", roi: 2.8, earned: 2290, saved: 2000 },
-    { month: "Apr", roi: 4.1, earned: 2000, saved: 2181 },
-    { month: "May", roi: 3.5, earned: 2181, saved: 2500 },
-    { month: "Jun", roi: 5.2, earned: 2500, saved: 2100 },
+  const entries = performanceMode === "web2" ? web2Entries : web3Entries;
+  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const performanceData = MONTHS.map(month => {
+    const monthEntries = entries.filter(e => {
+      const d = new Date(e.date);
+      return MONTHS[d.getMonth()] === month;
+    });
+    const earned = monthEntries.reduce((s,e) => s + e.earned, 0);
+    const saved = monthEntries.reduce((s,e) => s + e.saved, 0);
+    const given = monthEntries.reduce((s,e) => s + e.given, 0);
+    const roi = earned > 0 ? parseFloat(((saved / earned) * 100).toFixed(1)) : 0;
+    return { month, earned, saved, given, roi };
+  }).filter(d => d.earned > 0 || d.saved > 0);
+  const totalEarned = entries.reduce((s,e) => s + e.earned, 0);
+  const totalSaved  = entries.reduce((s,e) => s + e.saved,  0);
+  const totalGiven  = entries.reduce((s,e) => s + e.given,  0);
+  const avgRoi = performanceData.length > 0 ? (performanceData.reduce((s,d) => s + d.roi, 0) / performanceData.length).toFixed(1) : "0.0";
+  const bestMonth = performanceData.reduce((best, d) => d.roi > (best?.roi ?? -Infinity) ? d : best, performanceData[0]);
+  const categoryMap: Record<string, number> = {};
+  entries.forEach(e => { categoryMap[e.givenTo || "Other"] = (categoryMap[e.givenTo || "Other"] || 0) + e.earned; });
+  const catColors = [T.primary, T.blue, T.violet, T.rose, T.amber];
+  const categoryPerformance = Object.entries(categoryMap).map(([name, value], i) => ({ name, value, color: catColors[i % catColors.length] }));
+  const metricsData = [
+    { label: "Total Earned", value: `$${totalEarned.toLocaleString()}`, icon: TrendingUp, color: T.primary, change: `${entries.length} entries` },
+    { label: "Total Saved",  value: `$${totalSaved.toLocaleString()}`,  icon: BarChart2,  color: T.violet,  change: totalEarned > 0 ? `${((totalSaved/totalEarned)*100).toFixed(1)}% rate` : "0%" },
+    { label: "Avg ROI",      value: `${avgRoi}%`,                       icon: Target,     color: T.amber,   change: bestMonth ? `Best: ${bestMonth.month}` : "N/A" },
+    { label: "Total Given",  value: `$${totalGiven.toLocaleString()}`,  icon: Activity,   color: T.rose,    change: totalEarned > 0 ? `${((totalGiven/totalEarned)*100).toFixed(1)}% rate` : "0%" },
   ];
-
-  // Web3 Performance Data (with higher volatility typical of crypto)
-  const web3PerformanceData = [
-    { month: "Jan", roi: 5.2, earned: 4200, saved: 1100 },
-    { month: "Feb", roi: -2.1, earned: 1800, saved: 800 },
-    { month: "Mar", roi: 8.5, earned: 5200, saved: 1200 },
-    { month: "Apr", roi: 12.3, earned: 7500, saved: 1800 },
-    { month: "May", roi: 6.8, earned: 4100, saved: 1500 },
-    { month: "Jun", roi: 15.7, earned: 9200, saved: 2100 },
-  ];
-
-  // Web2 Category Performance
-  const web2CategoryPerformance = [
-    { name: "Salary", value: 50, color: T.primary },
-    { name: "Bonuses", value: 25, color: T.blue },
-    { name: "Side Income", value: 15, color: T.violet },
-    { name: "Other", value: 10, color: T.rose },
-  ];
-
-  // Web3 Category Performance
-  const web3CategoryPerformance = [
-    { name: "Trading", value: 45, color: T.primary },
-    { name: "Staking", value: 30, color: T.violet },
-    { name: "Farming", value: 15, color: T.blue },
-    { name: "Other", value: 10, color: T.rose },
-  ];
-
-  // Web2 Metrics
-  const web2MetricsData = [
-    {
-      label: "Total ROI",
-      value: "21.3%",
-      icon: TrendingUp,
-      color: T.primary,
-      change: "+2.1%",
-    },
-    {
-      label: "Monthly Avg",
-      value: "3.55%",
-      icon: BarChart2,
-      color: T.violet,
-      change: "+0.3%",
-    },
-    {
-      label: "Best Month",
-      value: "5.2%",
-      icon: Target,
-      color: T.amber,
-      change: "Jun 2024",
-    },
-    {
-      label: "Consistency",
-      value: "95%",
-      icon: Activity,
-      color: T.blue,
-      change: "Very Stable",
-    },
-  ];
-
-  // Web3 Metrics
-  const web3MetricsData = [
-    {
-      label: "Total ROI",
-      value: "46.4%",
-      icon: TrendingUp,
-      color: T.primary,
-      change: "+8.2%",
-    },
-    {
-      label: "Monthly Avg",
-      value: "7.73%",
-      icon: BarChart2,
-      color: T.violet,
-      change: "+2.1%",
-    },
-    {
-      label: "Best Month",
-      value: "15.7%",
-      icon: Target,
-      color: T.amber,
-      change: "Jun 2024",
-    },
-    {
-      label: "Volatility",
-      value: "8.5%",
-      icon: Activity,
-      color: T.rose,
-      change: "Moderate",
-    },
-  ];
-
-  const performanceData = performanceMode === "web2" ? web2PerformanceData : web3PerformanceData;
   const categoryPerformance = performanceMode === "web2" ? web2CategoryPerformance : web3CategoryPerformance;
   const metricsData = performanceMode === "web2" ? web2MetricsData : web3MetricsData;
 

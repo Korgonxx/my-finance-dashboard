@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/db";
-import { Decimal } from "@prisma/client/runtime/library";
 
 function toEntry(row: any) {
   return {
@@ -21,10 +20,7 @@ function toEntry(row: any) {
 
 export async function GET(req: NextRequest) {
   const mode = req.nextUrl.searchParams.get("mode") ?? "web2";
-  const rows = await db.dashboardEntry.findMany({
-    where: { mode },
-    orderBy: { date: "desc" },
-  });
+  const rows = await db.dashboardEntry.findMany({ where: { mode }, orderBy: { date: "desc" } });
   return NextResponse.json(rows.map(toEntry));
 }
 
@@ -36,14 +32,14 @@ export async function POST(req: NextRequest) {
       mode:             body.mode      ?? "web2",
       date:             body.date,
       project:          body.project,
-      earned:           new Decimal(body.earned  ?? 0),
-      saved:            new Decimal(body.saved   ?? 0),
-      given:            new Decimal(body.given   ?? 0),
-      givenTo:          body.givenTo  ?? "",
-      walletAddress:    body.walletAddress ?? null,
-      walletName:       body.walletName    ?? null,
-      investmentAmount: body.investmentAmount != null ? new Decimal(body.investmentAmount) : null,
-      currentValue:     body.currentValue     != null ? new Decimal(body.currentValue)     : null,
+      earned:           body.earned    ?? 0,
+      saved:            body.saved     ?? 0,
+      given:            body.given     ?? 0,
+      givenTo:          body.givenTo   ?? "",
+      walletAddress:    body.walletAddress  ?? null,
+      walletName:       body.walletName     ?? null,
+      investmentAmount: body.investmentAmount ?? null,
+      currentValue:     body.currentValue    ?? null,
     },
   });
   return NextResponse.json(toEntry(row), { status: 201 });

@@ -1350,7 +1350,6 @@ export default function FinanceDashboard() {
     removeEntry(id);
     setDeleteEntry(null);
   }, [removeEntry]);
-  }, [isWeb3]);
 
   const exportCsv = useCallback(() => {
     const hdr  = ["Date","Project/Description","Earned/Received","Saved/Staked","Given/Sent","Category","Wallet Address","Wallet Name"];
@@ -1510,7 +1509,7 @@ export default function FinanceDashboard() {
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                 <img src="/brand/logo.png" alt="Ledger logo" width={34} height={34}
                   style={{ width:34, height:34, borderRadius:10, objectFit:"contain", background:T.card, padding:6, flexShrink:0 }} />
-                <div style={{ display:"none" }}>
+                <div style={{ display:"flex" }}>
                   <div style={{ fontSize:15, fontWeight:800, color:T.textPri, letterSpacing:"-0.03em",
                     fontFamily:"'Syne',sans-serif" }}>Ledger</div>
                   <div style={{ fontSize:9, color:T.textMut, letterSpacing:"0.1em",
@@ -1518,10 +1517,10 @@ export default function FinanceDashboard() {
                 </div>
               </div>
               {/* Page links - hidden on mobile */}
-              <div style={{ display:"none", gap:2 }}>
+              <div style={{ display:"flex", gap:2 }}>
                 {[
                   { href:"/",            icon:LayoutDashboard, label:"Dashboard" },
-                  { href:"/cards",       icon:isWeb3?Wallet:CreditCard, label:isWeb3?"Wallets":"Cards" },
+                  { href:"/cards",       icon:CreditCard, label:"Cards" },
                   { href:"/performance", icon:TrendingUp, label:"Performance" },
                 ].map(link => (
                   <a key={link.href} href={link.href}
@@ -1542,7 +1541,7 @@ export default function FinanceDashboard() {
             <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"nowrap", overflowX:"auto", scrollBehavior:"smooth" }}>
               {/* Web2/Web3 toggle - hidden on mobile */}
               <button onClick={() => setMode(isWeb3?"web2":"web3")}
-                style={{ display:"none", alignItems:"center", gap:7,
+                style={{ display:"flex", alignItems:"center", gap:7,
                   background: isWeb3
                     ? "rgba(139,92,246,0.12)"
                     : T===DARK?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.05)",
@@ -1550,7 +1549,7 @@ export default function FinanceDashboard() {
                   borderRadius:10, padding:"0.5rem 1rem",
                   color: isWeb3?T.violet:T.textSec,
                   fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit", transition:"all 0.25s", whiteSpace:"nowrap" }}>
-                {isWeb3
+                {isHydrated&&isWeb3
                   ? <><Wallet size={14} /> Web3</>
                   : <><CreditCard size={14} /> Web2</>}
               </button>
@@ -1558,7 +1557,7 @@ export default function FinanceDashboard() {
               {/* Theme toggle - hidden on mobile */}
               <button onClick={() => setIsDark(d => !d)}
                 title={isDark?"Switch to light mode":"Switch to dark mode"}
-                style={{ display:"none", alignItems:"center", gap:7,
+                style={{ display:"flex", alignItems:"center", gap:7,
                   background: isDark?"rgba(245,158,11,0.1)":"rgba(139,92,246,0.1)",
                   border:`1px solid ${isDark?T.amber+"44":T.violet+"44"}`,
                   borderRadius:10, padding:"0.5rem 1rem",

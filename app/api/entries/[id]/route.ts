@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/db";
-import { Decimal } from "@prisma/client/runtime/library";
 
 function toEntry(row: any) {
   return {
@@ -19,10 +18,7 @@ function toEntry(row: any) {
   };
 }
 
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   const body = await req.json();
   const row = await db.dashboardEntry.update({
     where: { id: params.id },
@@ -30,23 +26,20 @@ export async function PUT(
       mode:             body.mode,
       date:             body.date,
       project:          body.project,
-      earned:           new Decimal(body.earned  ?? 0),
-      saved:            new Decimal(body.saved   ?? 0),
-      given:            new Decimal(body.given   ?? 0),
-      givenTo:          body.givenTo  ?? "",
-      walletAddress:    body.walletAddress ?? null,
-      walletName:       body.walletName    ?? null,
-      investmentAmount: body.investmentAmount != null ? new Decimal(body.investmentAmount) : null,
-      currentValue:     body.currentValue     != null ? new Decimal(body.currentValue)     : null,
+      earned:           body.earned    ?? 0,
+      saved:            body.saved     ?? 0,
+      given:            body.given     ?? 0,
+      givenTo:          body.givenTo   ?? "",
+      walletAddress:    body.walletAddress  ?? null,
+      walletName:       body.walletName     ?? null,
+      investmentAmount: body.investmentAmount ?? null,
+      currentValue:     body.currentValue    ?? null,
     },
   });
   return NextResponse.json(toEntry(row));
 }
 
-export async function DELETE(
-  _req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   await db.dashboardEntry.delete({ where: { id: params.id } });
   return NextResponse.json({ ok: true });
 }

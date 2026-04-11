@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect as useLoadEffect } from "react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
@@ -155,6 +156,7 @@ function CardsPage() {
       createdAt: "2025-05-20",
     },
   ]);
+  useEffect(() => { fetch("/api/wallets").then(r => r.json()).then(data => { if(Array.isArray(data) && data.length > 0) setWallets(data); }).catch(() => {}); }, []);
 
   // Web2: Bank Cards
   const [cards, setCards] = useState<BankCard[]>([
@@ -258,7 +260,7 @@ function CardsPage() {
     }
 
     if (deleteTargetType === "wallet") {
-      setWallets(wallets.filter((w) => w.id !== deleteTargetId));
+      setWallets(prev => prev.filter(w => w.id !== deleteTargetId)); fetch(`/api/wallets/${deleteTargetId}`, { method:"DELETE" }).catch(() => {});
     } else {
       setCards(cards.filter((c) => c.id !== deleteTargetId));
     }
@@ -385,7 +387,7 @@ function CardsPage() {
           },
           passcode: hashedPasscode,
         };
-        setWallets([...wallets, newWallet]);
+        setWallets(prev => [...prev, newWallet]); fetch("/api/wallets", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ name: newWallet.name, address: formData.address, network: newWallet.network, balance: 0 }) }).catch(() => {});
       } else {
         // Encrypt card number
         const encryptedNum = await encryptData(formData.number, encryptionPasscode);
