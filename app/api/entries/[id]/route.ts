@@ -18,10 +18,11 @@ function toEntry(row: any) {
   };
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   const body = await req.json();
   const row = await db.dashboardEntry.update({
-    where: { id: params.id },
+    where: { id },
     data: {
       mode:             body.mode,
       date:             body.date,
@@ -39,7 +40,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   return NextResponse.json(toEntry(row));
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
-  await db.dashboardEntry.delete({ where: { id: params.id } });
+export async function DELETE(_req: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
+  await db.dashboardEntry.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }
