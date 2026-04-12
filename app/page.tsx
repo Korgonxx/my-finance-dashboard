@@ -1399,10 +1399,10 @@ export default function FinanceDashboard() {
         return;
       }
       const loadedEntries = Array.isArray(data.entries) ? data.entries : [];
-      const web2 = loadedEntries.filter((entry): entry is Entry =>
+      const web2 = loadedEntries.filter((entry: any): entry is Entry =>
         typeof entry === "object" && entry !== null && "mode" in entry && (entry as any).mode === "web2"
       );
-      const web3 = loadedEntries.filter((entry): entry is Entry =>
+      const web3 = loadedEntries.filter((entry: any): entry is Entry =>
         typeof entry === "object" && entry !== null && "mode" in entry && (entry as any).mode === "web3"
       );
       setWeb2Entries(web2);
