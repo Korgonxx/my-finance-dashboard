@@ -1,298 +1,146 @@
 "use client";
-
-import { useState, useEffect } from "react";
-import { Shield, AlertCircle, Lock } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
 import { useAppSettings } from "../context/AppSettingsContext";
 
-const DARK = {
-  bg: "#06080f",
-  card: "rgba(255,255,255,0.032)",
-  border: "rgba(255,255,255,0.075)",
-  primary: "#00c9a7",
-  rose: "#f43f5e",
-  textPri: "#f0f4ff",
-  textMut: "rgba(240,244,255,0.28)",
-  shadow: "0 32px 80px rgba(0,0,0,0.8)",
-  btnGhost: "rgba(255,255,255,0.05)",
-  inputBg: "rgba(255,255,255,0.04)",
-};
-
-const LIGHT = {
-  bg: "#f0f4f8",
-  card: "rgba(255,255,255,0.85)",
-  border: "rgba(0,0,0,0.08)",
-  primary: "#009d82",
-  rose: "#e11d48",
-  textPri: "#0d1117",
-  textMut: "rgba(13,17,23,0.38)",
-  shadow: "0 32px 80px rgba(0,0,0,0.12)",
-  btnGhost: "rgba(0,0,0,0.04)",
-  inputBg: "rgba(0,0,0,0.04)",
-};
-
-interface MasterPasscodeGuardProps {
-  isDark: boolean;
-  children: React.ReactNode;
-}
-
-export function MasterPasscodeGuard({ isDark, children }: MasterPasscodeGuardProps) {
-  const { appPasscodeVerified, verifyAppPasscode } = useAppSettings();
-  const [passcodeInput, setPasscodeInput] = useState("");
-  const [error, setError] = useState("");
-  const [isAttempting, setIsAttempting] = useState(false);
-
-  const T = isDark ? DARK : LIGHT;
+export function MasterPasscodeGuard({ isDark, children }: { isDark: boolean; children: React.ReactNode }) {
+  const { appPasscodeVerified, verifyAppPasscode, appPasscodeEnabled } = useAppSettings();
+  const [digits, setDigits] = useState(["","","","","",""]);
+  const [error, setError] = useState(false);
+  const [shake, setShake] = useState(false);
+  const inputRefs = useRef<(HTMLInputElement|null)[]>([]);
 
   useEffect(() => {
-    try {
-      document.body.style.overflow = appPasscodeVerified ? "" : "hidden";
-    } catch {}
-    return () => {
-      try {
-        document.body.style.overflow = "";
-      } catch {}
-    };
-  }, [appPasscodeVerified]);
-
-  const handleVerify = () => {
-    setIsAttempting(true);
-    const success = verifyAppPasscode(passcodeInput);
-    if (!success) {
-      setError("Incorrect passcode");
-      setPasscodeInput("");
+    if (!appPasscodeVerified && appPasscodeEnabled) {
+      setTimeout(() => inputRefs.current[0]?.focus(), 400);
     }
-    setIsAttempting(false);
-  };
+  }, [appPasscodeVerified, appPasscodeEnabled]);
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && passcodeInput.length === 6) {
-      handleVerify();
+  if (!appPasscodeEnabled || appPasscodeVerified) return <>{children}</>;
+
+  const handleDigit = (val: string, idx: number) => {
+    if (!/^\d?$/.test(val)) return;
+    const next = [...digits];
+    next[idx] = val;
+    setDigits(next);
+    setError(false);
+    if (val && idx < 5) inputRefs.current[idx+1]?.focus();
+    if (next.every(d => d !== "") && val) {
+      const ok = verifyAppPasscode(next.join(""));
+      if (!ok) {
+        setShake(true); setError(true);
+        setTimeout(() => { setShake(false); setDigits(["","","","","",""]); inputRefs.current[0]?.focus(); }, 650);
+      }
     }
   };
 
-  // If already verified, render children with floating window
-  if (appPasscodeVerified) {
-    return <>{children}</>;
-  }
+  const handleKey = (e: React.KeyboardEvent, idx: number) => {
+    if (e.key === "Backspace" && !digits[idx] && idx > 0) inputRefs.current[idx-1]?.focus();
+  };
 
-  // While not verified, show blur and modal
+  const filled = digits.filter(d => d !== "").length;
+
   return (
-    <div style={{ position: "relative" }}>
-      {/* Blurred Background Content */}
-      <div
-        suppressHydrationWarning
-        inert
-        aria-hidden="true"
-        style={{
-          filter: "blur(6px)",
-          pointerEvents: "none",
-          opacity: 0.5,
-        }}
-      >
-        {children}
-      </div>
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 9999,
+      background: "#050505",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontFamily: "'Outfit','Segoe UI',sans-serif",
+    }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Outfit:wght@400;600;700;800;900&display=swap');
+        @keyframes shake{0%,100%{transform:translateX(0)}15%{transform:translateX(-12px)}35%{transform:translateX(12px)}55%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+        @keyframes floatUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:none}}
+        @keyframes pulse{0%,100%{opacity:0.4;transform:scale(1)}50%{opacity:0.8;transform:scale(1.05)}}
+        .passcode-digit{
+          width:52px;height:60px;border-radius:16px;
+          background:rgba(255,255,255,0.04);
+          border:2px solid rgba(255,255,255,0.08);
+          color:#fff;font-size:24px;font-weight:700;
+          text-align:center;outline:none;caret-color:transparent;
+          font-family:'DM Mono',monospace;transition:all 0.15s;
+        }
+        .passcode-digit:focus{
+          border-color:#f5ff5e;
+          background:rgba(245,255,94,0.05);
+          box-shadow:0 0 0 4px rgba(245,255,94,0.1);
+        }
+        .passcode-digit.filled{border-color:rgba(255,255,255,0.18);background:rgba(255,255,255,0.07);}
+        .passcode-digit.error{border-color:#ff3d6b!important;background:rgba(255,61,107,0.06)!important;box-shadow:0 0 0 4px rgba(255,61,107,0.12)!important;}
+      `}</style>
 
-      {/* Authentication Modal - Overlay */}
-      <div
-        role="dialog"
-        aria-modal="true"
-        tabIndex={-1}
-        style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(0,0,0,0.6)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 100,
-          padding: "1rem",
-          backdropFilter: "blur(8px)",
-          WebkitBackdropFilter: "blur(8px)",
-        }}
-      >
-        <div
-          style={{
-            width: "100%",
-            maxWidth: 420,
-            background: T.card,
-            border: `1px solid ${T.border}`,
-            borderRadius: 20,
-            padding: "2.5rem 2rem",
-            boxShadow: T.shadow,
-            animation: "slideUp 0.4s ease",
-          }}
-        >
-          {/* Icon */}
-          <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
-            <div
-              style={{
-                width: 70,
-                height: 70,
-                background: `${T.primary}20`,
-                border: `2px solid ${T.primary}`,
-                borderRadius: 14,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto 1rem",
-              }}
-            >
-              <Shield size={36} color={T.primary} />
+      {/* Ambient glows */}
+      <div style={{ position:"absolute", width:500, height:500, borderRadius:"50%",
+        background:"radial-gradient(circle, rgba(245,255,94,0.04) 0%, transparent 65%)",
+        top:"30%", left:"40%", transform:"translate(-50%,-50%)", pointerEvents:"none" }}/>
+      <div style={{ position:"absolute", width:300, height:300, borderRadius:"50%",
+        background:"radial-gradient(circle, rgba(13,245,160,0.03) 0%, transparent 65%)",
+        bottom:"20%", right:"30%", pointerEvents:"none" }}/>
+
+      <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:36,
+        animation:"floatUp 0.5s ease", position:"relative", zIndex:1 }}>
+
+        {/* Logo mark */}
+        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:16 }}>
+          <div style={{
+            width:68, height:68, borderRadius:20,
+            background:"linear-gradient(135deg, #f5ff5e, #f5ff5ebb)",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            fontSize:28, fontWeight:900, color:"#000",
+            boxShadow:"0 8px 32px rgba(245,255,94,0.25)",
+          }}>K</div>
+          <div style={{ textAlign:"center" }}>
+            <div style={{ fontSize:22, fontWeight:900, color:"#fff", letterSpacing:"-0.03em" }}>
+              Korgon Finance
             </div>
-            <h1
-              style={{
-                fontSize: "1.4rem",
-                fontWeight: 800,
-                color: T.textPri,
-                margin: "0 0 0.5rem 0",
-                fontFamily: "'Syne',sans-serif",
-              }}
-            >
-              Security Verification
-            </h1>
-            <p
-              style={{
-                fontSize: 13,
-                color: T.textMut,
-                margin: 0,
-                lineHeight: 1.5,
-              }}
-            >
-              Enter your 6-digit passcode to access the finance dashboard
-            </p>
-          </div>
-
-          {/* Input */}
-          <div style={{ marginBottom: "1.5rem" }}>
-            <input
-              type="password"
-              maxLength={6}
-              inputMode="numeric"
-              value={passcodeInput}
-              onChange={(e) => {
-                setPasscodeInput(e.target.value.replace(/\D/g, "").slice(0, 6));
-                setError("");
-              }}
-              onKeyPress={handleKeyPress}
-              placeholder="●●●●●●"
-              autoFocus
-              disabled={isAttempting}
-              style={{
-                width: "100%",
-                boxSizing: "border-box",
-                background: T.inputBg,
-                border: `2px solid ${error ? T.rose : T.border}`,
-                borderRadius: 12,
-                padding: "1rem",
-                fontSize: 32,
-                letterSpacing: "0.8em",
-                color: T.textPri,
-                textAlign: "center",
-                fontFamily: "'DM Mono','Fira Mono',monospace",
-                outline: "none",
-                transition: "all 0.3s ease",
-                opacity: isAttempting ? 0.6 : 1,
-                animation: error ? "shake 0.3s" : undefined,
-              }}
-            />
-
-            {error && (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  marginTop: "0.75rem",
-                  padding: "0.75rem",
-                  background: `${T.rose}15`,
-                  border: `1px solid ${T.rose}40`,
-                  borderRadius: 8,
-                  color: T.rose,
-                  fontSize: 13,
-                }}
-              >
-                <AlertCircle size={16} />
-                {error}
-              </div>
-            )}
-          </div>
-
-          {/* Button */}
-          <button
-            onClick={handleVerify}
-            disabled={passcodeInput.length !== 6 || isAttempting}
-            style={{
-              width: "100%",
-              background:
-                passcodeInput.length === 6
-                  ? `linear-gradient(135deg, ${T.primary}, ${T.primary}cc)`
-                  : T.btnGhost,
-              border: "none",
-              borderRadius: 12,
-              padding: "0.9rem",
-              color: passcodeInput.length === 6 ? (isDark ? "#021a14" : "#fff") : T.textMut,
-              fontSize: 14,
-              fontWeight: 700,
-              cursor: passcodeInput.length === 6 ? "pointer" : "not-allowed",
-              fontFamily: "inherit",
-              transition: "all 0.3s",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-              opacity: isAttempting ? 0.7 : 1,
-            }}
-            onMouseEnter={(e) => {
-              const btn = e.currentTarget as HTMLButtonElement;
-              if (passcodeInput.length === 6 && !isAttempting) {
-                btn.style.transform = "translateY(-2px)";
-                btn.style.boxShadow = `0 8px 24px ${T.primary}40`;
-              }
-            }}
-            onMouseLeave={(e) => {
-              const btn = e.currentTarget as HTMLButtonElement;
-              btn.style.transform = "translateY(0)";
-              btn.style.boxShadow = "none";
-            }}
-          >
-            <Lock size={16} />
-            {isAttempting ? "Verifying..." : "Unlock Dashboard"}
-          </button>
-
-          {/* Footer Info */}
-          <div
-            style={{
-              fontSize: 11,
-              color: T.textMut,
-              textAlign: "center",
-              marginTop: "1.5rem",
-              paddingTop: "1.5rem",
-              borderTop: `1px solid ${T.border}`,
-            }}
-          >
-            This dApp requires authentication to protect your financial data. Default passcode: 888888
+            <div style={{ fontSize:13, color:"rgba(255,255,255,0.28)", marginTop:5, fontWeight:500 }}>
+              Enter your passcode to continue
+            </div>
           </div>
         </div>
-      </div>
 
-      <style>{`
-        @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          25% { transform: translateX(-5px); }
-          75% { transform: translateX(5px); }
-        }
-      `}</style>
+        {/* Digit row */}
+        <div style={{
+          display:"flex", gap:10,
+          animation: shake ? "shake 0.6s ease" : "none",
+        }}>
+          {digits.map((d,i) => (
+            <input key={i} ref={el => { inputRefs.current[i] = el; }}
+              type="password" inputMode="numeric" maxLength={1}
+              value={d} onChange={e => handleDigit(e.target.value, i)}
+              onKeyDown={e => handleKey(e, i)}
+              className={`passcode-digit${d ? " filled":""}${error?" error":""}`}
+            />
+          ))}
+        </div>
+
+        {/* Progress indicator */}
+        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+          {digits.map((_,i) => (
+            <div key={i} style={{
+              width: i < filled ? 20 : 6, height:6, borderRadius:99,
+              transition:"all 0.2s ease",
+              background: i < filled ? "#f5ff5e" : "rgba(255,255,255,0.12)",
+            }}/>
+          ))}
+        </div>
+
+        {/* Error state */}
+        {error && (
+          <div style={{
+            padding:"8px 20px", borderRadius:99, animation:"floatUp 0.2s ease",
+            background:"rgba(255,61,107,0.1)", border:"1px solid rgba(255,61,107,0.2)",
+            fontSize:13, color:"#ff3d6b", fontWeight:700,
+          }}>
+            ✕ Incorrect passcode
+          </div>
+        )}
+
+        {!error && filled === 0 && (
+          <div style={{ fontSize:12, color:"rgba(255,255,255,0.18)", fontWeight:500 }}>
+            6-digit passcode
+          </div>
+        )}
+      </div>
     </div>
   );
 }

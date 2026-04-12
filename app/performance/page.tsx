@@ -1,412 +1,320 @@
 "use client";
-
 import { useEntries } from "../../lib/hooks/useEntries";
 import { useState, useEffect } from "react";
-import Link from "next/link";
 import {
   LineChart, Line, BarChart, Bar, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  Legend, PieChart, Pie, Cell,
+  PieChart, Pie, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis,
 } from "recharts";
-import {
-  TrendingUp, BarChart2, PieChart as PieIcon, Activity,
-  Sun, Moon, ArrowUpRight, ArrowDownLeft, Target,
-  LayoutDashboard, Wallet, CreditCard, ArrowLeft,
-} from "lucide-react";
+import { TrendingUp, BarChart2, Activity, Target, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { useWeb3 } from "../context/Web3Context";
-import { useAppSettings } from "../context/AppSettingsContext";
 import { MasterPasscodeGuard } from "../components/MasterPasscodeGuard";
-import { BottomToolsBar } from "../components/BottomToolsBar";
+import { Sidebar, THEME } from "../components/Sidebar";
 
-const DARK = {
-  bg: "#06080f",
-  card: "rgba(255,255,255,0.032)",
-  border: "rgba(255,255,255,0.075)",
-  primary: "#00c9a7",
-  violet: "#8b5cf6",
-  rose: "#f43f5e",
-  blue: "#60a5fa",
-  amber: "#f59e0b",
-  textPri: "#f0f4ff",
-  textSec: "rgba(240,244,255,0.5)",
-  textMut: "rgba(240,244,255,0.28)",
-  shadow: "0 32px 80px rgba(0,0,0,0.8)",
-  headerBg: "rgba(6,8,15,0.82)",
-  chartGrid: "rgba(255,255,255,0.04)",
-  btnGhost: "rgba(255,255,255,0.05)",
-};
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-const LIGHT = {
-  bg: "#f0f4f8",
-  card: "rgba(255,255,255,0.85)",
-  border: "rgba(0,0,0,0.08)",
-  primary: "#009d82",
-  violet: "#7c3aed",
-  rose: "#e11d48",
-  blue: "#2563eb",
-  amber: "#d97706",
-  textPri: "#0d1117",
-  textSec: "rgba(13,17,23,0.6)",
-  textMut: "rgba(13,17,23,0.38)",
-  shadow: "0 32px 80px rgba(0,0,0,0.12)",
-  headerBg: "rgba(240,244,248,0.9)",
-  chartGrid: "rgba(0,0,0,0.05)",
-  btnGhost: "rgba(0,0,0,0.04)",
-};
-
-const glassCard = (T: typeof DARK, extra: React.CSSProperties = {}): React.CSSProperties => ({
-  background: T.card,
-  border: `1px solid ${T.border}`,
-  borderRadius: 16,
-  backdropFilter: "blur(24px)",
-  WebkitBackdropFilter: "blur(24px)",
-  ...extra,
-});
-
-export default function PerformanceMetrics() {
-  const { mode, setMode } = useWeb3();
-  const { hideBalances } = useAppSettings();
-  const defaultMode = mode === "web3" ? "web3" : "web2";
+export default function PerformancePage() {
+  const { isWeb3, mode } = useWeb3();
   const [isDark, setIsDark] = useState(true);
-  const [performanceMode, setPerformanceMode] = useState<"web2" | "web3">(defaultMode);
-  const { web2Entries, web3Entries } = useEntries(performanceMode === "web3");
+  const [perfMode, setPerfMode] = useState<"web2"|"web3">(mode === "web3" ? "web3" : "web2");
+  const [chartType, setChartType] = useState<"bar"|"line"|"radar">("bar");
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem("ledger_theme");
       setIsDark(saved ? saved === "dark" : true);
-    } catch {
-      setIsDark(true);
-    }
+    } catch { setIsDark(true); }
   }, []);
 
-  const T = isDark ? DARK : LIGHT;
+  const T = isDark ? THEME.dark : THEME.light;
+  const { web2Entries, web3Entries } = useEntries(perfMode === "web3");
+  const entries = perfMode === "web2" ? web2Entries : web3Entries;
 
-  const bgStyle: React.CSSProperties = {
-    background: isDark
-      ? `radial-gradient(ellipse 80% 50% at 20% -10%, rgba(0,201,167,0.07) 0%, transparent 55%), radial-gradient(ellipse 60% 45% at 85% 90%, rgba(139,92,246,0.06) 0%, transparent 55%), ${T.bg}`
-      : `radial-gradient(ellipse 80% 50% at 20% -10%, rgba(0,157,130,0.08) 0%, transparent 55%), radial-gradient(ellipse 60% 45% at 85% 90%, rgba(124,58,237,0.05) 0%, transparent 55%), ${T.bg}`,
+  const perfData = MONTHS.map(month => {
+    const me = entries.filter(e => MONTHS[new Date(e.date).getMonth()] === month);
+    const earned = me.reduce((s,e) => s+e.earned, 0);
+    const saved  = me.reduce((s,e) => s+e.saved, 0);
+    const given  = me.reduce((s,e) => s+e.given, 0);
+    const roi    = earned > 0 ? parseFloat(((saved/earned)*100).toFixed(1)) : 0;
+    return { month, earned, saved, given, roi };
+  });
+
+  const activeData = perfData.filter(d => d.earned > 0 || d.saved > 0);
+
+  const totalEarned = entries.reduce((s,e) => s+e.earned, 0);
+  const totalSaved  = entries.reduce((s,e) => s+e.saved, 0);
+  const totalGiven  = entries.reduce((s,e) => s+e.given, 0);
+  const avgRoi = activeData.length > 0
+    ? (activeData.reduce((s,d) => s+d.roi,0)/activeData.length).toFixed(1) : "0.0";
+  const bestMonth = activeData.reduce((best,d) => d.roi>(best?.roi??-Infinity)?d:best, activeData[0]);
+  const netIncome = totalEarned - totalGiven;
+
+  const catMap: Record<string,number> = {};
+  entries.forEach(e => { catMap[e.givenTo||"Other"] = (catMap[e.givenTo||"Other"]||0)+e.earned; });
+  const catColors = [T.yellow, T.green, T.blue, T.purple, T.red];
+  const catData = Object.entries(catMap).map(([name,value],i) => ({ name, value, color: catColors[i%catColors.length] }));
+
+  const fmt = (n: number) => {
+    if(n===undefined||n===null)return"$0";
+    return new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}).format(n);
   };
 
-  const entries = performanceMode === "web2" ? web2Entries : web3Entries;
-  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const performanceData = MONTHS.map(month => {
-    const monthEntries = entries.filter(e => {
-      const d = new Date(e.date);
-      return MONTHS[d.getMonth()] === month;
-    });
-    const earned = monthEntries.reduce((s,e) => s + e.earned, 0);
-    const saved = monthEntries.reduce((s,e) => s + e.saved, 0);
-    const given = monthEntries.reduce((s,e) => s + e.given, 0);
-    const roi = earned > 0 ? parseFloat(((saved / earned) * 100).toFixed(1)) : 0;
-    return { month, earned, saved, given, roi };
-  }).filter(d => d.earned > 0 || d.saved > 0);
-  const totalEarned = entries.reduce((s,e) => s + e.earned, 0);
-  const totalSaved  = entries.reduce((s,e) => s + e.saved,  0);
-  const totalGiven  = entries.reduce((s,e) => s + e.given,  0);
-  const avgRoi = performanceData.length > 0 ? (performanceData.reduce((s,d) => s + d.roi, 0) / performanceData.length).toFixed(1) : "0.0";
-  const bestMonth = performanceData.reduce((best, d) => d.roi > (best?.roi ?? -Infinity) ? d : best, performanceData[0]);
-  const categoryMap: Record<string, number> = {};
-  entries.forEach(e => { categoryMap[e.givenTo || "Other"] = (categoryMap[e.givenTo || "Other"] || 0) + e.earned; });
-  const catColors = [T.primary, T.blue, T.violet, T.rose, T.amber];
-  const categoryPerformance = Object.entries(categoryMap).map(([name, value], i) => ({ name, value, color: catColors[i % catColors.length] }));
-  const metricsData = [
-    { label: "Total Earned", value: `$${totalEarned.toLocaleString()}`, icon: TrendingUp, color: T.primary, change: `${entries.length} entries` },
-    { label: "Total Saved",  value: `$${totalSaved.toLocaleString()}`,  icon: BarChart2,  color: T.violet,  change: totalEarned > 0 ? `${((totalSaved/totalEarned)*100).toFixed(1)}% rate` : "0%" },
-    { label: "Avg ROI",      value: `${avgRoi}%`,                       icon: Target,     color: T.amber,   change: bestMonth ? `Best: ${bestMonth.month}` : "N/A" },
-    { label: "Total Given",  value: `$${totalGiven.toLocaleString()}`,  icon: Activity,   color: T.rose,    change: totalEarned > 0 ? `${((totalGiven/totalEarned)*100).toFixed(1)}% rate` : "0%" },
+  const metrics = [
+    { label:"Total Earned", value:fmt(totalEarned), icon:TrendingUp, color:T.yellow, sub:`${entries.length} entries`, up:true },
+    { label:"Total Saved",  value:fmt(totalSaved),  icon:Target,     color:T.green,  sub:`${totalEarned>0?((totalSaved/totalEarned)*100).toFixed(1):"0"}% rate`, up:true },
+    { label:"Avg ROI",      value:`${avgRoi}%`,     icon:BarChart2,  color:T.blue,   sub:bestMonth?`Best: ${bestMonth.month}`:"N/A", up:parseFloat(avgRoi)>=0 },
+    { label:"Net Income",   value:fmt(netIncome),   icon:Activity,   color:netIncome>=0?T.green:T.red,
+      sub:`${totalEarned>0?((netIncome/totalEarned)*100).toFixed(1):"0"}% margin`, up:netIncome>=0 },
   ];
+
+  const emptyState = (
+    <div style={{height:220,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12}}>
+      <div style={{fontSize:36,opacity:0.2}}>📈</div>
+      <div style={{fontSize:13,color:T.textMut}}>Add entries to see performance data</div>
+    </div>
+  );
 
   return (
     <MasterPasscodeGuard isDark={isDark}>
       <>
-        <style suppressHydrationWarning>{`
-          @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&family=Geist:wght@400;500;600;700&display=swap');
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          @keyframes slideUp { from { opacity:0; transform:translateY(18px); } to { opacity:1; } }
-          @media (max-width: 768px) {
-            body { font-size: 14px; }
-            h1 { font-size: 1.5rem; }
-            h2 { font-size: 1.2rem; }
-          }
-        `}</style>
+      <style suppressHydrationWarning>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Outfit:wght@400;500;600;700;800;900&display=swap');
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        html,body{background:${T.bg};color:${T.textPri}}
+        @keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+        ::-webkit-scrollbar{width:4px;height:4px}
+        ::-webkit-scrollbar-track{background:transparent}
+        ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:99px}
+        option{background:${T.card};color:${T.textPri}}
+        .kc{transition:transform 0.2s ease,box-shadow 0.2s ease;}
+        .kc:hover{transform:translateY(-2px);}
+        .chart-btn{transition:all 0.15s;cursor:pointer;}
+        .chart-btn:hover{opacity:0.8;}
+      `}</style>
 
-        <div style={{ minHeight: "100vh", ...bgStyle, fontFamily: "'Geist','Segoe UI',sans-serif", color: T.textPri }}>
-          {/* Header */}
-          <header
-            style={{
-              position: "sticky",
-              top: 0,
-              zIndex: 40,
-              borderBottom: `1px solid ${T.border}`,
-              background: T.headerBg,
-              backdropFilter: "blur(20px)",
-              WebkitBackdropFilter: "blur(20px)",
-              padding: "1rem 1rem",
-            }}
-          >
-            <div
-              style={{
-                maxWidth: 1380,
-                margin: "0 auto",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                flexWrap: "wrap",
-                gap: "1rem",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-                <Link
-                  href="/"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "0.5rem 1rem",
-                    borderRadius: 8,
-                    textDecoration: "none",
-                    color: T.textMut,
-                    background: T.btnGhost,
-                    border: `1px solid ${T.border}`,
-                    cursor: "pointer",
-                    fontSize: 13,
-                  }}
-                >
-                  <ArrowLeft size={14} /> Back
-                </Link>
-                <h1 style={{ fontSize: "1.5rem", fontWeight: 800, margin: 0, fontFamily: "'Syne',sans-serif" }}>
-                  Performance Metrics
-                </h1>
+      <div style={{display:"flex",minHeight:"100vh",background:T.bg,
+        fontFamily:"'Outfit','Segoe UI',sans-serif",color:T.textPri}}>
+
+        <Sidebar isDark={isDark} setIsDark={setIsDark}/>
+
+        <div style={{marginLeft:230,flex:1,display:"flex",flexDirection:"column"}}>
+
+          {/* TOP BAR */}
+          <div style={{padding:"1rem 2rem",display:"flex",alignItems:"center",
+            justifyContent:"space-between",borderBottom:`1px solid ${T.border}`,
+            background:isDark?"rgba(8,8,8,0.85)":"rgba(242,242,240,0.9)",
+            backdropFilter:"blur(20px)",position:"sticky",top:0,zIndex:40}}>
+            <div>
+              <div style={{fontSize:10,color:T.textMut,fontWeight:700,
+                letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:2}}>Analytics</div>
+              <div style={{fontSize:20,fontWeight:900,letterSpacing:"-0.03em"}}>Performance</div>
+            </div>
+            {/* Mode + Chart toggles */}
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <div style={{display:"flex",background:T.pill,borderRadius:10,padding:3,border:`1px solid ${T.border}`}}>
+                {(["web2","web3"] as const).map(m=>(
+                  <button key={m} onClick={()=>setPerfMode(m)} className="chart-btn"
+                    style={{padding:"6px 14px",borderRadius:7,border:"none",cursor:"pointer",
+                      fontFamily:"inherit",fontSize:11,fontWeight:700,transition:"all 0.15s",
+                      background:perfMode===m?T.yellow:"transparent",
+                      color:perfMode===m?"#000":T.textMut}}>
+                    {m.toUpperCase()}
+                  </button>
+                ))}
               </div>
-
-              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-                {/* Web2/Web3 Toggle */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 4,
-                    background: T.btnGhost,
-                    border: `1px solid ${T.border}`,
-                    borderRadius: 8,
-                    padding: "0.25rem",
-                  }}
-                >
-                  <button
-                    onClick={() => setPerformanceMode("web2")}
-                    style={{
-                      padding: "0.4rem 0.8rem",
-                      borderRadius: 6,
-                      border: "none",
-                      background: performanceMode === "web2" ? T.primary : "transparent",
-                      color: performanceMode === "web2" ? (isDark ? "#021a14" : "#fff") : T.textMut,
-                      cursor: "pointer",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      transition: "all 0.2s",
-                    }}
-                  >
-                    <CreditCard size={12} style={{ display: "inline", marginRight: 4 }} />
-                    Web2
+              <div style={{display:"flex",background:T.pill,borderRadius:10,padding:3,border:`1px solid ${T.border}`}}>
+                {(["bar","line","radar"] as const).map(c=>(
+                  <button key={c} onClick={()=>setChartType(c)} className="chart-btn"
+                    style={{padding:"6px 12px",borderRadius:7,border:"none",cursor:"pointer",
+                      fontFamily:"inherit",fontSize:11,fontWeight:700,transition:"all 0.15s",
+                      background:chartType===c?T.yellow:"transparent",
+                      color:chartType===c?"#000":T.textMut}}>
+                    {c.charAt(0).toUpperCase()+c.slice(1)}
                   </button>
-                  <button
-                    onClick={() => setPerformanceMode("web3")}
-                    style={{
-                      padding: "0.4rem 0.8rem",
-                      borderRadius: 6,
-                      border: "none",
-                      background: performanceMode === "web3" ? T.primary : "transparent",
-                      color: performanceMode === "web3" ? (isDark ? "#021a14" : "#fff") : T.textMut,
-                      cursor: "pointer",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      transition: "all 0.2s",
-                    }}
-                  >
-                    <Wallet size={12} style={{ display: "inline", marginRight: 4 }} />
-                    Web3
-                  </button>
-                </div>
-
-                <button
-                  onClick={() => setIsDark(!isDark)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "0.5rem 1rem",
-                    borderRadius: 8,
-                    background: isDark ? T.amber + "15" : T.violet + "15",
-                    border: `1px solid ${isDark ? T.amber + "44" : T.violet + "44"}`,
-                    color: isDark ? T.amber : T.violet,
-                    cursor: "pointer",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    fontFamily: "inherit",
-                  }}
-                >
-                  {isDark ? <Sun size={14} /> : <Moon size={14} />}
-                  {isDark ? "Light" : "Dark"}
-                </button>
+                ))}
               </div>
             </div>
-          </header>
+          </div>
 
-          {/* Main Content */}
-          <main
-            style={{
-              maxWidth: 1380,
-              margin: "0 auto",
-              padding: "2rem 1rem 6rem 1rem",
-            }}
-          >
-            {/* KPI Cards */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                gap: "1rem",
-                marginBottom: "2rem",
-              }}
-            >
-              {metricsData.map((metric) => {
-                const Icon = metric.icon;
-                return (
-                  <div key={metric.label} style={{ ...glassCard(T, { padding: "1.5rem" }) }}>
-                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1rem" }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12, color: T.textMut, marginBottom: 4 }}>{metric.label}</div>
-                        <div suppressHydrationWarning style={{ fontSize: "1.75rem", fontWeight: 700, color: metric.color }}>
-                          {hideBalances ? "****" : metric.value}
-                        </div>
-                      </div>
-                      <Icon size={24} style={{ color: metric.color, opacity: 0.5 }} />
+          {/* CONTENT */}
+          <div style={{padding:"1.5rem 2rem 4rem",flex:1,animation:"slideUp 0.4s ease"}}>
+
+            {/* Metric cards */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"1rem",marginBottom:"1.5rem"}}>
+              {metrics.map((m,i)=>(
+                <div key={m.label} className="kc" style={{
+                  background:i===0?T.yellow:T.card,
+                  borderRadius:20,padding:"1.5rem",
+                  border:`1px solid ${i===0?"transparent":T.border}`,
+                }}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+                    <span style={{fontSize:9,fontWeight:700,letterSpacing:"0.08em",
+                      textTransform:"uppercase",color:i===0?"rgba(0,0,0,0.4)":T.textMut}}>
+                      {m.label}
+                    </span>
+                    <m.icon size={14} color={i===0?"rgba(0,0,0,0.5)":m.color}/>
+                  </div>
+                  <div style={{fontFamily:"'DM Mono',monospace",fontSize:"1.55rem",
+                    fontWeight:700,color:i===0?"#000":m.color,letterSpacing:"-0.03em",lineHeight:1,marginBottom:8}}>
+                    {m.value}
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:4}}>
+                    {m.up?<ArrowUpRight size={11} color={i===0?"rgba(0,0,0,0.4)":T.green}/>
+                         :<ArrowDownRight size={11} color={T.red}/>}
+                    <span style={{fontSize:11,color:i===0?"rgba(0,0,0,0.4)":T.textMut,fontWeight:600}}>
+                      {m.sub}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Charts */}
+            <div style={{display:"grid",gridTemplateColumns:"1.5fr 1fr",gap:"1rem",marginBottom:"1rem"}}>
+
+              {/* Main chart */}
+              <div className="kc" style={{background:T.card,borderRadius:20,padding:"1.5rem",border:`1px solid ${T.border}`}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:800,color:T.textPri}}>
+                      {chartType==="bar"?"Monthly Breakdown":chartType==="line"?"ROI Trend":"Radar Overview"}
                     </div>
-                    <div style={{ fontSize: 12, color: metric.color, fontWeight: 600 }}>
-                      {metric.change}
+                    <div style={{fontSize:11,color:T.textMut,marginTop:2}}>
+                      {activeData.length} active months
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                  <div style={{display:"flex",gap:10}}>
+                    {[{c:T.yellow,l:"Earned"},{c:T.green,l:"Saved"},{c:T.red,l:"Given"}].map(x=>(
+                      <div key={x.l} style={{display:"flex",alignItems:"center",gap:4}}>
+                        <div style={{width:6,height:6,borderRadius:2,background:x.c}}/>
+                        <span style={{fontSize:10,color:T.textMut,fontWeight:600}}>{x.l}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-            {/* Charts Grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "2rem", marginBottom: "2rem" }}>
-              {/* ROI Trend */}
-              <div style={{ ...glassCard(T, { padding: "1.5rem" }) }}>
-                <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: "1rem", display: "flex", alignItems: "center", gap: 8 }}>
-                  <TrendingUp size={16} style={{ color: T.primary }} />
-                  ROI Trend
-                </h2>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={performanceData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={T.chartGrid} />
-                    <XAxis dataKey="month" stroke={T.textMut} style={{ fontSize: 12 }} />
-                    <YAxis stroke={T.textMut} style={{ fontSize: 12 }} />
-                    <Tooltip
-                      contentStyle={{
-                        background: T.card,
-                        border: `1px solid ${T.border}`,
-                        borderRadius: 8,
-                      }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="roi"
-                      stroke={T.primary}
-                      strokeWidth={2}
-                      dot={{ fill: T.primary, r: 4 }}
-                      activeDot={{ r: 6 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+                {activeData.length>0?(
+                  <>
+                    {chartType==="bar"&&(
+                      <ResponsiveContainer width="100%" height={230}>
+                        <BarChart data={perfData} barCategoryGap="38%" barGap={2}>
+                          <CartesianGrid strokeDasharray="2 5" stroke={isDark?"rgba(255,255,255,0.04)":"rgba(0,0,0,0.06)"} vertical={false}/>
+                          <XAxis dataKey="month" tick={{fill:T.textMut,fontSize:10}} axisLine={false} tickLine={false}/>
+                          <YAxis tick={{fill:T.textMut,fontSize:10}} axisLine={false} tickLine={false}
+                            tickFormatter={v=>`$${(v/1000).toFixed(0)}k`} width={34}/>
+                          <Tooltip contentStyle={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,fontSize:12,color:T.textPri}}
+                            formatter={(v:any)=>[fmt(Number(v))]}/>
+                          <Bar dataKey="earned" name="Earned" fill={T.yellow} radius={[5,5,0,0]}/>
+                          <Bar dataKey="saved"  name="Saved"  fill={T.green}  radius={[5,5,0,0]}/>
+                          <Bar dataKey="given"  name="Given"  fill={T.red}    radius={[5,5,0,0]}/>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                    {chartType==="line"&&(
+                      <ResponsiveContainer width="100%" height={230}>
+                        <LineChart data={perfData}>
+                          <CartesianGrid strokeDasharray="2 5" stroke={isDark?"rgba(255,255,255,0.04)":"rgba(0,0,0,0.06)"} vertical={false}/>
+                          <XAxis dataKey="month" tick={{fill:T.textMut,fontSize:10}} axisLine={false} tickLine={false}/>
+                          <YAxis tick={{fill:T.textMut,fontSize:10}} axisLine={false} tickLine={false}
+                            tickFormatter={v=>`$${(v/1000).toFixed(0)}k`} width={34}/>
+                          <Tooltip contentStyle={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,fontSize:12,color:T.textPri}}
+                            formatter={(v:any)=>[fmt(Number(v))]}/>
+                          <Line type="monotone" dataKey="earned" name="Earned" stroke={T.yellow} strokeWidth={2.5}
+                            dot={{r:3,fill:T.yellow,strokeWidth:0}} activeDot={{r:5}}/>
+                          <Line type="monotone" dataKey="saved"  name="Saved"  stroke={T.green}  strokeWidth={2.5}
+                            dot={{r:3,fill:T.green,strokeWidth:0}}  activeDot={{r:5}}/>
+                          <Line type="monotone" dataKey="given"  name="Given"  stroke={T.red}    strokeWidth={2.5}
+                            dot={{r:3,fill:T.red,strokeWidth:0}}    activeDot={{r:5}}/>
+                        </LineChart>
+                      </ResponsiveContainer>
+                    )}
+                    {chartType==="radar"&&(
+                      <ResponsiveContainer width="100%" height={230}>
+                        <RadarChart data={activeData}>
+                          <PolarGrid stroke={isDark?"rgba(255,255,255,0.08)":"rgba(0,0,0,0.08)"}/>
+                          <PolarAngleAxis dataKey="month" tick={{fill:T.textMut,fontSize:10}}/>
+                          <Radar name="Earned" dataKey="earned" stroke={T.yellow} fill={T.yellow} fillOpacity={0.18}/>
+                          <Radar name="Saved"  dataKey="saved"  stroke={T.green}  fill={T.green}  fillOpacity={0.15}/>
+                          <Tooltip contentStyle={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,fontSize:12,color:T.textPri}}
+                            formatter={(v:any)=>[fmt(Number(v))]}/>
+                        </RadarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </>
+                ):emptyState}
               </div>
 
-              {/* Performance Distribution */}
-              <div style={{ ...glassCard(T, { padding: "1.5rem" }) }}>
-                <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: "1rem", display: "flex", alignItems: "center", gap: 8 }}>
-                  <PieIcon size={16} style={{ color: T.violet }} />
-                  Performance Distribution
-                </h2>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={categoryPerformance}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={(entry) => `${entry.name}: ${entry.value}%`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {categoryPerformance.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
+              {/* Category donut */}
+              <div className="kc" style={{background:T.green,borderRadius:20,padding:"1.5rem"}}>
+                <div style={{fontSize:13,fontWeight:800,color:"#000",marginBottom:4}}>By Category</div>
+                <div style={{fontSize:11,color:"rgba(0,0,0,0.45)",marginBottom:"1rem"}}>Income breakdown</div>
+                {catData.length>0?(
+                  <>
+                    <ResponsiveContainer width="100%" height={160}>
+                      <PieChart>
+                        <Pie data={catData} cx="50%" cy="50%" outerRadius={70} innerRadius={32}
+                          dataKey="value" labelLine={false}>
+                          {catData.map((_,i)=><Cell key={i} fill={["#000","rgba(0,0,0,0.7)","rgba(0,0,0,0.5)","rgba(0,0,0,0.35)","rgba(0,0,0,0.2)"][i%5]}/>)}
+                        </Pie>
+                        <Tooltip contentStyle={{background:"#fff",border:"none",borderRadius:10,fontSize:12,color:"#000"}}
+                          formatter={(v:any)=>[fmt(Number(v))]}/>
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:8}}>
+                      {catData.slice(0,4).map((c,i)=>(
+                        <div key={c.name} style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:6}}>
+                            <div style={{width:6,height:6,borderRadius:2,
+                              background:["#000","rgba(0,0,0,0.7)","rgba(0,0,0,0.5)","rgba(0,0,0,0.3)"][i]}}/>
+                            <span style={{fontSize:11,color:"rgba(0,0,0,0.6)",fontWeight:600}}>{c.name}</span>
+                          </div>
+                          <span style={{fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:700,color:"#000"}}>{fmt(c.value)}</span>
+                        </div>
                       ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        background: T.card,
-                        border: `1px solid ${T.border}`,
-                        borderRadius: 8,
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
+                    </div>
+                  </>
+                ):(
+                  <div style={{height:200,display:"flex",alignItems:"center",justifyContent:"center",
+                    color:"rgba(0,0,0,0.3)",fontSize:13}}>No categories yet</div>
+                )}
               </div>
             </div>
 
-            {/* Monthly Performance */}
-            <div style={{ ...glassCard(T, { padding: "1.5rem" }) }}>
-              <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: "1rem", display: "flex", alignItems: "center", gap: 8 }}>
-                <BarChart2 size={16} style={{ color: T.blue }} />
-                Monthly Performance
-              </h2>
-              <ResponsiveContainer width="100%" height={350}>
-                <AreaChart data={performanceData}>
-                  <defs>
-                    <linearGradient id="colorEarned" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={T.primary} stopOpacity={0.8} />
-                      <stop offset="95%" stopColor={T.primary} stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="colorSaved" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={T.blue} stopOpacity={0.8} />
-                      <stop offset="95%" stopColor={T.blue} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={T.chartGrid} />
-                  <XAxis dataKey="month" stroke={T.textMut} style={{ fontSize: 12 }} />
-                  <YAxis stroke={T.textMut} style={{ fontSize: 12 }} />
-                  <Tooltip
-                    contentStyle={{
-                      background: T.card,
-                      border: `1px solid ${T.border}`,
-                      borderRadius: 8,
-                    }}
-                  />
-                  <Legend />
-                  <Area
-                    type="monotone"
-                    dataKey="earned"
-                    stroke={T.primary}
-                    fillOpacity={1}
-                    fill="url(#colorEarned)"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="saved"
-                    stroke={T.blue}
-                    fillOpacity={1}
-                    fill="url(#colorSaved)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+            {/* ROI trend */}
+            <div className="kc" style={{background:T.card,borderRadius:20,padding:"1.5rem",border:`1px solid ${T.border}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
+                <div>
+                  <div style={{fontSize:13,fontWeight:800,color:T.textPri}}>ROI Trend</div>
+                  <div style={{fontSize:11,color:T.textMut,marginTop:2}}>Save rate per month (%)</div>
+                </div>
+                <div style={{fontFamily:"'DM Mono',monospace",fontSize:22,fontWeight:700,color:T.yellow}}>
+                  {avgRoi}%
+                </div>
+              </div>
+              {activeData.length>0?(
+                <ResponsiveContainer width="100%" height={140}>
+                  <AreaChart data={perfData}>
+                    <defs>
+                      <linearGradient id="roi" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={T.yellow} stopOpacity={0.2}/>
+                        <stop offset="100%" stopColor={T.yellow} stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="2 5" stroke={isDark?"rgba(255,255,255,0.04)":"rgba(0,0,0,0.06)"} vertical={false}/>
+                    <XAxis dataKey="month" tick={{fill:T.textMut,fontSize:10}} axisLine={false} tickLine={false}/>
+                    <YAxis tick={{fill:T.textMut,fontSize:10}} axisLine={false} tickLine={false}
+                      tickFormatter={v=>`${v}%`} width={34}/>
+                    <Tooltip contentStyle={{background:T.card,border:`1px solid ${T.border}`,borderRadius:10,fontSize:12,color:T.textPri}}
+                      formatter={(v:any)=>[`${v}%`,"ROI"]}/>
+                    <Area type="monotone" dataKey="roi" stroke={T.yellow} strokeWidth={2.5}
+                      fill="url(#roi)" dot={{r:3,fill:T.yellow,strokeWidth:0}} activeDot={{r:5}}/>
+                  </AreaChart>
+                </ResponsiveContainer>
+              ):emptyState}
             </div>
-          </main>
+          </div>
         </div>
-
-        <BottomToolsBar isDark={isDark} setIsDark={setIsDark} />
+      </div>
       </>
     </MasterPasscodeGuard>
   );
