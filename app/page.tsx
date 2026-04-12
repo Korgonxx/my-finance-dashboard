@@ -1407,7 +1407,7 @@ export default function FinanceDashboard() {
       );
       setWeb2Entries(web2);
       setWeb3Entries(web3);
-      setGoal(typeof data.goal === "number" ? data.goal : 60000);
+      setGoalAndSync(typeof data.goal === "number" ? data.goal : 60000);
       setCurrency((data.currency as Currency) || "USD");
       setHideBalances(Boolean(data.hideBalances));
       setMode(data.mode === "web3" ? "web3" : "web2");
