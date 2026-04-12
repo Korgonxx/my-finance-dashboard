@@ -1436,7 +1436,7 @@ export default function FinanceDashboard() {
   const handleImportEntries = useCallback((importedEntries: Entry[], importedGoal?: number) => {
     const setter = isWeb3 ? setWeb3Entries : setWeb2Entries;
     setter(importedEntries);
-    if (importedGoal && importedGoal > 0) setGoal(importedGoal);
+    if (importedGoal && importedGoal > 0) setGoalAndSync(importedGoal);
     setExportModal(false);
   }, [isWeb3]);
 
