@@ -4,7 +4,7 @@ import { useWeb3 } from "../context/Web3Context";
 import { useAppSettings, CURRENCY_SYMBOLS, type Currency } from "../context/AppSettingsContext";
 import {
   LayoutDashboard, CreditCard, BarChart2, Wallet,
-  Sun, Moon, Eye, EyeOff, Settings, ChevronRight,
+  Sun, Moon, Eye, EyeOff, ChevronRight,
   Shield, X, Check, Lock,
 } from "lucide-react";
 
@@ -24,10 +24,9 @@ export const THEME = {
     pill: "rgba(0,0,0,0.04)", pillHov: "rgba(0,0,0,0.07)", glow: "rgba(0,0,0,0.02)",
   },
 };
-
 export type ThemeType = typeof THEME.dark;
 
-// ── Passcode Modal ──────────────────────────────────────────────────────────────
+// ── Passcode Modal ─────────────────────────────────────────────────────────────
 function PasscodeModal({ T, onClose }: { T: ThemeType; onClose: () => void }) {
   const { verifyAppPasscode, changeAppPasscode } = useAppSettings();
   const [step, setStep] = useState<"menu"|"verify"|"new"|"confirm">("menu");
@@ -37,49 +36,53 @@ function PasscodeModal({ T, onClose }: { T: ThemeType; onClose: () => void }) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const activeVal = step === "verify" ? current : step === "new" ? newCode : confirmCode;
-  const setActiveVal = step === "verify" ? setCurrent : step === "new" ? setNewCode : setConfirmCode;
+  const activeVal = step==="verify" ? current : step==="new" ? newCode : confirmCode;
+  const setActiveVal = (v: string) => {
+    if (step==="verify") setCurrent(v);
+    else if (step==="new") setNewCode(v);
+    else setConfirmCode(v);
+  };
 
   const numpad = ["1","2","3","4","5","6","7","8","9","","0","⌫"];
 
   const handleNum = (n: string) => {
     if (!n) return;
-    if (n === "⌫") { setActiveVal(v => v.slice(0,-1)); setError(""); return; }
+    if (n==="⌫") { setActiveVal(activeVal.slice(0,-1)); setError(""); return; }
     if (activeVal.length >= 6) return;
-    setActiveVal(v => v + n);
+    setActiveVal(activeVal + n);
     setError("");
   };
 
   const handleNext = () => {
-    if (step === "menu") { setStep("verify"); setCurrent(""); setError(""); return; }
-    if (step === "verify") {
+    if (step==="menu") { setStep("verify"); setCurrent(""); setError(""); return; }
+    if (step==="verify") {
       const ok = verifyAppPasscode(current);
       if (!ok) { setError("Incorrect passcode"); setCurrent(""); return; }
       setStep("new"); setNewCode(""); setError("");
-    } else if (step === "new") {
+    } else if (step==="new") {
       if (newCode.length < 4) { setError("Min 4 digits"); return; }
       setStep("confirm"); setConfirmCode(""); setError("");
-    } else if (step === "confirm") {
+    } else if (step==="confirm") {
       if (newCode !== confirmCode) { setError("Codes don't match"); setConfirmCode(""); setStep("new"); setNewCode(""); return; }
-      const ok = changeAppPasscode(current, newCode.padEnd(6,"0").slice(0,6));
+      // Pad to 6 digits if needed
+      const finalCode = newCode.length === 6 ? newCode : newCode.padEnd(6, "0");
+      const ok = changeAppPasscode(current, finalCode);
       if (ok) {
         setSuccess("Passcode changed!"); setStep("menu");
         setTimeout(() => { setSuccess(""); onClose(); }, 1500);
       } else {
-        setError("Failed — passcode must be exactly 6 digits");
-        setStep("new"); setNewCode("");
+        setError("Failed — use exactly 6 digits"); setStep("new"); setNewCode("");
       }
     }
   };
 
-  // Auto-advance when 6 digits entered
   useEffect(() => {
-    if (activeVal.length === 6) { setTimeout(handleNext, 120); }
+    if (activeVal.length === 6 && step !== "menu") setTimeout(handleNext, 150);
   }, [activeVal]);
 
   const dots = (val: string) => Array.from({length:6}).map((_,i) => (
     <div key={i} style={{
-      width: 10, height: 10, borderRadius: "50%", transition: "all 0.15s",
+      width:10, height:10, borderRadius:"50%", transition:"all 0.15s",
       background: i < val.length ? T.yellow : T.border,
       transform: i < val.length ? "scale(1.3)" : "scale(1)",
     }}/>
@@ -88,19 +91,12 @@ function PasscodeModal({ T, onClose }: { T: ThemeType; onClose: () => void }) {
   return (
     <div style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.75)",
       backdropFilter:"blur(20px)",display:"flex",alignItems:"center",
-      justifyContent:"center",padding:"1rem",
-      fontFamily:"'Outfit','Segoe UI',sans-serif"}}>
-      <style>{`
-        @keyframes popIn{from{opacity:0;transform:scale(0.9) translateY(16px)}to{opacity:1;transform:none}}
-        .np-btn{transition:all 0.12s;cursor:pointer;}
-        .np-btn:hover{filter:brightness(1.3);}
-        .np-btn:active{transform:scale(0.92)!important;}
-      `}</style>
-      <div style={{width:"100%",maxWidth:340,background:T.card,
-        border:`1px solid ${T.border}`,borderRadius:28,padding:"1.75rem",
-        animation:"popIn 0.25s ease",boxShadow:"0 40px 80px rgba(0,0,0,0.6)"}}>
+      justifyContent:"center",padding:"1rem",fontFamily:"'Outfit','Segoe UI',sans-serif"}}>
+      <style>{`@keyframes popIn{from{opacity:0;transform:scale(0.9) translateY(16px)}to{opacity:1;transform:none}} .np-btn{transition:all 0.12s;cursor:pointer;} .np-btn:hover{filter:brightness(1.3);} .np-btn:active{transform:scale(0.92)!important;}`}</style>
+      <div style={{width:"100%",maxWidth:340,background:T.card,border:`1px solid ${T.border}`,
+        borderRadius:28,padding:"1.75rem",animation:"popIn 0.25s ease",
+        boxShadow:"0 40px 80px rgba(0,0,0,0.6)"}}>
 
-        {/* Header */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.5rem"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <div style={{width:36,height:36,borderRadius:10,background:`${T.yellow}18`,
@@ -112,14 +108,13 @@ function PasscodeModal({ T, onClose }: { T: ThemeType; onClose: () => void }) {
               <div style={{fontSize:10,color:T.textMut}}>Default: 888888</div>
             </div>
           </div>
-          <button onClick={onClose} style={{width:30,height:30,borderRadius:8,
-            background:T.pill,border:`1px solid ${T.border}`,cursor:"pointer",
-            display:"flex",alignItems:"center",justifyContent:"center",color:T.textMut}}>
+          <button onClick={onClose} style={{width:30,height:30,borderRadius:8,background:T.pill,
+            border:`1px solid ${T.border}`,cursor:"pointer",display:"flex",
+            alignItems:"center",justifyContent:"center",color:T.textMut}}>
             <X size={13}/>
           </button>
         </div>
 
-        {/* Success */}
         {success && (
           <div style={{padding:"10px 16px",borderRadius:12,background:`${T.green}15`,
             border:`1px solid ${T.green}30`,color:T.green,fontSize:13,fontWeight:700,
@@ -128,18 +123,16 @@ function PasscodeModal({ T, onClose }: { T: ThemeType; onClose: () => void }) {
           </div>
         )}
 
-        {/* Menu */}
-        {step === "menu" && !success && (
+        {step==="menu" && !success && (
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <div style={{fontSize:13,color:T.textSec,marginBottom:4,lineHeight:1.6}}>
-              Change your 6-digit app passcode. You'll need your current passcode to confirm.
+              Change your 6-digit app passcode. You'll need your current passcode first.
             </div>
             <button onClick={()=>{setStep("verify");setCurrent("");setError("");}}
               style={{width:"100%",padding:"13px 16px",borderRadius:14,
-                background:T.pill,border:`1px solid ${T.border}`,
-                color:T.textPri,fontSize:13,fontWeight:700,cursor:"pointer",
-                fontFamily:"inherit",textAlign:"left",display:"flex",
-                alignItems:"center",justifyContent:"space-between"}}>
+                background:T.pill,border:`1px solid ${T.border}`,color:T.textPri,
+                fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",
+                textAlign:"left",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <div style={{display:"flex",alignItems:"center",gap:10}}>
                 <Lock size={14} color={T.yellow}/>Change Passcode
               </div>
@@ -148,60 +141,45 @@ function PasscodeModal({ T, onClose }: { T: ThemeType; onClose: () => void }) {
           </div>
         )}
 
-        {/* Numpad steps */}
         {step !== "menu" && (
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:18}}>
             <div style={{fontSize:13,color:T.textSec,fontWeight:600,textAlign:"center"}}>
               {step==="verify"&&"Enter current passcode"}
-              {step==="new"&&"Enter new passcode"}
+              {step==="new"&&"Enter new passcode (6 digits)"}
               {step==="confirm"&&"Confirm new passcode"}
             </div>
-
-            <div style={{display:"flex",gap:10}}>
-              {dots(activeVal)}
-            </div>
-
+            <div style={{display:"flex",gap:10}}>{dots(activeVal)}</div>
             {error&&(
-              <div style={{fontSize:12,color:T.red,fontWeight:700,
-                padding:"5px 14px",borderRadius:99,
-                background:`${T.red}12`,border:`1px solid ${T.red}25`}}>
+              <div style={{fontSize:12,color:T.red,fontWeight:700,padding:"5px 14px",
+                borderRadius:99,background:`${T.red}12`,border:`1px solid ${T.red}25`}}>
                 {error}
               </div>
             )}
-
-            {/* Numpad */}
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,width:"100%"}}>
               {numpad.map((n,i)=>(
-                <button key={i} onClick={()=>n&&handleNum(n)}
-                  className="np-btn"
-                  style={{
-                    height:52,borderRadius:12,fontFamily:"'DM Mono',monospace",
+                <button key={i} onClick={()=>n&&handleNum(n)} className="np-btn"
+                  style={{height:52,borderRadius:12,fontFamily:"'DM Mono',monospace",
                     fontSize:n==="⌫"?16:19,fontWeight:700,
                     background:n==="⌫"?`${T.red}0f`:n===""?"transparent":T.pill,
                     border:n===""?"none":`1px solid ${n==="⌫"?T.red+"22":T.border}`,
                     color:n==="⌫"?T.red:T.textPri,
-                    cursor:n?"pointer":"default",
-                    visibility:n===""?"hidden":"visible",
-                  }}>
+                    cursor:n?"pointer":"default",visibility:n===""?"hidden":"visible"}}>
                   {n}
                 </button>
               ))}
             </div>
-
             <div style={{display:"flex",gap:8,width:"100%"}}>
               <button onClick={()=>{
-                  if(step==="verify"){setStep("menu");}
-                  else if(step==="new"){setStep("verify");setNewCode("");}
-                  else{setStep("new");setConfirmCode("");}
-                  setError("");
-                }}
-                style={{flex:1,padding:"11px",borderRadius:12,background:T.pill,
-                  border:`1px solid ${T.border}`,color:T.textSec,
-                  fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+                if(step==="verify"){setStep("menu");}
+                else if(step==="new"){setStep("verify");setNewCode("");}
+                else{setStep("new");setConfirmCode("");}
+                setError("");
+              }} style={{flex:1,padding:"11px",borderRadius:12,background:T.pill,
+                border:`1px solid ${T.border}`,color:T.textSec,fontSize:12,
+                fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
                 Back
               </button>
-              <button onClick={handleNext}
-                disabled={activeVal.length<4}
+              <button onClick={handleNext} disabled={activeVal.length<4}
                 style={{flex:2,padding:"11px",borderRadius:12,border:"none",
                   background:activeVal.length>=4?T.yellow:T.pill,
                   color:activeVal.length>=4?"#000":T.textMut,
@@ -219,23 +197,33 @@ function PasscodeModal({ T, onClose }: { T: ThemeType; onClose: () => void }) {
   );
 }
 
-// ── Sidebar ──────────────────────────────────────────────────────────────────
+// ── Sidebar ───────────────────────────────────────────────────────────────────
 export function Sidebar({ isDark, setIsDark }: { isDark: boolean; setIsDark: (v: boolean) => void }) {
   const { isWeb3, setMode } = useWeb3();
   const { currency, setCurrency, hideBalances, setHideBalances } = useAppSettings();
   const [passcodeModal, setPasscodeModal] = useState(false);
   const [currentPath, setCurrentPath] = useState("/");
+  // ── KEY FIX: delay isWeb3-dependent rendering until after hydration ──
+  const [hydrated, setHydrated] = useState(false);
 
   const T = isDark ? THEME.dark : THEME.light;
 
-  useEffect(() => { setCurrentPath(window.location.pathname); }, []);
+  useEffect(() => {
+    setCurrentPath(window.location.pathname);
+    setHydrated(true);
+  }, []);
 
   const currencies: Currency[] = ["USD","EUR","GBP","INR","JPY","AUD","CAD","CHF"];
 
+  // Use stable values on server, real values after hydration
+  const currentMode = hydrated ? (isWeb3 ? "web3" : "web2") : "web2";
+  const cardIcon = hydrated && isWeb3 ? Wallet : CreditCard;
+  const cardLabel = hydrated && isWeb3 ? "Wallets" : "Cards";
+
   const navLinks = [
-    { href: "/", icon: LayoutDashboard, label: "Dashboard" },
-    { href: "/cards", icon: isWeb3 ? Wallet : CreditCard, label: isWeb3 ? "Wallets" : "Cards" },
-    { href: "/performance", icon: BarChart2, label: "Performance" },
+    { href: "/",            icon: LayoutDashboard, label: "Dashboard" },
+    { href: "/cards",       icon: cardIcon,        label: cardLabel   },
+    { href: "/performance", icon: BarChart2,        label: "Performance" },
   ];
 
   const Toggle = ({ value, onChange }: { value: boolean; onChange: () => void }) => (
@@ -260,15 +248,11 @@ export function Sidebar({ isDark, setIsDark }: { isDark: boolean; setIsDark: (v:
         select option{background:${T.card};color:${T.textPri};}
       `}</style>
 
-      <aside style={{
-        width:230,minHeight:"100vh",
-        background:T.sidebar,
+      <aside style={{width:230,minHeight:"100vh",background:T.sidebar,
         backdropFilter:"blur(32px)",WebkitBackdropFilter:"blur(32px)",
-        borderRight:`1px solid ${T.border}`,
-        display:"flex",flexDirection:"column",
+        borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",
         position:"fixed",left:0,top:0,bottom:0,zIndex:50,
-        fontFamily:"'Outfit','Segoe UI',sans-serif",
-      }}>
+        fontFamily:"'Outfit','Segoe UI',sans-serif"}}>
 
         {/* Logo */}
         <div style={{padding:"1.5rem 1.25rem 1.25rem",borderBottom:`1px solid ${T.border}`}}>
@@ -285,21 +269,24 @@ export function Sidebar({ isDark, setIsDark }: { isDark: boolean; setIsDark: (v:
           </div>
         </div>
 
-        {/* Mode toggle */}
+        {/* Mode toggle — suppressed until hydrated */}
         <div style={{padding:"1rem 1.25rem 0.5rem"}}>
           <div style={{fontSize:9,color:T.textMut,fontWeight:700,letterSpacing:"0.1em",
             textTransform:"uppercase",marginBottom:7}}>Mode</div>
-          <div style={{display:"flex",background:T.pill,borderRadius:10,padding:3,border:`1px solid ${T.border}`}}>
-            {(["web2","web3"] as const).map(m=>{
-              const active=(isWeb3?"web3":"web2")===m;
-              return(
-                <button key={m} onClick={()=>setMode(m)} style={{
-                  flex:1,padding:"7px 0",borderRadius:7,border:"none",cursor:"pointer",
-                  fontFamily:"inherit",fontSize:11,fontWeight:700,transition:"all 0.2s",
-                  background:active?T.yellow:"transparent",
-                  color:active?"#000":T.textMut,
-                  boxShadow:active?`0 2px 8px ${T.yellow}30`:"none",
-                }}>{m.toUpperCase()}</button>
+          <div style={{display:"flex",background:T.pill,borderRadius:10,padding:3,border:`1px solid ${T.border}`}}
+            suppressHydrationWarning>
+            {(["web2","web3"] as const).map(m => {
+              const active = hydrated ? currentMode === m : m === "web2";
+              return (
+                <button key={m} onClick={()=>setMode(m)}
+                  suppressHydrationWarning
+                  style={{flex:1,padding:"7px 0",borderRadius:7,border:"none",cursor:"pointer",
+                    fontFamily:"inherit",fontSize:11,fontWeight:700,transition:"all 0.2s",
+                    background:active?T.yellow:"transparent",
+                    color:active?"#000":T.textMut,
+                    boxShadow:active?`0 2px 8px ${T.yellow}30`:"none"}}>
+                  {m.toUpperCase()}
+                </button>
               );
             })}
           </div>
@@ -309,20 +296,21 @@ export function Sidebar({ isDark, setIsDark }: { isDark: boolean; setIsDark: (v:
         <nav style={{padding:"0.5rem 0.75rem",flex:1}}>
           <div style={{fontSize:9,color:T.textMut,fontWeight:700,letterSpacing:"0.1em",
             textTransform:"uppercase",padding:"0.5rem 0.5rem 0.75rem"}}>Navigation</div>
-          {navLinks.map(link=>{
-            const active=currentPath===link.href;
-            return(
-              <a key={link.href} href={link.href} className="nav-link" style={{
-                display:"flex",alignItems:"center",gap:10,padding:"10px 12px",
-                borderRadius:12,marginBottom:3,
-                color:active?"#000":T.textSec,
-                background:active?T.yellow:"transparent",
-                fontSize:13,fontWeight:600,
-                boxShadow:active?`0 4px 16px ${T.yellow}35`:"none",
-              }}>
+          {navLinks.map(link => {
+            const active = currentPath === link.href;
+            return (
+              <a key={link.href} href={link.href} className="nav-link"
+                suppressHydrationWarning
+                style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",
+                  borderRadius:12,marginBottom:3,
+                  color:active?"#000":T.textSec,
+                  background:active?T.yellow:"transparent",
+                  fontSize:13,fontWeight:600,
+                  boxShadow:active?`0 4px 16px ${T.yellow}35`:"none"}}>
                 <div style={{width:28,height:28,borderRadius:7,
                   background:active?"rgba(0,0,0,0.12)":T.pill,
-                  display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  display:"flex",alignItems:"center",justifyContent:"center"}}
+                  suppressHydrationWarning>
                   <link.icon size={14} color={active?"#000":T.textSec}/>
                 </div>
                 {link.label}
@@ -336,7 +324,6 @@ export function Sidebar({ isDark, setIsDark }: { isDark: boolean; setIsDark: (v:
         <div style={{padding:"0.75rem 1.25rem",borderTop:`1px solid ${T.border}`}}>
           <div style={{fontSize:9,color:T.textMut,fontWeight:700,letterSpacing:"0.1em",
             textTransform:"uppercase",marginBottom:12}}>Preferences</div>
-
           {[
             {icon:isDark?<Moon size={12} color={T.textMut}/>:<Sun size={12} color={T.textMut}/>,
              label:"Dark Mode",value:isDark,onChange:()=>setIsDark(!isDark)},
@@ -352,8 +339,6 @@ export function Sidebar({ isDark, setIsDark }: { isDark: boolean; setIsDark: (v:
               <Toggle value={item.value} onChange={item.onChange}/>
             </div>
           ))}
-
-          {/* Currency */}
           <div style={{marginTop:4}}>
             <div style={{fontSize:9,color:T.textMut,fontWeight:700,letterSpacing:"0.1em",
               textTransform:"uppercase",marginBottom:6}}>Currency</div>
@@ -367,14 +352,13 @@ export function Sidebar({ isDark, setIsDark }: { isDark: boolean; setIsDark: (v:
           </div>
         </div>
 
-        {/* Passcode button */}
+        {/* Passcode */}
         <div style={{padding:"0.75rem",borderTop:`1px solid ${T.border}`}}>
           <button onClick={()=>setPasscodeModal(true)} className="sb-btn"
-            style={{width:"100%",padding:"10px",borderRadius:10,
-              background:T.pill,border:`1px solid ${T.border}`,
-              color:T.textSec,fontSize:11,fontWeight:700,cursor:"pointer",
-              fontFamily:"inherit",display:"flex",alignItems:"center",
-              justifyContent:"center",gap:7}}>
+            style={{width:"100%",padding:"10px",borderRadius:10,background:T.pill,
+              border:`1px solid ${T.border}`,color:T.textSec,fontSize:11,fontWeight:700,
+              cursor:"pointer",fontFamily:"inherit",
+              display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
             <Shield size={12}/> Change Passcode
           </button>
         </div>

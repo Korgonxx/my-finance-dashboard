@@ -106,6 +106,7 @@ model Account {
   isDefault        Boolean      @default(false)
   network          String?
   walletAddress    String?
+  walletMeta       Json?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
   deletedAt        DateTime?
@@ -383,6 +384,7 @@ model DashboardEntry {
   given            Decimal  @default(0) @db.Decimal(20, 8)
   givenTo          String   @default("")
   walletAddress    String?
+  walletMeta       Json?
   walletName       String?
   investmentAmount Decimal? @db.Decimal(20, 8)
   currentValue     Decimal? @db.Decimal(20, 8)

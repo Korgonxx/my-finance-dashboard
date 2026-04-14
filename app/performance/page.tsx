@@ -16,6 +16,7 @@ const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov
 export default function PerformancePage() {
   const { isWeb3, mode } = useWeb3();
   const [isDark, setIsDark] = useState(true);
+  const [hydrated, setHydrated] = useState(false);
   const [perfMode, setPerfMode] = useState<"web2"|"web3">(mode === "web3" ? "web3" : "web2");
   const [chartType, setChartType] = useState<"bar"|"line"|"radar">("bar");
 
@@ -24,6 +25,7 @@ export default function PerformancePage() {
       const saved = localStorage.getItem("ledger_theme");
       setIsDark(saved ? saved === "dark" : true);
     } catch { setIsDark(true); }
+    setHydrated(true);
   }, []);
 
   const T = isDark ? THEME.dark : THEME.light;
@@ -116,8 +118,8 @@ export default function PerformancePage() {
                   <button key={m} onClick={()=>setPerfMode(m)} className="chart-btn"
                     style={{padding:"6px 14px",borderRadius:7,border:"none",cursor:"pointer",
                       fontFamily:"inherit",fontSize:11,fontWeight:700,transition:"all 0.15s",
-                      background:perfMode===m?T.yellow:"transparent",
-                      color:perfMode===m?"#000":T.textMut}}>
+                      background:(hydrated?perfMode:"")=== m?T.yellow:"transparent",
+                      color:(hydrated?perfMode:"")=== m?"#000":T.textMut}}>
                     {m.toUpperCase()}
                   </button>
                 ))}
