@@ -11,19 +11,15 @@ import { useWeb3 } from "../context/Web3Context";
 import { useAppSettings } from "../context/AppSettingsContext";
 import { MasterPasscodeGuard } from "../components/MasterPasscodeGuard";
 import { Sidebar, THEME } from "../components/Sidebar";
+import { PageTransition } from "../components/PageTransition";
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 export default function PerformancePage() {
   const { isWeb3, mode } = useWeb3();
   const { isDark, setIsDark } = useAppSettings();
-  const [hydrated, setHydrated] = useState(false);
   const [perfMode, setPerfMode] = useState<"web2"|"web3">(mode === "web3" ? "web3" : "web2");
   const [chartType, setChartType] = useState<"bar"|"line"|"radar">("bar");
-
-  useEffect(() => {
-    setHydrated(true);
-  }, []);
 
   const T = isDark ? THEME.dark : THEME.light;
   const { web2Entries, web3Entries } = useEntries(perfMode === "web3");
@@ -75,7 +71,7 @@ export default function PerformancePage() {
 
   return (
     <MasterPasscodeGuard isDark={isDark}>
-      <>
+      <PageTransition>
       <style suppressHydrationWarning>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Outfit:wght@400;500;600;700;800;900&display=swap');
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -318,7 +314,7 @@ export default function PerformancePage() {
           </div>
         </div>
       </div>
-      </>
+      </PageTransition>
     </MasterPasscodeGuard>
   );
 }

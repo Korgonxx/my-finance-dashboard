@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo, ReactNode } from "react";
 
 export type AppMode = "web2" | "web3";
 
@@ -42,15 +42,23 @@ const SEED_WALLETS: WalletAddress[] = [
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 
+// Global mode cache to prevent jitter during navigation
+let modeCache: AppMode | null = null;
+
 export function Web3Provider({ children }: { children: ReactNode }) {
   const [mode, setModeState] = useState<AppMode>(() => {
+    if (modeCache) return modeCache;
     try {
       const m = localStorage.getItem("app_mode") as AppMode | null;
-      return (m === "web2" || m === "web3") ? m : "web2";
+      const resolvedMode = (m === "web2" || m === "web3") ? m : "web2";
+      modeCache = resolvedMode;
+      return resolvedMode;
     } catch {
+      modeCache = "web2";
       return "web2";
     }
   });
+  
   const [wallets, setWalletsState] = useState<WalletAddress[]>(() => {
     try {
       const raw = localStorage.getItem("wallet_addresses");
@@ -59,7 +67,9 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       return SEED_WALLETS;
     }
   });
+  
   const [isHydrated, setIsHydrated] = useState(false);
+  const modeRef = useRef(mode);
 
   /* ── hydration protection ── */
   useEffect(() => {
@@ -72,7 +82,16 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     try { localStorage.setItem("wallet_addresses", JSON.stringify(wallets)); } catch {}
   }, [wallets]);
 
+  /* ── persist mode changes and update cache ── */
+  useEffect(() => {
+    modeCache = mode;
+    modeRef.current = mode;
+    try { localStorage.setItem("app_mode", mode); } catch {}
+  }, [mode]);
+
   const setMode = (m: AppMode) => {
+    modeCache = m;
+    modeRef.current = m;
     setModeState(m);
     try { localStorage.setItem("app_mode", m); } catch {}
   };
@@ -88,11 +107,25 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   const deleteWallet = (id: string) =>
     setWalletsState(prev => prev.filter(w => w.id !== id));
 
-  // Stabilize isWeb3 after hydration to prevent jitter during navigation
-  const stableIsWeb3 = isHydrated ? mode === "web3" : false;
+  // Memoized isWeb3 to prevent recalculation on every render
+  const stableIsWeb3 = useMemo(() => {
+    if (!isHydrated) return modeRef.current === "web3";
+    return mode === "web3";
+  }, [mode, isHydrated]);
+
+  const value = useMemo(() => ({
+    mode,
+    setMode,
+    isWeb3: stableIsWeb3,
+    wallets,
+    setWallets,
+    addWallet,
+    updateWallet,
+    deleteWallet,
+  }), [mode, stableIsWeb3, wallets]);
 
   return (
-    <Web3Context.Provider value={{ mode, setMode, isWeb3: stableIsWeb3, wallets, setWallets, addWallet, updateWallet, deleteWallet }}>
+    <Web3Context.Provider value={value}>
       {children}
     </Web3Context.Provider>
   );

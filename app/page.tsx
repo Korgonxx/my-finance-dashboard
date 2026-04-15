@@ -15,6 +15,7 @@ import { useAppSettings, type Currency } from "./context/AppSettingsContext";
 import { MasterPasscodeGuard } from "./components/MasterPasscodeGuard";
 import { Sidebar, THEME, type ThemeType } from "./components/Sidebar";
 import { CloudSyncModal } from "./components/CloudSyncModal";
+import { PageTransition } from "./components/PageTransition";
 import { loadDashboardState, saveDashboardState } from "./lib/cloudSync";
 
 type Entry = {
@@ -300,26 +301,17 @@ export default function FinanceDashboard(){
 
   return(
     <MasterPasscodeGuard isDark={isDark}>
-      <>
+      <PageTransition>
       <style suppressHydrationWarning>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Outfit:wght@400;500;600;700;800;900&display=swap');
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
         html,body{background:${T.bg};color:${T.textPri}}
-        @keyframes fadeIn{from{opacity:0}to{opacity:1}}
         @keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
-        @keyframes popIn{from{opacity:0;transform:scale(0.94) translateY(12px)}to{opacity:1;transform:none}}
-        ::-webkit-scrollbar{width:4px;height:4px}
-        ::-webkit-scrollbar-track{background:transparent}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+        ::-webkit-scrollbar{width:4px} ::-webkit-scrollbar-track{background:transparent}
         ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:99px}
-        input[type=date]::-webkit-calendar-picker-indicator{filter:${isDark?"invert(0.5)":"none"};cursor:pointer}
-        input::placeholder{color:${T.textMut}}
-        option{background:${T.card};color:${T.textPri}}
-        .kc{transition:transform 0.2s ease,box-shadow 0.2s ease;}
-        .kc:hover{transform:translateY(-3px);}
-        .tr{transition:background 0.12s;}
-        .tr:hover{background:${T.pill}!important;}
-        .pill-btn{transition:all 0.15s;cursor:pointer;}
-        .pill-btn:hover{opacity:0.8;}
+        input::placeholder{color:${T.textMut}} select,option{background:${T.card};color:${T.textPri}}
+        select{appearance:none;-webkit-appearance:none;}
       `}</style>
 
       <div style={{display:"flex",minHeight:"100vh",background:T.bg,
@@ -907,7 +899,7 @@ export default function FinanceDashboard(){
           </div>
         </div>
       )}
-      </>
+      </PageTransition>
     </MasterPasscodeGuard>
   );
 }

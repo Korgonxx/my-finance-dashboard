@@ -5,6 +5,7 @@ import { useAppSettings } from "../context/AppSettingsContext";
 import { encryptData, decryptData, maskData, hashPasscode, verifyPasscode } from "../utils/encryption";
 import { MasterPasscodeGuard } from "../components/MasterPasscodeGuard";
 import { Sidebar, THEME, type ThemeType } from "../components/Sidebar";
+import { PageTransition } from "../components/PageTransition";
 import { useWallets } from "@/lib/hooks/useWallets";
 import { Plus, Trash2, Copy, X, Shield, Wallet, CreditCard, Check, AlertCircle, Lock, Unlock } from "lucide-react";
 
@@ -276,7 +277,7 @@ function CardsPage(){
 
   return(
     <MasterPasscodeGuard isDark={isDark}>
-      <>
+      <PageTransition>
       <style suppressHydrationWarning>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Outfit:wght@400;500;600;700;800;900&display=swap');
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -299,7 +300,7 @@ function CardsPage(){
             backdropFilter:"blur(20px)",position:"sticky",top:0,zIndex:40}}>
             <div>
               <div style={{fontSize:10,color:T.textMut,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:2}}>
-                {hydrated&&isWeb3?"Crypto":"Finance"}
+                {isWeb3?"Crypto":"Finance"}
               </div>
               <div style={{fontSize:20,fontWeight:900,letterSpacing:"-0.03em"}} suppressHydrationWarning>
                 {hydrated&&isWeb3?"Wallets":"Cards"}
@@ -482,7 +483,7 @@ function CardsPage(){
           </button>
         </div>
       </Modal>}
-      </>
+      </PageTransition>
     </MasterPasscodeGuard>
   );
 }
