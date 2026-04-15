@@ -339,7 +339,7 @@ export default function FinanceDashboard(){
             <div>
               <div style={{fontSize:10,color:T.textMut,fontWeight:700,
                 letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:2}}>
-                {isHydrated&&isWeb3?"Crypto Portfolio":"Personal Finance"}
+                {isWeb3?"Crypto Portfolio":"Personal Finance"}
               </div>
               <div style={{fontSize:20,fontWeight:900,letterSpacing:"-0.03em",color:T.textPri}}>
                 Dashboard

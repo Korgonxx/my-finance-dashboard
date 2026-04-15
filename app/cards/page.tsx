@@ -268,7 +268,7 @@ function CardsPage(){
     finally{setDelL(false);}
   };
 
-  const total=hydrated?(isWeb3?wallets.reduce((s,w)=>s+w.balance,0):cards.reduce((s,c)=>s+c.balance,0)):0;
+  const total=isWeb3?wallets.reduce((s,w)=>s+w.balance,0):cards.reduce((s,c)=>s+c.balance,0);
   const inp:React.CSSProperties={width:"100%",padding:"10px 14px",background:T.pill,border:`1px solid ${T.border}`,
     borderRadius:10,color:T.textPri,fontSize:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box"};
   const lbl:React.CSSProperties={display:"block",fontSize:10,color:T.textMut,fontWeight:700,
