@@ -45,13 +45,15 @@ function buildCumulative(entries:Entry[]){
 // ── Entry Modal ───────────────────────────────────────────────────────────────
 function EntryModal({onSave,onClose,initial,isWeb3,T}:{
   onSave:(e:Entry)=>void;onClose:()=>void;
-  initial?:Partial<Entry>&{earned?:string;saved?:string;given?:string};
+  initial?:Partial<Entry>;
   isWeb3:boolean;T:ThemeType;
 }){
   const[form,setForm]=useState({
     date:initial?.date??new Date().toISOString().slice(0,10),
     project:initial?.project??"",
-    earned:initial?.earned??"",saved:initial?.saved??"",given:initial?.given??"",
+    earned:initial?.earned !== undefined ? String(initial.earned) : "",
+    saved:initial?.saved !== undefined ? String(initial.saved) : "",
+    given:initial?.given !== undefined ? String(initial.given) : "",
     givenTo:initial?.givenTo??"",
     walletAddress:initial?.walletAddress??"",walletName:initial?.walletName??"",
   });
@@ -729,7 +731,7 @@ export default function FinanceDashboard(){
       {/* ── MODALS ── */}
       {addModal&&<EntryModal onSave={save} onClose={()=>setAddModal(false)} isWeb3={isWeb3} T={T}/>}
       {editEntry&&<EntryModal
-        initial={{...editEntry,earned:String(editEntry.earned),saved:String(editEntry.saved),given:String(editEntry.given)}}
+        initial={editEntry}
         onSave={save} onClose={()=>setEditEntry(null)} isWeb3={isWeb3} T={T}/>}
       {deleteEntry&&<DeleteModal entry={deleteEntry} onConfirm={()=>remove(deleteEntry.id)} onClose={()=>setDeleteEntry(null)} T={T}/>}
 
