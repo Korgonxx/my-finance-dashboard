@@ -17,19 +17,39 @@ export type Entry = {
   currentValue?: number;
 };
 
+// Global cache to prevent refetch on navigation
+const entriesCache = new Map<string, { data: Entry[], timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 export function useEntries(isWeb3: boolean) {
   const [web2Entries, setWeb2Entries] = useState<Entry[]>([]);
   const [web3Entries, setWeb3Entries] = useState<Entry[]>([]);
   const [loaded, setLoaded] = useState(false);
   const syncedIds = useRef<Set<string>>(new Set());
+  const loadedRef = useRef(false);
 
   useEffect(() => {
     async function load() {
+      // Prevent double-load on initial mount
+      if (loadedRef.current) return;
+      loadedRef.current = true;
+
       try {
-        const [w2, w3]: [Entry[], Entry[]] = await Promise.all([
-          fetch("/api/entries?mode=web2").then(r => r.json()),
-          fetch("/api/entries?mode=web3").then(r => r.json()),
-        ]);
+        // Check cache first
+        const w2Cache = entriesCache.get("web2");
+        const w3Cache = entriesCache.get("web3");
+        const now = Date.now();
+        
+        const w2 = (w2Cache && now - w2Cache.timestamp < CACHE_TTL) 
+          ? w2Cache.data 
+          : await fetch("/api/entries?mode=web2").then(r => r.json());
+        const w3 = (w3Cache && now - w3Cache.timestamp < CACHE_TTL) 
+          ? w3Cache.data 
+          : await fetch("/api/entries?mode=web3").then(r => r.json());
+
+        // Update cache
+        entriesCache.set("web2", { data: w2, timestamp: Date.now() });
+        entriesCache.set("web3", { data: w3, timestamp: Date.now() });
 
         if (w2.length === 0 && w3.length === 0) {
           await migrateFromLocalStorage(syncedIds.current);
@@ -39,6 +59,8 @@ export function useEntries(isWeb3: boolean) {
           ]);
           r2.forEach((e: Entry) => syncedIds.current.add(e.id));
           r3.forEach((e: Entry) => syncedIds.current.add(e.id));
+          entriesCache.set("web2", { data: r2, timestamp: Date.now() });
+          entriesCache.set("web3", { data: r3, timestamp: Date.now() });
           setWeb2Entries(r2);
           setWeb3Entries(r3);
         } else {
@@ -102,23 +124,50 @@ export function useEntries(isWeb3: boolean) {
   return { web2Entries, web3Entries, setWeb2Entries, setWeb3Entries, loaded, save, remove };
 }
 
+// Global cache for goals
+const goalCache = new Map<string, { amount: number, timestamp: number }>();
+
 export function useGoal(mode: "web2" | "web3") {
   const [goal, setGoalState] = useState(60000);
+  const loadedRef = useRef(false);
 
   useEffect(() => {
-    fetch(`/api/goal?mode=${mode}`)
-      .then(r => r.json())
-      .then(data => { if (data.amount) setGoalState(data.amount); })
-      .catch(() => {
+    async function load() {
+      // Prevent double-load on initial mount
+      if (loadedRef.current) return;
+      loadedRef.current = true;
+
+      try {
+        const cached = goalCache.get(mode);
+        const now = Date.now();
+        
+        if (cached && now - cached.timestamp < CACHE_TTL) {
+          setGoalState(cached.amount);
+          return;
+        }
+
+        const r = await fetch(`/api/goal?mode=${mode}`);
+        const data = await r.json();
+        if (data.amount) {
+          setGoalState(data.amount);
+          goalCache.set(mode, { amount: data.amount, timestamp: Date.now() });
+        }
+      } catch (err) {
+        console.error("[useGoal] load failed", err);
         try {
           const saved = localStorage.getItem("fd_goal");
           if (saved) setGoalState(parseFloat(saved));
         } catch {}
-      });
+      }
+    }
+    load();
   }, [mode]);
 
   const setGoal = useCallback((amount: number, currency = "USD") => {
     setGoalState(amount);
+    // Update cache immediately
+    goalCache.set(mode, { amount, timestamp: Date.now() });
+    
     fetch("/api/goal", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
