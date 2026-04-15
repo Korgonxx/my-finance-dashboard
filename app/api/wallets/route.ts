@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
           isEncrypted:   true,
           encryptedData: body.encryptedData ?? null,
           passcode:      body.passcode      ?? null,
-        } : null,
+        } : undefined,
       },
     });
     return NextResponse.json({

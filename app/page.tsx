@@ -392,7 +392,7 @@ export default function FinanceDashboard(){
                   </div>
                   <div style={{fontFamily:"'DM Mono',monospace",fontSize:"1.8rem",
                     fontWeight:700,color:item.color,letterSpacing:"-0.04em",lineHeight:1,marginBottom:6}}>
-                    {item.value}
+                    {isHydrated ? item.value : "$0"}
                   </div>
                   {item.change&&(
                     <div style={{display:"flex",alignItems:"center",gap:4,

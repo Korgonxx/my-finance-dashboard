@@ -4,11 +4,9 @@ import { Web3Provider } from "./context/Web3Context";
 import { AppSettingsProvider } from "./context/AppSettingsContext";
 
 export const metadata: Metadata = {
-  title: "Ledger — Personal Finance Dashboard",
-  description: "Track your earnings, savings, and giving with beautiful charts and analytics",
-  icons: {
-    icon: "/brand/favicon.png",
-  },
+  title: "Korgon Finance",
+  description: "Track your earnings, savings, and giving",
+  icons: { icon: "/brand/favicon.png" },
 };
 
 export const viewport: Viewport = {
@@ -19,11 +17,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth">
+    <html lang="en" suppressHydrationWarning>
       <head>
-        <meta name="theme-color" content="#06080f" />
+        <meta name="theme-color" content="#080808"/>
       </head>
-      <body suppressHydrationWarning>
+      <body suppressHydrationWarning style={{ margin:0, background:"#080808" }}>
         <Web3Provider>
           <AppSettingsProvider>
             {children}

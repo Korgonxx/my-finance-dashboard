@@ -52,7 +52,7 @@ const CURRENCY_SYMBOLS: Record<Currency, string> = {
 };
 
 export function AppSettingsProvider({ children }: { children: ReactNode }) {
-  const [appPasscodeVerified, setAppPasscodeVerified] = useState(false);
+  const [appPasscodeVerified, setAppPasscodeVerified] = useState(() => { try { return sessionStorage.getItem("korgon_verified") === "true"; } catch { return false; } });
   const [masterPasscode, setMasterPasscode] = useState(() => {
     try {
       const saved = localStorage.getItem("app_master_passcode");
@@ -106,7 +106,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
 
   const verifyAppPasscode = (passcode: string): boolean => {
     if (passcode === masterPasscode) {
-      setAppPasscodeVerified(true);
+      setAppPasscodeVerified(true); try { sessionStorage.setItem("korgon_verified", "true"); } catch {}
       return true;
     }
     return false;
@@ -124,7 +124,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
   };
 
   const lockApp = () => {
-    setAppPasscodeVerified(false);
+    setAppPasscodeVerified(false); try { sessionStorage.removeItem("korgon_verified"); } catch {}
   };
 
   const setCurrency = (newCurrency: Currency) => {
