@@ -174,17 +174,12 @@ function BCard({c,T,onDelete,onDecrypt,decNum}:{c:BankCard;T:ThemeType;onDelete:
 }
 
 function CardsPage(){
-  const{mode,setMode}=useWeb3();
+  const{isWeb3,setMode}=useWeb3();
   const{setCurrentPage,isDark,setIsDark}=useAppSettings();
-  const[hydrated,setHydrated]=useState(false);
   
-  // Stabilize isWeb3 after hydration to prevent jitter
-  const isWeb3=hydrated?mode==="web3":false;
+  // Use stable isWeb3 from provider to prevent jitter on navigation
   const T=isDark?THEME.dark:THEME.light;
 
-  useEffect(()=>{
-    setHydrated(true);
-  },[]);
   useEffect(()=>{setCurrentPage("cards");},[setCurrentPage]);
 
   const{wallets,loading:wLoading,addWallet,removeWallet}=useWallets();

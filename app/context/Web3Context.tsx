@@ -59,6 +59,12 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       return SEED_WALLETS;
     }
   });
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  /* ── hydration protection ── */
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   /* ── persist wallets ── */
   useEffect(() => {
@@ -82,8 +88,11 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   const deleteWallet = (id: string) =>
     setWalletsState(prev => prev.filter(w => w.id !== id));
 
+  // Stabilize isWeb3 after hydration to prevent jitter during navigation
+  const stableIsWeb3 = isHydrated ? mode === "web3" : false;
+
   return (
-    <Web3Context.Provider value={{ mode, setMode, isWeb3: mode === "web3", wallets, setWallets, addWallet, updateWallet, deleteWallet }}>
+    <Web3Context.Provider value={{ mode, setMode, isWeb3: stableIsWeb3, wallets, setWallets, addWallet, updateWallet, deleteWallet }}>
       {children}
     </Web3Context.Provider>
   );
