@@ -204,9 +204,12 @@ function CardDetailModal({title,children,onClose,T,accentBg}:{
 export default function FinanceDashboard(){
   const{isWeb3,setMode}=useWeb3();
   const{setCurrentPage,currency,setCurrency,hideBalances,setHideBalances,isDark,setIsDark}=useAppSettings();
-  const currentMode=isWeb3?"web3":"web2";
+  const[isHydrated,setIsHydrated]=useState(false);
+  
+  // Stabilize currentMode after hydration to prevent jitter
+  const currentMode=isHydrated?isWeb3?"web3":"web2":"web2";
   const{goal,setGoal:setGoalAndSync}=useGoal(currentMode);
-  const{web2Entries,web3Entries,setWeb2Entries,setWeb3Entries,loaded,save:saveEntry,remove:removeEntry}=useEntries(isWeb3);
+  const{web2Entries,web3Entries,setWeb2Entries,setWeb3Entries,loaded,save:saveEntry,remove:removeEntry}=useEntries(isHydrated?isWeb3:false);
   const[filter,setFilter]=useState("All");
   const[addModal,setAddModal]=useState(false);
   const[editEntry,setEditEntry]=useState<Entry|null>(null);
@@ -220,7 +223,6 @@ export default function FinanceDashboard(){
   const[goalInput,setGoalInput]=useState(String(goal));
   const[showGoalModal,setShowGoalModal]=useState(false);
   const[goalError,setGoalError]=useState("");
-  const[isHydrated,setIsHydrated]=useState(false);
 
   const T=isDark?THEME.dark:THEME.light;
 

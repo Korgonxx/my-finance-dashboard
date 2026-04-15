@@ -176,8 +176,10 @@ function BCard({c,T,onDelete,onDecrypt,decNum}:{c:BankCard;T:ThemeType;onDelete:
 function CardsPage(){
   const{mode,setMode}=useWeb3();
   const{setCurrentPage,isDark,setIsDark}=useAppSettings();
-  const isWeb3=mode==="web3";
   const[hydrated,setHydrated]=useState(false);
+  
+  // Stabilize isWeb3 after hydration to prevent jitter
+  const isWeb3=hydrated?mode==="web3":false;
   const T=isDark?THEME.dark:THEME.light;
 
   useEffect(()=>{
