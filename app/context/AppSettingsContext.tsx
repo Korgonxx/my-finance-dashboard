@@ -23,6 +23,10 @@ interface AppSettingsContextType {
   // Floating window
   currentPage: AppPage;
   setCurrentPage: (page: AppPage) => void;
+
+  // Theme
+  isDark: boolean;
+  setIsDark: (isDark: boolean) => void;
 }
 
 const AppSettingsContext = createContext<AppSettingsContextType>({
@@ -36,6 +40,8 @@ const AppSettingsContext = createContext<AppSettingsContextType>({
   setHideBalances: () => {},
   currentPage: "home",
   setCurrentPage: () => {},
+  isDark: true,
+  setIsDark: () => {},
 });
 
 const DEFAULT_PASSCODE = "888888";
@@ -78,7 +84,31 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
     }
   });
   const [currentPage, setCurrentPageState] = useState<AppPage>("home");
-  const [isHydrated, setIsHydrated] = useState(true);
+  const [isDark, setIsDarkState] = useState(true);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  // Load initial settings
+  useEffect(() => {
+    try {
+      const savedTheme = localStorage.getItem("app_theme");
+      if (savedTheme !== null) {
+        setIsDarkState(savedTheme === "true");
+      } else {
+        // Default to dark mode or system preference
+        const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        setIsDarkState(prefersDark);
+      }
+    } catch {}
+    setIsHydrated(true);
+  }, []);
+
+  // Persist theme
+  useEffect(() => {
+    if (!isHydrated) return;
+    try {
+      localStorage.setItem("app_theme", String(isDark));
+    } catch {}
+  }, [isDark, isHydrated]);
 
   // Persist master passcode
   useEffect(() => {
@@ -139,6 +169,19 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
     setCurrentPageState(page);
   };
 
+  const setIsDark = (dark: boolean) => {
+    setIsDarkState(dark);
+    try {
+      if (!dark) {
+        document.documentElement.classList.add('light');
+        document.body.style.background = '#F2F2F0';
+      } else {
+        document.documentElement.classList.remove('light');
+        document.body.style.background = '#080808';
+      }
+    } catch {}
+  };
+
   return (
     <AppSettingsContext.Provider
       value={{
@@ -152,6 +195,8 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
         setHideBalances,
         currentPage,
         setCurrentPage,
+        isDark,
+        setIsDark,
       }}
     >
       {children}

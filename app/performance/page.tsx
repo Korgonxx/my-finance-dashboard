@@ -8,6 +8,7 @@ import {
 } from "recharts";
 import { TrendingUp, BarChart2, Activity, Target, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { useWeb3 } from "../context/Web3Context";
+import { useAppSettings } from "../context/AppSettingsContext";
 import { MasterPasscodeGuard } from "../components/MasterPasscodeGuard";
 import { Sidebar, THEME } from "../components/Sidebar";
 
@@ -15,16 +16,12 @@ const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov
 
 export default function PerformancePage() {
   const { isWeb3, mode } = useWeb3();
-  const [isDark, setIsDark] = useState(true);
+  const { isDark, setIsDark } = useAppSettings();
   const [hydrated, setHydrated] = useState(false);
   const [perfMode, setPerfMode] = useState<"web2"|"web3">(mode === "web3" ? "web3" : "web2");
   const [chartType, setChartType] = useState<"bar"|"line"|"radar">("bar");
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("ledger_theme");
-      setIsDark(saved ? saved === "dark" : true);
-    } catch { setIsDark(true); }
     setHydrated(true);
   }, []);
 

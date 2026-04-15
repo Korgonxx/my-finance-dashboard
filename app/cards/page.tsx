@@ -175,15 +175,12 @@ function BCard({c,T,onDelete,onDecrypt,decNum}:{c:BankCard;T:ThemeType;onDelete:
 
 function CardsPage(){
   const{mode,setMode}=useWeb3();
-  const{setCurrentPage}=useAppSettings();
+  const{setCurrentPage,isDark,setIsDark}=useAppSettings();
   const isWeb3=mode==="web3";
-  const[isDark,setIsDark]=useState(true);
   const[hydrated,setHydrated]=useState(false);
   const T=isDark?THEME.dark:THEME.light;
 
   useEffect(()=>{
-    try{const s=localStorage.getItem("theme");setIsDark(s?s==="dark":window.matchMedia("(prefers-color-scheme: dark)").matches);}
-    catch{setIsDark(true);}
     setHydrated(true);
   },[]);
   useEffect(()=>{setCurrentPage("cards");},[setCurrentPage]);

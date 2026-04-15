@@ -201,11 +201,10 @@ function CardDetailModal({title,children,onClose,T,accentBg}:{
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 export default function FinanceDashboard(){
   const{isWeb3,setMode}=useWeb3();
-  const{setCurrentPage,currency,setCurrency,hideBalances,setHideBalances}=useAppSettings();
+  const{setCurrentPage,currency,setCurrency,hideBalances,setHideBalances,isDark,setIsDark}=useAppSettings();
   const currentMode=isWeb3?"web3":"web2";
   const{goal,setGoal:setGoalAndSync}=useGoal(currentMode);
   const{web2Entries,web3Entries,setWeb2Entries,setWeb3Entries,loaded,save:saveEntry,remove:removeEntry}=useEntries(isWeb3);
-  const[isDark,setIsDark]=useState(true);
   const[filter,setFilter]=useState("All");
   const[addModal,setAddModal]=useState(false);
   const[editEntry,setEditEntry]=useState<Entry|null>(null);
