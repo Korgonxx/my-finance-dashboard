@@ -374,6 +374,133 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+// ─────────────────────────────────────────────
+// WEB2 DASHBOARD (Personal Finance)
+// ─────────────────────────────────────────────
+
+model Web2DashboardEntry {
+  id               String   @id @default(cuid())
+  date             String
+  project          String
+  earned           Decimal  @default(0) @db.Decimal(20, 8)
+  saved            Decimal  @default(0) @db.Decimal(20, 8)
+  given            Decimal  @default(0) @db.Decimal(20, 8)
+  givenTo          String   @default("")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([date])
+  @@index([createdAt])
+  @@map("web2_dashboard_entries")
+}
+
+model Web2DashboardGoal {
+  id        String   @id @default(cuid())
+  amount    Decimal  @db.Decimal(20, 8)
+  currency  String   @default("USD")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("web2_dashboard_goal")
+}
+
+model Web2Card {
+  id          String   @id @default(cuid())
+  name        String
+  cardType    String
+  lastFour    String
+  balance     Decimal  @default(0) @db.Decimal(20, 8)
+  currency    String   @default("USD")
+  isActive    Boolean  @default(true)
+  color       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([createdAt])
+  @@map("web2_cards")
+}
+
+model Web2Performance {
+  id        String   @id @default(cuid())
+  month     String
+  earned    Decimal  @default(0) @db.Decimal(20, 8)
+  saved     Decimal  @default(0) @db.Decimal(20, 8)
+  given     Decimal  @default(0) @db.Decimal(20, 8)
+  roi       Decimal  @default(0) @db.Decimal(10, 4)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([month])
+  @@map("web2_performance")
+}
+
+// ─────────────────────────────────────────────
+// WEB3 DASHBOARD (Crypto Portfolio)
+// ─────────────────────────────────────────────
+
+model Web3DashboardEntry {
+  id                String   @id @default(cuid())
+  date              String
+  project           String
+  walletAddress     String
+  walletName        String
+  network           String
+  investmentAmount  Decimal  @db.Decimal(20, 8)
+  currentValue      Decimal  @db.Decimal(20, 8)
+  roi               Decimal  @default(0) @db.Decimal(10, 4)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([date])
+  @@index([walletAddress])
+  @@index([createdAt])
+  @@map("web3_dashboard_entries")
+}
+
+model Web3DashboardGoal {
+  id        String   @id @default(cuid())
+  amount    Decimal  @db.Decimal(20, 8)
+  currency  String   @default("USD")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("web3_dashboard_goal")
+}
+
+model Web3Wallet {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  address     String   @unique
+  network     String
+  balance     Decimal  @default(0) @db.Decimal(20, 8)
+  currency    String   @default("USD")
+  isActive    Boolean  @default(true)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([address])
+  @@index([createdAt])
+  @@map("web3_wallets")
+}
+
+model Web3Performance {
+  id               String   @id @default(cuid())
+  month            String
+  walletAddress    String
+  investmentTotal  Decimal  @default(0) @db.Decimal(20, 8)
+  currentTotal     Decimal  @default(0) @db.Decimal(20, 8)
+  roi              Decimal  @default(0) @db.Decimal(10, 4)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([month, walletAddress])
+  @@index([walletAddress])
+  @@index([month])
+  @@map("web3_performance")
+}
+
+// Legacy models (kept for backward compatibility)
 model DashboardEntry {
   id               String   @id @default(cuid())
   mode             String   @default("web2")
