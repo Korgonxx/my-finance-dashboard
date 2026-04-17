@@ -111,8 +111,8 @@ export default function PerformancePage() {
                   <button key={m} onClick={()=>setPerfMode(m)} className="chart-btn"
                     style={{padding:"6px 14px",borderRadius:7,border:"none",cursor:"pointer",
                       fontFamily:"inherit",fontSize:11,fontWeight:700,transition:"all 0.15s",
-                      background:(hydrated?perfMode:"")=== m?T.yellow:"transparent",
-                      color:(hydrated?perfMode:"")=== m?"#000":T.textMut}}>
+                      background:perfMode=== m?T.yellow:"transparent",
+                      color:perfMode=== m?"#000":T.textMut}}>
                     {m.toUpperCase()}
                   </button>
                 ))}

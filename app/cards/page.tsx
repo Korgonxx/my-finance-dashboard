@@ -322,19 +322,19 @@ function CardsPage(){
                 style={{display:"flex",alignItems:"center",gap:6,padding:"7px 18px",borderRadius:99,
                   background:T.yellow,border:"none",color:"#000",fontSize:11,fontWeight:900,
                   cursor:"pointer",fontFamily:"inherit",boxShadow:`0 4px 14px ${T.yellow}40`}}>
-                <Plus size={13}/> Add {hydrated&&isWeb3?"Wallet":"Card"}
+                <Plus size={13}/> Add {isWeb3?"Wallet":"Card"}
               </button>
             </div>
           </div>
 
           {/* CONTENT */}
           <div style={{padding:"1.5rem 2rem 4rem",flex:1,animation:"slideUp 0.4s ease"}}>
-            <div style={{background:hydrated&&isWeb3?T.green:T.yellow,borderRadius:20,
+            <div style={{background:isWeb3?T.green:T.yellow,borderRadius:20,
               padding:"1.5rem 2rem",marginBottom:"1.5rem",
               display:"flex",justifyContent:"space-between",alignItems:"center"}} suppressHydrationWarning>
               <div>
                 <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(0,0,0,0.45)",marginBottom:6}}>
-                  Total {hydrated&&isWeb3?"Portfolio":"Balance"}
+                  Total {isWeb3?"Portfolio":"Balance"}
                 </div>
                 <div style={{fontFamily:"'DM Mono',monospace",fontSize:"2.5rem",fontWeight:700,color:"#000",letterSpacing:"-0.04em",lineHeight:1}}>
                   ${total.toLocaleString()}
@@ -343,12 +343,12 @@ function CardsPage(){
               <div style={{textAlign:"right"}}>
                 <div style={{fontSize:10,fontWeight:700,color:"rgba(0,0,0,0.4)",marginBottom:4}}>Connected</div>
                 <div style={{fontFamily:"'DM Mono',monospace",fontSize:"2.5rem",fontWeight:700,color:"#000"}}>
-                  {hydrated?(isWeb3?wallets.length:cards.length):0}
+                  {isWeb3?wallets.length:cards.length}
                 </div>
               </div>
             </div>
 
-            {(!hydrated||isWeb3)?(
+                {isWeb3?(
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:"1rem"}}>
                 {wLoading?Array.from({length:3}).map((_,i)=>(
                   <div key={i} style={{background:T.card,borderRadius:20,height:220,border:`1px solid ${T.border}`,animation:"pulse 1.5s ease infinite"}}/>

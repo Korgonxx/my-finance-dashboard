@@ -368,12 +368,12 @@ export default function FinanceDashboard(){
               background:T.card,borderRadius:20,border:`1px solid ${T.border}`,
               overflow:"hidden"}}>
               {[
-                {label:isHydrated&&isWeb3?"Total Assets":"Total Earned",value:money(totalEarned),change:null,color:T.yellow},
+                {label:isWeb3?"Total Assets":"Total Earned",value:money(totalEarned),change:null,color:T.yellow},
                 {label:"Net Income",value:money(netIncome),
                   change:{val:pct(Math.abs(netIncome),totalEarned)+"%",up:netIncome>=0},
                   color:netIncome>=0?T.green:T.red},
-                {label:isHydrated&&isWeb3?"Total Sent":"Total Given",value:money(totalGiven),change:null,color:T.textSec},
-                {label:isHydrated&&isWeb3?"Portfolio Goal":"Yearly Goal",value:`${Math.round(progress)}%`,
+                {label:isWeb3?"Total Sent":"Total Given",value:money(totalGiven),change:null,color:T.textSec},
+                {label:isWeb3?"Portfolio Goal":"Yearly Goal",value:`${Math.round(progress)}%`,
                   change:{val:money(goal),up:true},color:T.yellow},
               ].map((item,i)=>(
                 <div key={i} style={{flex:1,padding:"1.5rem",
@@ -386,7 +386,7 @@ export default function FinanceDashboard(){
                   </div>
                   <div style={{fontFamily:"'DM Mono',monospace",fontSize:"1.8rem",
                     fontWeight:700,color:item.color,letterSpacing:"-0.04em",lineHeight:1,marginBottom:6}}>
-                    {isHydrated ? item.value : "$0"}
+                    {item.value}
                   </div>
                   {item.change&&(
                     <div style={{display:"flex",alignItems:"center",gap:4,
@@ -640,7 +640,7 @@ export default function FinanceDashboard(){
                 <table style={{width:"100%",borderCollapse:"collapse",minWidth:560}}>
                   <thead>
                     <tr>
-                      {["Date","Description",...(isHydrated&&isWeb3?["Wallet"]:[]),"Received","Saved","Sent","Category",""].map((h,i)=>(
+                      {["Date","Description",...(isWeb3?["Wallet"]:[]),"Received","Saved","Sent","Category",""].map((h,i)=>(
                         <th key={i} style={{padding:"0.7rem 1.25rem",
                           textAlign:["Received","Saved","Sent"].includes(h)?"right":h===""?"center":"left",
                           fontSize:9,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",
@@ -660,7 +660,7 @@ export default function FinanceDashboard(){
                           color:T.textPri,maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                           {e.project}
                         </td>
-                        {isHydrated&&isWeb3&&(
+                        {isWeb3&&(
                           <td style={{padding:"0.85rem 1.25rem",fontSize:11,
                             fontFamily:"'DM Mono',monospace",color:T.textMut}}>
                             {e.walletName||shortAddr(e.walletAddress||"")||"—"}
@@ -870,7 +870,7 @@ export default function FinanceDashboard(){
               </div>
               <div>
                 <div style={{fontSize:16,fontWeight:900,letterSpacing:"-0.02em",color:T.textPri}}>Set Your Goal</div>
-                <div style={{fontSize:11,color:T.textMut}}>Annual {isHydrated&&isWeb3?"portfolio":"earning"} target</div>
+                <div style={{fontSize:11,color:T.textMut}}>Annual {isWeb3?"portfolio":"earning"} target</div>
               </div>
             </div>
             <input type="number" value={goalInput}
