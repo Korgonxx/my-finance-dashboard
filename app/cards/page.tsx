@@ -303,7 +303,7 @@ function CardsPage(){
                 {isWeb3?"Crypto":"Finance"}
               </div>
               <div style={{fontSize:20,fontWeight:900,letterSpacing:"-0.03em"}} suppressHydrationWarning>
-                {hydrated&&isWeb3?"Wallets":"Cards"}
+                {isWeb3?"Wallets":"Cards"}
               </div>
             </div>
             <div style={{display:"flex",gap:8}}>
@@ -312,8 +312,8 @@ function CardsPage(){
                   <button key={m} onClick={()=>setMode(m)} suppressHydrationWarning
                     style={{padding:"6px 14px",borderRadius:7,border:"none",cursor:"pointer",
                       fontFamily:"inherit",fontSize:11,fontWeight:700,transition:"all 0.15s",
-                      background:(hydrated?isWeb3:false)===(m==="web3")?T.yellow:"transparent",
-                      color:(hydrated?isWeb3:false)===(m==="web3")?"#000":T.textMut}}>
+                      background:isWeb3===(m==="web3")?T.yellow:"transparent",
+                      color:isWeb3===(m==="web3")?"#000":T.textMut}}>
                     {m.toUpperCase()}
                   </button>
                 ))}
