@@ -93,7 +93,14 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     modeCache = m;
     modeRef.current = m;
     setModeState(m);
-    try { localStorage.setItem("app_mode", m); } catch {}
+    try { 
+      localStorage.setItem("app_mode", m);
+      if (m === "web3") {
+        document.documentElement.classList.add("web3-mode");
+      } else {
+        document.documentElement.classList.remove("web3-mode");
+      }
+    } catch {}
   };
 
   const setWallets = (w: WalletAddress[]) => setWalletsState(w);

@@ -18,8 +18,18 @@ const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov
 export default function PerformancePage() {
   const { isWeb3, mode } = useWeb3();
   const { isDark, setIsDark } = useAppSettings();
-  const [perfMode, setPerfMode] = useState<"web2"|"web3">(mode === "web3" ? "web3" : "web2");
+  const [hydrated, setHydrated] = useState(false);
+  
+  // Use document class for initial mode to prevent jitter
+  const initialMode = typeof document !== 'undefined' && document.documentElement.classList.contains('web3-mode') ? 'web3' : 'web2';
+  const [perfMode, setPerfMode] = useState<"web2"|"web3">(initialMode);
   const [chartType, setChartType] = useState<"bar"|"line"|"radar">("bar");
+
+  useEffect(() => {
+    setHydrated(true);
+    // Sync with actual context mode once hydrated
+    setPerfMode(mode === "web3" ? "web3" : "web2");
+  }, [mode]);
 
   const T = isDark ? THEME.dark : THEME.light;
   const { web2Entries, web3Entries } = useEntries(perfMode === "web3");
@@ -199,117 +209,72 @@ export default function PerformancePage() {
                             tickFormatter={v=>`$${(v/1000).toFixed(0)}k`} width={34}/>
                           <Tooltip contentStyle={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,fontSize:12,color:T.textPri}}
                             formatter={(v:any)=>[fmt(Number(v))]}/>
-                          <Bar dataKey="earned" name="Earned" fill={T.yellow} radius={[5,5,0,0]}/>
-                          <Bar dataKey="saved"  name="Saved"  fill={T.green}  radius={[5,5,0,0]}/>
-                          <Bar dataKey="given"  name="Given"  fill={T.red}    radius={[5,5,0,0]}/>
+                          <Bar dataKey="earned" name="Earned" fill={T.yellow} radius={[4,4,0,0]}/>
+                          <Bar dataKey="saved" name="Saved" fill={T.green} radius={[4,4,0,0]}/>
+                          <Bar dataKey="given" name="Given" fill={T.red} radius={[4,4,0,0]}/>
                         </BarChart>
                       </ResponsiveContainer>
                     )}
                     {chartType==="line"&&(
                       <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={perfData}>
+                        <AreaChart data={perfData}>
+                          <defs>
+                            <linearGradient id="gROI" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor={T.blue} stopOpacity={0.3}/>
+                              <stop offset="95%" stopColor={T.blue} stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
                           <CartesianGrid strokeDasharray="2 5" stroke={isDark?"rgba(255,255,255,0.04)":"rgba(0,0,0,0.06)"} vertical={false}/>
                           <XAxis dataKey="month" tick={{fill:T.textMut,fontSize:10}} axisLine={false} tickLine={false}/>
-                          <YAxis tick={{fill:T.textMut,fontSize:10}} axisLine={false} tickLine={false}
-                            tickFormatter={v=>`$${(v/1000).toFixed(0)}k`} width={34}/>
-                          <Tooltip contentStyle={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,fontSize:12,color:T.textPri}}
-                            formatter={(v:any)=>[fmt(Number(v))]}/>
-                          <Line type="monotone" dataKey="earned" name="Earned" stroke={T.yellow} strokeWidth={2.5}
-                            dot={{r:3,fill:T.yellow,strokeWidth:0}} activeDot={{r:5}}/>
-                          <Line type="monotone" dataKey="saved"  name="Saved"  stroke={T.green}  strokeWidth={2.5}
-                            dot={{r:3,fill:T.green,strokeWidth:0}}  activeDot={{r:5}}/>
-                          <Line type="monotone" dataKey="given"  name="Given"  stroke={T.red}    strokeWidth={2.5}
-                            dot={{r:3,fill:T.red,strokeWidth:0}}    activeDot={{r:5}}/>
-                        </LineChart>
+                          <YAxis tick={{fill:T.textMut,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>`${v}%`}/>
+                          <Tooltip contentStyle={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,fontSize:12,color:T.textPri}}/>
+                          <Area type="monotone" dataKey="roi" stroke={T.blue} strokeWidth={3} fillOpacity={1} fill="url(#gROI)"/>
+                        </AreaChart>
                       </ResponsiveContainer>
                     )}
                     {chartType==="radar"&&(
                       <ResponsiveContainer width="100%" height="100%">
-                        <RadarChart data={activeData}>
-                          <PolarGrid stroke={isDark?"rgba(255,255,255,0.08)":"rgba(0,0,0,0.08)"}/>
-                          <PolarAngleAxis dataKey="month" tick={{fill:T.textMut,fontSize:10}}/>
-                          <Radar name="Earned" dataKey="earned" stroke={T.yellow} fill={T.yellow} fillOpacity={0.18}/>
-                          <Radar name="Saved"  dataKey="saved"  stroke={T.green}  fill={T.green}  fillOpacity={0.15}/>
-                          <Tooltip contentStyle={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,fontSize:12,color:T.textPri}}
-                            formatter={(v:any)=>[fmt(Number(v))]}/>
+                        <RadarChart cx="50%" cy="50%" outerRadius="80%" data={perfData}>
+                          <PolarGrid stroke={isDark?"rgba(255,255,255,0.05)":"rgba(0,0,0,0.08)"}/>
+                          <PolarAngleAxis dataKey="month" tick={{fill:T.textMut,fontSize:9}}/>
+                          <Radar name="ROI" dataKey="roi" stroke={T.yellow} fill={T.yellow} fillOpacity={0.5}/>
+                          <Tooltip contentStyle={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,fontSize:12,color:T.textPri}}/>
                         </RadarChart>
                       </ResponsiveContainer>
                     )}
                   </div>
-                ):emptyState}
+                ):(emptyState)}
               </div>
 
-              {/* Category donut */}
-              <div className="kc" style={{background:T.green,borderRadius:20,padding:"1.5rem",display:"flex",flexDirection:"column"}}>
-                <div style={{fontSize:13,fontWeight:800,color:"#000",marginBottom:4}}>By Category</div>
-                <div style={{fontSize:11,color:"rgba(0,0,0,0.45)",marginBottom:"1rem"}}>Income breakdown</div>
+              {/* Pie chart */}
+              <div className="kc" style={{background:T.card,borderRadius:20,padding:"1.5rem",border:`1px solid ${T.border}`,display:"flex",flexDirection:"column"}}>
+                <div style={{fontSize:13,fontWeight:800,color:T.textPri,marginBottom:"1rem"}}>Allocation</div>
                 {catData.length>0?(
-                  <>
-                    <div style={{height:160,minHeight:160}}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={catData} cx="50%" cy="50%" outerRadius={70} innerRadius={32}
-                          dataKey="value" labelLine={false}>
-                          {catData.map((_,i)=><Cell key={i} fill={["#000","rgba(0,0,0,0.7)","rgba(0,0,0,0.5)","rgba(0,0,0,0.35)","rgba(0,0,0,0.2)"][i%5]}/>)}
-                        </Pie>
-                        <Tooltip contentStyle={{background:"#fff",border:"none",borderRadius:10,fontSize:12,color:"#000"}}
-                          formatter={(v:any)=>[fmt(Number(v))]}/>
-                      </PieChart>
-                    </ResponsiveContainer>
+                  <div style={{flex:1,display:"flex",flexDirection:"column"}}>
+                    <div style={{height:180}}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={catData} innerRadius={55} outerRadius={75} paddingAngle={5} dataKey="value">
+                            {catData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color}/>)}
+                          </Pie>
+                          <Tooltip contentStyle={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,fontSize:12,color:T.textPri}}/>
+                        </PieChart>
+                      </ResponsiveContainer>
                     </div>
-                    <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:8}}>
-                      {catData.slice(0,4).map((c,i)=>(
-                        <div key={c.name} style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                          <div style={{display:"flex",alignItems:"center",gap:6}}>
-                            <div style={{width:6,height:6,borderRadius:2,
-                              background:["#000","rgba(0,0,0,0.7)","rgba(0,0,0,0.5)","rgba(0,0,0,0.3)"][i]}}/>
-                            <span style={{fontSize:11,color:"rgba(0,0,0,0.6)",fontWeight:600}}>{c.name}</span>
+                    <div style={{marginTop:12,display:"flex",flexDirection:"column",gap:8}}>
+                      {catData.map(c=>(
+                        <div key={c.name} style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8}}>
+                            <div style={{width:8,height:8,borderRadius:2,background:c.color}}/>
+                            <span style={{fontSize:11,color:T.textSec,fontWeight:600}}>{c.name}</span>
                           </div>
-                          <span style={{fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:700,color:"#000"}}>{fmt(c.value)}</span>
+                          <span style={{fontSize:11,fontWeight:700,color:T.textPri}}>{fmt(c.value)}</span>
                         </div>
                       ))}
                     </div>
-                  </>
-                ):(
-                  <div style={{height:200,display:"flex",alignItems:"center",justifyContent:"center",
-                    color:"rgba(0,0,0,0.3)",fontSize:13}}>No categories yet</div>
-                )}
+                  </div>
+                ):(emptyState)}
               </div>
-            </div>
-
-            {/* ROI trend */}
-            <div className="kc" style={{background:T.card,borderRadius:20,padding:"1.5rem",border:`1px solid ${T.border}`,display:"flex",flexDirection:"column"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
-                <div>
-                  <div style={{fontSize:13,fontWeight:800,color:T.textPri}}>ROI Trend</div>
-                  <div style={{fontSize:11,color:T.textMut,marginTop:2}}>Save rate per month (%)</div>
-                </div>
-                <div style={{fontFamily:"'DM Mono',monospace",fontSize:22,fontWeight:700,color:T.yellow}}>
-                  {avgRoi}%
-                </div>
-              </div>
-              {activeData.length>0?(
-                <div style={{height:140,minHeight:140,flex:1}}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={perfData}>
-                    <defs>
-                      <linearGradient id="roi" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={T.yellow} stopOpacity={0.2}/>
-                        <stop offset="100%" stopColor={T.yellow} stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="2 5" stroke={isDark?"rgba(255,255,255,0.04)":"rgba(0,0,0,0.06)"} vertical={false}/>
-                    <XAxis dataKey="month" tick={{fill:T.textMut,fontSize:10}} axisLine={false} tickLine={false}/>
-                    <YAxis tick={{fill:T.textMut,fontSize:10}} axisLine={false} tickLine={false}
-                      tickFormatter={v=>`${v}%`} width={34}/>
-                    <Tooltip contentStyle={{background:T.card,border:`1px solid ${T.border}`,borderRadius:10,fontSize:12,color:T.textPri}}
-                      formatter={(v:any)=>[`${v}%`,"ROI"]}/>
-                    <Area type="monotone" dataKey="roi" stroke={T.yellow} strokeWidth={2.5}
-                      fill="url(#roi)" dot={{r:3,fill:T.yellow,strokeWidth:0}} activeDot={{r:5}}/>
-                  </AreaChart>
-                </ResponsiveContainer>
-                </div>
-              ):emptyState}
             </div>
           </div>
         </div>

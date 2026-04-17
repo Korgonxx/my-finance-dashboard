@@ -29,6 +29,23 @@ function toWeb3Entry(row: any) {
   };
 }
 
+function toLegacyEntry(row: any) {
+  return {
+    id:               row.id,
+    mode:             row.mode,
+    date:             row.date,
+    project:          row.project,
+    earned:           Number(row.earned),
+    saved:            Number(row.saved),
+    given:            Number(row.given),
+    givenTo:          row.givenTo,
+    walletAddress:    row.walletAddress ?? "",
+    walletName:       row.walletName    ?? "",
+    investmentAmount: row.investmentAmount ? Number(row.investmentAmount) : undefined,
+    currentValue:     row.currentValue     ? Number(row.currentValue)     : undefined,
+  };
+}
+
 export async function GET(req: NextRequest) {
   const mode = req.nextUrl.searchParams.get("mode") ?? "web2";
   
@@ -45,20 +62,7 @@ export async function GET(req: NextRequest) {
     // Fallback to legacy table if new tables don't exist yet
     try {
       const rows = await db.dashboardEntry.findMany({ where: { mode }, orderBy: { date: "desc" } });
-      return NextResponse.json(rows.map((r: any) => ({
-        id: r.id,
-        mode: r.mode,
-        date: r.date,
-        project: r.project,
-        earned: Number(r.earned),
-        saved: Number(r.saved),
-        given: Number(r.given),
-        givenTo: r.givenTo,
-        walletAddress: r.walletAddress ?? "",
-        walletName: r.walletName ?? "",
-        investmentAmount: r.investmentAmount ? Number(r.investmentAmount) : undefined,
-        currentValue: r.currentValue ? Number(r.currentValue) : undefined,
-      })));
+      return NextResponse.json(rows.map(toLegacyEntry));
     } catch (fallbackErr) {
       console.error("[GET /api/entries] Fallback failed", fallbackErr);
       return NextResponse.json({ error: "Failed to load entries" }, { status: 500 });
@@ -72,31 +76,35 @@ export async function POST(req: NextRequest) {
     const mode = body.mode ?? "web2";
 
     if (mode === "web3") {
-      const row = await db.web3DashboardEntry.create({
-        data: {
-          id:               body.id,
-          date:             body.date,
-          project:          body.project,
-          walletAddress:    body.walletAddress,
-          walletName:       body.walletName,
-          network:          body.network ?? "Ethereum",
-          investmentAmount: body.investmentAmount ?? 0,
-          currentValue:     body.currentValue ?? 0,
-          roi:              body.roi ?? 0,
-        },
+      const data = {
+        date:             body.date,
+        project:          body.project,
+        walletAddress:    body.walletAddress ?? "",
+        walletName:       body.walletName    ?? "",
+        network:          body.network       ?? "Ethereum",
+        investmentAmount: body.investmentAmount ?? 0,
+        currentValue:     body.currentValue    ?? 0,
+        roi:              body.roi             ?? 0,
+      };
+      const row = await db.web3DashboardEntry.upsert({
+        where: { id: body.id },
+        update: data,
+        create: { ...data, id: body.id },
       });
       return NextResponse.json(toWeb3Entry(row), { status: 201 });
     } else {
-      const row = await db.web2DashboardEntry.create({
-        data: {
-          id:      body.id,
-          date:    body.date,
-          project: body.project,
-          earned:  body.earned ?? 0,
-          saved:   body.saved ?? 0,
-          given:   body.given ?? 0,
-          givenTo: body.givenTo ?? "",
-        },
+      const data = {
+        date:    body.date,
+        project: body.project,
+        earned:  body.earned ?? 0,
+        saved:   body.saved  ?? 0,
+        given:   body.given  ?? 0,
+        givenTo: body.givenTo ?? "",
+      };
+      const row = await db.web2DashboardEntry.upsert({
+        where: { id: body.id },
+        update: data,
+        create: { ...data, id: body.id },
       });
       return NextResponse.json(toWeb2Entry(row), { status: 201 });
     }
@@ -105,23 +113,25 @@ export async function POST(req: NextRequest) {
     // Fallback to legacy table
     try {
       const body = await req.json();
-      const row = await db.dashboardEntry.create({
-        data: {
-          id:               body.id,
-          mode:             body.mode ?? "web2",
-          date:             body.date,
-          project:          body.project,
-          earned:           body.earned ?? 0,
-          saved:            body.saved ?? 0,
-          given:            body.given ?? 0,
-          givenTo:          body.givenTo ?? "",
-          walletAddress:    body.walletAddress ?? null,
-          walletName:       body.walletName ?? null,
-          investmentAmount: body.investmentAmount ?? null,
-          currentValue:     body.currentValue ?? null,
-        },
+      const data = {
+        mode:             body.mode ?? "web2",
+        date:             body.date,
+        project:          body.project,
+        earned:           body.earned ?? 0,
+        saved:            body.saved ?? 0,
+        given:            body.given ?? 0,
+        givenTo:          body.givenTo ?? "",
+        walletAddress:    body.walletAddress ?? null,
+        walletName:       body.walletName ?? null,
+        investmentAmount: body.investmentAmount ?? null,
+        currentValue:     body.currentValue ?? null,
+      };
+      const row = await db.dashboardEntry.upsert({
+        where: { id: body.id },
+        update: data,
+        create: { ...data, id: body.id },
       });
-      return NextResponse.json(row, { status: 201 });
+      return NextResponse.json(toLegacyEntry(row), { status: 201 });
     } catch (fallbackErr) {
       console.error("[POST /api/entries] Fallback failed", fallbackErr);
       return NextResponse.json({ error: "Failed to create entry" }, { status: 500 });

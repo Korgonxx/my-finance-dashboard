@@ -216,7 +216,9 @@ export function Sidebar({ isDark, setIsDark }: { isDark: boolean; setIsDark: (v:
   const currencies: Currency[] = ["USD","EUR","GBP","INR","JPY","AUD","CAD","CHF"];
 
   // Use stable values on server, real values after hydration
-  const currentMode = hydrated ? (isWeb3 ? "web3" : "web2") : "web2";
+  // Check document class for initial mode to prevent jitter
+  const initialMode = typeof document !== 'undefined' && document.documentElement.classList.contains('web3-mode') ? 'web3' : 'web2';
+  const currentMode = hydrated ? (isWeb3 ? "web3" : "web2") : initialMode;
   const cardIcon = hydrated && isWeb3 ? Wallet : CreditCard;
   const cardLabel = hydrated && isWeb3 ? "Wallets" : "Cards";
 

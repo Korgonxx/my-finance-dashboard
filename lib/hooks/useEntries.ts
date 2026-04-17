@@ -63,11 +63,17 @@ export function useEntries(isWeb3: boolean) {
           entriesCache.set("web3", { data: r3, timestamp: Date.now() });
           setWeb2Entries(r2);
           setWeb3Entries(r3);
+          // Sync back to localStorage
+          localStorage.setItem("fd_web2_entries", JSON.stringify(r2));
+          localStorage.setItem("fd_web3_entries", JSON.stringify(r3));
         } else {
           w2.forEach((e: Entry) => syncedIds.current.add(e.id));
           w3.forEach((e: Entry) => syncedIds.current.add(e.id));
           setWeb2Entries(w2);
           setWeb3Entries(w3);
+          // Sync back to localStorage
+          localStorage.setItem("fd_web2_entries", JSON.stringify(w2));
+          localStorage.setItem("fd_web3_entries", JSON.stringify(w3));
         }
       } catch (err) {
         console.error("[useEntries] load failed, falling back to localStorage", err);
@@ -97,25 +103,59 @@ export function useEntries(isWeb3: boolean) {
     });
 
     const isNew = !syncedIds.current.has(entry.id);
-    if (isNew) {
-      syncedIds.current.add(entry.id);
-      fetch("/api/entries", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(fullEntry),
-      }).catch(err => console.error("[useEntries] POST failed", err));
-    } else {
-      fetch(`/api/entries/${entry.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(fullEntry),
-      }).catch(err => console.error("[useEntries] PUT failed", err));
-    }
+    const apiPromise = isNew
+      ? fetch("/api/entries", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(fullEntry),
+        })
+      : fetch(`/api/entries/${entry.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(fullEntry),
+        });
+
+    apiPromise
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        if (isNew) syncedIds.current.add(entry.id);
+        
+        // Always update localStorage as well for redundancy
+        const key = isWeb3 ? "fd_web3_entries" : "fd_web2_entries";
+        const current = JSON.parse(localStorage.getItem(key) || "[]");
+        const exists = current.some((e: any) => e.id === entry.id);
+        const updated = exists
+          ? current.map((e: any) => e.id === entry.id ? fullEntry : e)
+          : [...current, fullEntry];
+        localStorage.setItem(key, JSON.stringify(updated));
+      })
+      .catch(err => {
+        console.error(`[useEntries] ${isNew ? "POST" : "PUT"} failed`, err);
+        // Fallback to localStorage on API failure
+        try {
+          const key = isWeb3 ? "fd_web3_entries" : "fd_web2_entries";
+          const current = JSON.parse(localStorage.getItem(key) || "[]");
+          const exists = current.some((e: any) => e.id === entry.id);
+          const updated = exists
+            ? current.map((e: any) => e.id === entry.id ? fullEntry : e)
+            : [...current, fullEntry];
+          localStorage.setItem(key, JSON.stringify(updated));
+        } catch {}
+      });
   }, [isWeb3]);
 
   const remove = useCallback((id: string) => {
     setWeb2Entries(prev => prev.filter(e => e.id !== id));
     setWeb3Entries(prev => prev.filter(e => e.id !== id));
+    
+    // Sync to localStorage
+    try {
+      const w2 = JSON.parse(localStorage.getItem("fd_web2_entries") || "[]");
+      const w3 = JSON.parse(localStorage.getItem("fd_web3_entries") || "[]");
+      localStorage.setItem("fd_web2_entries", JSON.stringify(w2.filter((e: any) => e.id !== id)));
+      localStorage.setItem("fd_web3_entries", JSON.stringify(w3.filter((e: any) => e.id !== id)));
+    } catch {}
+
     fetch(`/api/entries/${id}`, { method: "DELETE" })
       .catch(err => console.error("[useEntries] DELETE failed", err));
     syncedIds.current.delete(id);

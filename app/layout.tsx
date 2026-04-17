@@ -34,6 +34,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     document.documentElement.classList.remove('light');
                     document.body.style.background = '#080808';
                   }
+                  
+                  // Fix Web2/Web3 mode jitter
+                  var mode = localStorage.getItem('app_mode');
+                  if (mode === 'web3') {
+                    document.documentElement.classList.add('web3-mode');
+                  } else {
+                    document.documentElement.classList.remove('web3-mode');
+                  }
                 } catch (e) {}
               })();
             `,
