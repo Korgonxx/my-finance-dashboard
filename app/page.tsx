@@ -303,65 +303,55 @@ export default function FinanceDashboard(){
     <MasterPasscodeGuard isDark={isDark}>
       <PageTransition>
       <style suppressHydrationWarning>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Outfit:wght@400;500;600;700;800;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
         html,body{background:${T.bg};color:${T.textPri}}
         @keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+        @keyframes fadeIn{from{opacity:0}to{opacity:1}}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
-        ::-webkit-scrollbar{width:4px} ::-webkit-scrollbar-track{background:transparent}
-        ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:99px}
+        ::-webkit-scrollbar{width:6px} ::-webkit-scrollbar-track{background:transparent}
+        ::-webkit-scrollbar-thumb{background:${T.border};border-radius:99px}
         input::placeholder{color:${T.textMut}} select,option{background:${T.card};color:${T.textPri}}
         select{appearance:none;-webkit-appearance:none;}
       `}</style>
 
       <div style={{display:"flex",minHeight:"100vh",background:T.bg,
-        fontFamily:"'Outfit','Segoe UI',sans-serif",color:T.textPri}}>
+        fontFamily:"'Plus Jakarta Sans','Segoe UI',sans-serif",color:T.textPri}}>
 
         <Sidebar isDark={isDark} setIsDark={setIsDark}/>
 
-        {/* CONTENT */}
-        <div style={{marginLeft:230,flex:1,display:"flex",flexDirection:"column",minHeight:"100vh"}}>
+        {/* MODERN 3-COLUMN LAYOUT */}
+        <div style={{marginLeft:80,flex:1,display:"flex",flexDirection:"column",minHeight:"100vh"}}>
 
           {/* TOP BAR */}
-          <div style={{padding:"1rem 2rem",display:"flex",alignItems:"center",
+          <div style={{padding:"1rem 2.5rem",display:"flex",alignItems:"center",
             justifyContent:"space-between",
             borderBottom:`1px solid ${T.border}`,
-            background: isDark?"rgba(8,8,8,0.85)":"rgba(242,242,240,0.9)",
+            background: T.card,
             backdropFilter:"blur(20px)",position:"sticky",top:0,zIndex:40}}>
             <div>
-              <div style={{fontSize:10,color:T.textMut,fontWeight:700,
-                letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:2}}>
+              <div style={{fontSize:11,color:T.textMut,fontWeight:700,
+                letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:2}}>
                 {isWeb3?"Crypto Portfolio":"Personal Finance"}
               </div>
-              <div style={{fontSize:20,fontWeight:900,letterSpacing:"-0.03em",color:T.textPri}}>
-                Dashboard
+              <div style={{fontSize:22,fontWeight:800,letterSpacing:"-0.02em",color:T.textPri}}>
+                {isWeb3?"Portfolio":"Dashboard"}
               </div>
             </div>
-            <div style={{display:"flex",gap:8,alignItems:"center"}}>
-              <button onClick={()=>setCloudSyncModal(true)}
-                style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",
-                  borderRadius:99,background:T.pill,border:`1px solid ${T.border}`,
-                  color:T.textSec,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
-                <Zap size={11}/>Sync
-              </button>
-              <button onClick={exportCsv}
-                style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",
-                  borderRadius:99,background:T.pill,border:`1px solid ${T.border}`,
-                  color:T.textSec,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
-                <Download size={11}/>Export
-              </button>
+            <div style={{display:"flex",gap:10,alignItems:"center"}}>
               <button onClick={()=>setAddModal(true)}
-                style={{display:"flex",alignItems:"center",gap:6,padding:"7px 18px",
-                  borderRadius:99,background:T.yellow,border:"none",
-                  color:"#000",fontSize:11,fontWeight:900,cursor:"pointer",
-                  fontFamily:"inherit",boxShadow:`0 4px 14px ${T.yellow}40`}}>
-                <Plus size={13}/>Add Entry
+                style={{display:"flex",alignItems:"center",gap:8,padding:"10px 18px",
+                  borderRadius:14,background:T.yellow,border:"none",
+                  color:"#000",fontSize:12,fontWeight:800,cursor:"pointer",
+                  fontFamily:"inherit",transition:"all 0.2s"}}>
+                <Plus size={14}/>Add Entry
               </button>
             </div>
           </div>
 
-          {/* PAGE */}
-          <div style={{padding:"1.5rem 2rem 4rem",flex:1,animation:"slideUp 0.4s ease"}}>
+          {/* PAGE - 3 COLUMN LAYOUT */}
+          <div style={{padding:"2rem 2.5rem 4rem",flex:1,animation:"slideUp 0.4s ease",
+            display:"grid",gridTemplateColumns:"1fr 1.2fr 280px",gap:"2rem",maxWidth:"1600px",margin:"0 auto",width:"100%"}}>
 
             {/* ── HEADLINE NUMBERS ── */}
             <div style={{display:"flex",gap:0,marginBottom:"1.5rem",
@@ -407,112 +397,84 @@ export default function FinanceDashboard(){
               ))}
             </div>
 
-            {/* ── CARD GRID ── */}
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"1rem",marginBottom:"1rem"}}>
-
+            {/* ── LEFT COLUMN: METRIC CARDS ── */}
+            <div style={{display:"flex",flexDirection:"column",gap:"1.5rem"}}>
               {/* Cash Flow — GREEN */}
               <div className="kc" onClick={()=>setDetailCard("cashflow")}
-                style={{background:T.green,borderRadius:20,padding:"1.5rem",cursor:"pointer",
-                  position:"relative",overflow:"hidden"}}>
+                style={{background:isWeb3?"rgba(132,204,22,0.1)":T.green,borderRadius:18,padding:"1.5rem",cursor:"pointer",
+                  position:"relative",overflow:"hidden",border:isWeb3?`1px solid rgba(132,204,22,0.2)`:"none",
+                  transition:"all 0.3s"}}>
                 <div style={{position:"absolute",top:-20,right:-20,width:100,height:100,
-                  borderRadius:"50%",background:"rgba(0,0,0,0.08)"}}/>
+                  borderRadius:"50%",background:isWeb3?"rgba(132,204,22,0.05)":"rgba(0,0,0,0.08)"}}/>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12,position:"relative"}}>
                   <div>
                     <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.08em",
-                      textTransform:"uppercase",color:"rgba(0,0,0,0.45)",marginBottom:4}}>Cash Flow</div>
-                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:"1.7rem",
-                      fontWeight:700,color:"#000",letterSpacing:"-0.03em",lineHeight:1}}>
+                      textTransform:"uppercase",color:isWeb3?"rgba(132,204,22,0.6)":"rgba(0,0,0,0.45)",marginBottom:4}}>
+                      {isWeb3?"Portfolio":"Cash Flow"}
+                    </div>
+                    <div style={{fontFamily:"'Geist Mono',monospace",fontSize:"1.6rem",
+                      fontWeight:700,color:isWeb3?"#84cc16":"#000",letterSpacing:"-0.03em",lineHeight:1}}>
                       {money(totalEarned)}
                     </div>
                   </div>
-                  <div style={{width:34,height:34,borderRadius:10,background:"rgba(0,0,0,0.12)",
+                  <div style={{width:40,height:40,borderRadius:12,background:isWeb3?"rgba(132,204,22,0.15)":"rgba(0,0,0,0.12)",
                     display:"flex",alignItems:"center",justifyContent:"center"}}>
-                    <TrendingUp size={15} color="#000"/>
-                  </div>
-                </div>
-                <div style={{height:70,position:"relative"}}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={cumulative.slice(-10)}>
-                      <defs>
-                        <linearGradient id="gfg" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#000" stopOpacity={0.2}/>
-                          <stop offset="100%" stopColor="#000" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <Area type="monotone" dataKey="value" stroke="#000" strokeWidth={2} fill="url(#gfg)" dot={false}/>
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-                <div style={{display:"flex",gap:16,marginTop:8}}>
-                  <div>
-                    <div style={{fontSize:9,color:"rgba(0,0,0,0.4)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em"}}>Saved</div>
-                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:13,fontWeight:700,color:"#000"}}>{money(totalSaved)}</div>
-                  </div>
-                  <div>
-                    <div style={{fontSize:9,color:"rgba(0,0,0,0.4)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em"}}>Given</div>
-                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:13,fontWeight:700,color:"#000"}}>{money(totalGiven)}</div>
+                    <TrendingUp size={18} color={isWeb3?"#84cc16":"#000"}/>
                   </div>
                 </div>
               </div>
 
-              {/* Goal — YELLOW */}
+              {/* Goal Progress — YELLOW/PURPLE */}
               <div className="kc" onClick={()=>setShowGoalModal(true)}
-                style={{background:T.yellow,borderRadius:20,padding:"1.5rem",cursor:"pointer",
-                  position:"relative",overflow:"hidden"}}>
+                style={{background:isWeb3?"rgba(168,85,247,0.1)":T.yellow,borderRadius:18,padding:"1.5rem",cursor:"pointer",
+                  position:"relative",overflow:"hidden",border:isWeb3?`1px solid rgba(168,85,247,0.2)`:"none",
+                  transition:"all 0.3s"}}>
                 <div style={{position:"absolute",bottom:-30,right:-30,width:120,height:120,
-                  borderRadius:"50%",background:"rgba(0,0,0,0.06)"}}/>
+                  borderRadius:"50%",background:isWeb3?"rgba(168,85,247,0.05)":"rgba(0,0,0,0.06)"}}/>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12,position:"relative"}}>
                   <div>
                     <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.08em",
-                      textTransform:"uppercase",color:"rgba(0,0,0,0.4)",marginBottom:4}}>
-                      {money(goal)}
+                      textTransform:"uppercase",color:isWeb3?"rgba(168,85,247,0.6)":"rgba(0,0,0,0.4)",marginBottom:4}}>
+                      {isWeb3?"Portfolio Goal":"Target"}
                     </div>
-                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:"1.7rem",
-                      fontWeight:700,color:"#000",letterSpacing:"-0.03em",lineHeight:1}}>
+                    <div style={{fontFamily:"'Geist Mono',monospace",fontSize:"1.6rem",
+                      fontWeight:700,color:isWeb3?"#a855f7":"#000",letterSpacing:"-0.03em",lineHeight:1}}>
                       {Math.round(progress)}%
                     </div>
                   </div>
-                  <button style={{width:34,height:34,borderRadius:10,background:"rgba(0,0,0,0.12)",
-                    border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                    <Target size={15} color="#000"/>
-                  </button>
+                  <div style={{width:40,height:40,borderRadius:12,background:isWeb3?"rgba(168,85,247,0.15)":"rgba(0,0,0,0.12)",
+                    display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <Target size={18} color={isWeb3?"#a855f7":"#000"}/>
+                  </div>
                 </div>
-                <div style={{height:8,background:"rgba(0,0,0,0.12)",borderRadius:99,marginBottom:10,position:"relative"}}>
-                  <div style={{position:"absolute",inset:0,borderRadius:99,background:"rgba(0,0,0,0.5)",
+                <div style={{height:6,background:isWeb3?"rgba(168,85,247,0.2)":"rgba(0,0,0,0.12)",borderRadius:99,marginTop:10,position:"relative",overflow:"hidden"}}>
+                  <div style={{position:"absolute",inset:0,borderRadius:99,background:isWeb3?"#a855f7":"#000",
                     width:`${progress}%`,transition:"width 1s ease"}}/>
-                </div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                  <div style={{background:"rgba(0,0,0,0.1)",borderRadius:10,padding:"8px 10px"}}>
-                    <div style={{fontSize:9,color:"rgba(0,0,0,0.4)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:2}}>Earned</div>
-                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:12,fontWeight:700,color:"#000"}}>{money(totalEarned)}</div>
-                  </div>
-                  <div style={{background:"rgba(0,0,0,0.1)",borderRadius:10,padding:"8px 10px"}}>
-                    <div style={{fontSize:9,color:"rgba(0,0,0,0.4)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:2}}>Remain</div>
-                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:12,fontWeight:700,color:"#000"}}>{money(Math.max(0,goal-totalEarned))}</div>
-                  </div>
                 </div>
               </div>
 
-              {/* Net Income — DARK */}
+              {/* Net Income — BLUE */}
               <div className="kc" onClick={()=>setDetailCard("income")}
-                style={{background:T.card,borderRadius:20,padding:"1.5rem",cursor:"pointer",
-                  border:`1px solid ${T.border}`}}>
+                style={{background:T.card,borderRadius:18,padding:"1.5rem",cursor:"pointer",
+                  border:`1px solid ${T.border}`,transition:"all 0.3s"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
                   <div>
                     <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.08em",
-                      textTransform:"uppercase",color:T.textMut,marginBottom:4}}>Net Income</div>
-                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:"1.7rem",
+                      textTransform:"uppercase",color:T.textMut,marginBottom:4}}>
+                      {isWeb3?"24H Return":"Net Income"}
+                    </div>
+                    <div style={{fontFamily:"'Geist Mono',monospace",fontSize:"1.6rem",
                       fontWeight:700,letterSpacing:"-0.03em",lineHeight:1,
                       color:netIncome>=0?T.green:T.red}}>
                       {money(netIncome)}
                     </div>
                   </div>
-                  <div style={{display:"flex",alignItems:"center",gap:4,
-                    padding:"4px 10px",borderRadius:99,
-                    background:netIncome>=0?`${T.green}15`:`${T.red}15`}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,
+                    padding:"6px 12px",borderRadius:10,
+                    background:netIncome>=0?`${T.green}20`:`${T.red}20`}}>
                     {netIncome>=0
-                      ?<TrendingUp size={12} color={T.green}/>
-                      :<TrendingDown size={12} color={T.red}/>}
+                      ?<ArrowUpRight size={13} color={T.green}/>
+                      :<ArrowDownRight size={13} color={T.red}/>}
                     <span style={{fontSize:11,fontWeight:700,
                       color:netIncome>=0?T.green:T.red}}>
                       {pct(Math.abs(netIncome),totalEarned)}%
@@ -533,8 +495,11 @@ export default function FinanceDashboard(){
               </div>
             </div>
 
+            {/* ── MIDDLE COLUMN: CHARTS & TRANSACTIONS ── */}
+            <div style={{display:"flex",flexDirection:"column",gap:"1.5rem",minHeight:"fit-content"}}>
+            
             {/* ── CHARTS ROW ── */}
-            <div style={{display:"grid",gridTemplateColumns:"1.6fr 1fr",gap:"1rem",marginBottom:"1rem"}}>
+            <div style={{display:"flex",flexDirection:"column",gap:"1rem"}}>
 
               {/* Monthly breakdown */}
               <div className="kc" onClick={()=>setDetailCard("monthly")}
@@ -716,6 +681,63 @@ export default function FinanceDashboard(){
                   </tbody>
                 </table>
               </div>
+            </div>
+            </div>
+
+            {/* ── RIGHT COLUMN: PROFILE & STATS ── */}
+            <div style={{display:"flex",flexDirection:"column",gap:"1.5rem",height:"fit-content",position:"sticky",top:80}}>
+              
+              {/* Profile Card */}
+              <div style={{background:T.card,borderRadius:18,padding:"1.5rem",border:`1px solid ${T.border}`,textAlign:"center"}}>
+                <div style={{width:56,height:56,borderRadius:14,background:T.yellow,margin:"0 auto 12px",
+                  display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>
+                  {isWeb3?"🪙":"💰"}
+                </div>
+                <div style={{fontSize:14,fontWeight:800,color:T.textPri,marginBottom:2}}>
+                  {isWeb3?"Portfolio":"Finance"}
+                </div>
+                <div style={{fontSize:11,color:T.textMut}}>
+                  {isWeb3?"Crypto Manager":"Budget Tracker"}
+                </div>
+              </div>
+
+              {/* Activity Stats */}
+              <div style={{background:T.card,borderRadius:18,padding:"1.5rem",border:`1px solid ${T.border}`}}>
+                <div style={{fontSize:12,fontWeight:800,color:T.textPri,marginBottom:12}}>Activity</div>
+                <div style={{display:"flex",alignItems:"baseline",gap:4,marginBottom:12}}>
+                  <div style={{fontFamily:"'Geist Mono',monospace",fontSize:20,fontWeight:700,color:T.yellow}}>
+                    {entries.length}
+                  </div>
+                  <div style={{fontSize:11,color:T.textMut}}>total entries</div>
+                </div>
+                <div style={{height:60,background:T.card2,borderRadius:12,padding:"8px 10px",
+                  display:"flex",alignItems:"flex-end",gap:4,justifyContent:"space-around"}}>
+                  {[1,2,3,1,2,3,2].map((h,i)=>(
+                    <div key={i} style={{flex:1,height:`${h*15}px`,background:T.yellow,borderRadius:3}}/>
+                  ))}
+                </div>
+              </div>
+
+              {/* Quick Links */}
+              <div style={{background:T.card,borderRadius:18,padding:"1.5rem",border:`1px solid ${T.border}`}}>
+                <div style={{fontSize:12,fontWeight:800,color:T.textPri,marginBottom:12}}>Quick Actions</div>
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {[
+                    {label:"View Charts",icon:"📊"},
+                    {label:"Export Data",icon:"📥"},
+                    {label:"Settings",icon:"⚙️"}
+                  ].map(item=>(
+                    <button key={item.label} style={{padding:"10px 12px",borderRadius:10,border:`1px solid ${T.border}`,
+                      background:T.card2,color:T.textPri,fontSize:12,fontWeight:700,
+                      cursor:"pointer",display:"flex",alignItems:"center",gap:8,
+                      transition:"all 0.2s",fontFamily:"inherit"}}>
+                      <span>{item.icon}</span>
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
             </div>
           </div>
         </div>

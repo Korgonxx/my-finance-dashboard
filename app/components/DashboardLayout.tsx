@@ -46,10 +46,7 @@ export function DashboardLayout({ children, T, isDark }: DashboardLayoutProps) {
           borderRadius: 8,
           padding: 8,
           color: T.textPri,
-          cursor: "pointer",
-          "@media (max-width: 768px)": {
-            display: "block"
-          }
+          cursor: "pointer"
         }}
       >
         {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
