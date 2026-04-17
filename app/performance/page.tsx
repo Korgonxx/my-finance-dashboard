@@ -11,19 +11,15 @@ import { useWeb3 } from "../context/Web3Context";
 import { useAppSettings } from "../context/AppSettingsContext";
 import { MasterPasscodeGuard } from "../components/MasterPasscodeGuard";
 import { Sidebar, THEME } from "../components/Sidebar";
+import { PageTransition } from "../components/PageTransition";
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 export default function PerformancePage() {
   const { isWeb3, mode } = useWeb3();
   const { isDark, setIsDark } = useAppSettings();
-  const [hydrated, setHydrated] = useState(false);
   const [perfMode, setPerfMode] = useState<"web2"|"web3">(mode === "web3" ? "web3" : "web2");
   const [chartType, setChartType] = useState<"bar"|"line"|"radar">("bar");
-
-  useEffect(() => {
-    setHydrated(true);
-  }, []);
 
   const T = isDark ? THEME.dark : THEME.light;
   const { web2Entries, web3Entries } = useEntries(perfMode === "web3");
@@ -75,7 +71,7 @@ export default function PerformancePage() {
 
   return (
     <MasterPasscodeGuard isDark={isDark}>
-      <>
+      <PageTransition>
       <style suppressHydrationWarning>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Outfit:wght@400;500;600;700;800;900&display=swap');
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -115,8 +111,8 @@ export default function PerformancePage() {
                   <button key={m} onClick={()=>setPerfMode(m)} className="chart-btn"
                     style={{padding:"6px 14px",borderRadius:7,border:"none",cursor:"pointer",
                       fontFamily:"inherit",fontSize:11,fontWeight:700,transition:"all 0.15s",
-                      background:(hydrated?perfMode:"")=== m?T.yellow:"transparent",
-                      color:(hydrated?perfMode:"")=== m?"#000":T.textMut}}>
+                      background:perfMode=== m?T.yellow:"transparent",
+                      color:perfMode=== m?"#000":T.textMut}}>
                     {m.toUpperCase()}
                   </button>
                 ))}
@@ -172,7 +168,7 @@ export default function PerformancePage() {
             <div style={{display:"grid",gridTemplateColumns:"1.5fr 1fr",gap:"1rem",marginBottom:"1rem"}}>
 
               {/* Main chart */}
-              <div className="kc" style={{background:T.card,borderRadius:20,padding:"1.5rem",border:`1px solid ${T.border}`}}>
+              <div className="kc" style={{background:T.card,borderRadius:20,padding:"1.5rem",border:`1px solid ${T.border}`,display:"flex",flexDirection:"column"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
                   <div>
                     <div style={{fontSize:13,fontWeight:800,color:T.textPri}}>
@@ -193,9 +189,9 @@ export default function PerformancePage() {
                 </div>
 
                 {activeData.length>0?(
-                  <>
+                  <div style={{flex:1,minHeight:250}}>
                     {chartType==="bar"&&(
-                      <ResponsiveContainer width="100%" height={230}>
+                      <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={perfData} barCategoryGap="38%" barGap={2}>
                           <CartesianGrid strokeDasharray="2 5" stroke={isDark?"rgba(255,255,255,0.04)":"rgba(0,0,0,0.06)"} vertical={false}/>
                           <XAxis dataKey="month" tick={{fill:T.textMut,fontSize:10}} axisLine={false} tickLine={false}/>
@@ -210,7 +206,7 @@ export default function PerformancePage() {
                       </ResponsiveContainer>
                     )}
                     {chartType==="line"&&(
-                      <ResponsiveContainer width="100%" height={230}>
+                      <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={perfData}>
                           <CartesianGrid strokeDasharray="2 5" stroke={isDark?"rgba(255,255,255,0.04)":"rgba(0,0,0,0.06)"} vertical={false}/>
                           <XAxis dataKey="month" tick={{fill:T.textMut,fontSize:10}} axisLine={false} tickLine={false}/>
@@ -228,7 +224,7 @@ export default function PerformancePage() {
                       </ResponsiveContainer>
                     )}
                     {chartType==="radar"&&(
-                      <ResponsiveContainer width="100%" height={230}>
+                      <ResponsiveContainer width="100%" height="100%">
                         <RadarChart data={activeData}>
                           <PolarGrid stroke={isDark?"rgba(255,255,255,0.08)":"rgba(0,0,0,0.08)"}/>
                           <PolarAngleAxis dataKey="month" tick={{fill:T.textMut,fontSize:10}}/>
@@ -239,17 +235,18 @@ export default function PerformancePage() {
                         </RadarChart>
                       </ResponsiveContainer>
                     )}
-                  </>
+                  </div>
                 ):emptyState}
               </div>
 
               {/* Category donut */}
-              <div className="kc" style={{background:T.green,borderRadius:20,padding:"1.5rem"}}>
+              <div className="kc" style={{background:T.green,borderRadius:20,padding:"1.5rem",display:"flex",flexDirection:"column"}}>
                 <div style={{fontSize:13,fontWeight:800,color:"#000",marginBottom:4}}>By Category</div>
                 <div style={{fontSize:11,color:"rgba(0,0,0,0.45)",marginBottom:"1rem"}}>Income breakdown</div>
                 {catData.length>0?(
                   <>
-                    <ResponsiveContainer width="100%" height={160}>
+                    <div style={{height:160,minHeight:160}}>
+                    <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie data={catData} cx="50%" cy="50%" outerRadius={70} innerRadius={32}
                           dataKey="value" labelLine={false}>
@@ -259,6 +256,7 @@ export default function PerformancePage() {
                           formatter={(v:any)=>[fmt(Number(v))]}/>
                       </PieChart>
                     </ResponsiveContainer>
+                    </div>
                     <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:8}}>
                       {catData.slice(0,4).map((c,i)=>(
                         <div key={c.name} style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -280,7 +278,7 @@ export default function PerformancePage() {
             </div>
 
             {/* ROI trend */}
-            <div className="kc" style={{background:T.card,borderRadius:20,padding:"1.5rem",border:`1px solid ${T.border}`}}>
+            <div className="kc" style={{background:T.card,borderRadius:20,padding:"1.5rem",border:`1px solid ${T.border}`,display:"flex",flexDirection:"column"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
                 <div>
                   <div style={{fontSize:13,fontWeight:800,color:T.textPri}}>ROI Trend</div>
@@ -291,7 +289,8 @@ export default function PerformancePage() {
                 </div>
               </div>
               {activeData.length>0?(
-                <ResponsiveContainer width="100%" height={140}>
+                <div style={{height:140,minHeight:140,flex:1}}>
+                <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={perfData}>
                     <defs>
                       <linearGradient id="roi" x1="0" y1="0" x2="0" y2="1">
@@ -309,12 +308,13 @@ export default function PerformancePage() {
                       fill="url(#roi)" dot={{r:3,fill:T.yellow,strokeWidth:0}} activeDot={{r:5}}/>
                   </AreaChart>
                 </ResponsiveContainer>
+                </div>
               ):emptyState}
             </div>
           </div>
         </div>
       </div>
-      </>
+      </PageTransition>
     </MasterPasscodeGuard>
   );
 }

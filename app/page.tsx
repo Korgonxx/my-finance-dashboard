@@ -15,6 +15,7 @@ import { useAppSettings, type Currency } from "./context/AppSettingsContext";
 import { MasterPasscodeGuard } from "./components/MasterPasscodeGuard";
 import { Sidebar, THEME, type ThemeType } from "./components/Sidebar";
 import { CloudSyncModal } from "./components/CloudSyncModal";
+import { PageTransition } from "./components/PageTransition";
 import { loadDashboardState, saveDashboardState } from "./lib/cloudSync";
 
 type Entry = {
@@ -204,6 +205,8 @@ function CardDetailModal({title,children,onClose,T,accentBg}:{
 export default function FinanceDashboard(){
   const{isWeb3,setMode}=useWeb3();
   const{setCurrentPage,currency,setCurrency,hideBalances,setHideBalances,isDark,setIsDark}=useAppSettings();
+  
+  // Use stable isWeb3 from provider to prevent jitter on navigation
   const currentMode=isWeb3?"web3":"web2";
   const{goal,setGoal:setGoalAndSync}=useGoal(currentMode);
   const{web2Entries,web3Entries,setWeb2Entries,setWeb3Entries,loaded,save:saveEntry,remove:removeEntry}=useEntries(isWeb3);
@@ -220,11 +223,10 @@ export default function FinanceDashboard(){
   const[goalInput,setGoalInput]=useState(String(goal));
   const[showGoalModal,setShowGoalModal]=useState(false);
   const[goalError,setGoalError]=useState("");
-  const[isHydrated,setIsHydrated]=useState(false);
 
   const T=isDark?THEME.dark:THEME.light;
 
-  useEffect(()=>{setIsHydrated(true);setCurrentPage("home");},[setCurrentPage]);
+  useEffect(()=>{setCurrentPage("home");},[setCurrentPage]);
   useEffect(()=>{setGoalInput(String(goal));},[goal]);
 
   const entries=isWeb3?web3Entries:web2Entries;
@@ -299,26 +301,17 @@ export default function FinanceDashboard(){
 
   return(
     <MasterPasscodeGuard isDark={isDark}>
-      <>
+      <PageTransition>
       <style suppressHydrationWarning>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Outfit:wght@400;500;600;700;800;900&display=swap');
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
         html,body{background:${T.bg};color:${T.textPri}}
-        @keyframes fadeIn{from{opacity:0}to{opacity:1}}
         @keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
-        @keyframes popIn{from{opacity:0;transform:scale(0.94) translateY(12px)}to{opacity:1;transform:none}}
-        ::-webkit-scrollbar{width:4px;height:4px}
-        ::-webkit-scrollbar-track{background:transparent}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+        ::-webkit-scrollbar{width:4px} ::-webkit-scrollbar-track{background:transparent}
         ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:99px}
-        input[type=date]::-webkit-calendar-picker-indicator{filter:${isDark?"invert(0.5)":"none"};cursor:pointer}
-        input::placeholder{color:${T.textMut}}
-        option{background:${T.card};color:${T.textPri}}
-        .kc{transition:transform 0.2s ease,box-shadow 0.2s ease;}
-        .kc:hover{transform:translateY(-3px);}
-        .tr{transition:background 0.12s;}
-        .tr:hover{background:${T.pill}!important;}
-        .pill-btn{transition:all 0.15s;cursor:pointer;}
-        .pill-btn:hover{opacity:0.8;}
+        input::placeholder{color:${T.textMut}} select,option{background:${T.card};color:${T.textPri}}
+        select{appearance:none;-webkit-appearance:none;}
       `}</style>
 
       <div style={{display:"flex",minHeight:"100vh",background:T.bg,
@@ -338,7 +331,7 @@ export default function FinanceDashboard(){
             <div>
               <div style={{fontSize:10,color:T.textMut,fontWeight:700,
                 letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:2}}>
-                {isHydrated&&isWeb3?"Crypto Portfolio":"Personal Finance"}
+                {isWeb3?"Crypto Portfolio":"Personal Finance"}
               </div>
               <div style={{fontSize:20,fontWeight:900,letterSpacing:"-0.03em",color:T.textPri}}>
                 Dashboard
@@ -375,12 +368,12 @@ export default function FinanceDashboard(){
               background:T.card,borderRadius:20,border:`1px solid ${T.border}`,
               overflow:"hidden"}}>
               {[
-                {label:isHydrated&&isWeb3?"Total Assets":"Total Earned",value:money(totalEarned),change:null,color:T.yellow},
+                {label:isWeb3?"Total Assets":"Total Earned",value:money(totalEarned),change:null,color:T.yellow},
                 {label:"Net Income",value:money(netIncome),
                   change:{val:pct(Math.abs(netIncome),totalEarned)+"%",up:netIncome>=0},
                   color:netIncome>=0?T.green:T.red},
-                {label:isHydrated&&isWeb3?"Total Sent":"Total Given",value:money(totalGiven),change:null,color:T.textSec},
-                {label:isHydrated&&isWeb3?"Portfolio Goal":"Yearly Goal",value:`${Math.round(progress)}%`,
+                {label:isWeb3?"Total Sent":"Total Given",value:money(totalGiven),change:null,color:T.textSec},
+                {label:isWeb3?"Portfolio Goal":"Yearly Goal",value:`${Math.round(progress)}%`,
                   change:{val:money(goal),up:true},color:T.yellow},
               ].map((item,i)=>(
                 <div key={i} style={{flex:1,padding:"1.5rem",
@@ -393,7 +386,7 @@ export default function FinanceDashboard(){
                   </div>
                   <div style={{fontFamily:"'DM Mono',monospace",fontSize:"1.8rem",
                     fontWeight:700,color:item.color,letterSpacing:"-0.04em",lineHeight:1,marginBottom:6}}>
-                    {isHydrated ? item.value : "$0"}
+                    {item.value}
                   </div>
                   {item.change&&(
                     <div style={{display:"flex",alignItems:"center",gap:4,
@@ -647,7 +640,7 @@ export default function FinanceDashboard(){
                 <table style={{width:"100%",borderCollapse:"collapse",minWidth:560}}>
                   <thead>
                     <tr>
-                      {["Date","Description",...(isHydrated&&isWeb3?["Wallet"]:[]),"Received","Saved","Sent","Category",""].map((h,i)=>(
+                      {["Date","Description",...(isWeb3?["Wallet"]:[]),"Received","Saved","Sent","Category",""].map((h,i)=>(
                         <th key={i} style={{padding:"0.7rem 1.25rem",
                           textAlign:["Received","Saved","Sent"].includes(h)?"right":h===""?"center":"left",
                           fontSize:9,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",
@@ -667,7 +660,7 @@ export default function FinanceDashboard(){
                           color:T.textPri,maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                           {e.project}
                         </td>
-                        {isHydrated&&isWeb3&&(
+                        {isWeb3&&(
                           <td style={{padding:"0.85rem 1.25rem",fontSize:11,
                             fontFamily:"'DM Mono',monospace",color:T.textMut}}>
                             {e.walletName||shortAddr(e.walletAddress||"")||"—"}
@@ -877,7 +870,7 @@ export default function FinanceDashboard(){
               </div>
               <div>
                 <div style={{fontSize:16,fontWeight:900,letterSpacing:"-0.02em",color:T.textPri}}>Set Your Goal</div>
-                <div style={{fontSize:11,color:T.textMut}}>Annual {isHydrated&&isWeb3?"portfolio":"earning"} target</div>
+                <div style={{fontSize:11,color:T.textMut}}>Annual {isWeb3?"portfolio":"earning"} target</div>
               </div>
             </div>
             <input type="number" value={goalInput}
@@ -906,7 +899,7 @@ export default function FinanceDashboard(){
           </div>
         </div>
       )}
-      </>
+      </PageTransition>
     </MasterPasscodeGuard>
   );
 }

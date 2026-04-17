@@ -5,6 +5,7 @@ import { useAppSettings } from "../context/AppSettingsContext";
 import { encryptData, decryptData, maskData, hashPasscode, verifyPasscode } from "../utils/encryption";
 import { MasterPasscodeGuard } from "../components/MasterPasscodeGuard";
 import { Sidebar, THEME, type ThemeType } from "../components/Sidebar";
+import { PageTransition } from "../components/PageTransition";
 import { useWallets } from "@/lib/hooks/useWallets";
 import { Plus, Trash2, Copy, X, Shield, Wallet, CreditCard, Check, AlertCircle, Lock, Unlock } from "lucide-react";
 
@@ -174,15 +175,12 @@ function BCard({c,T,onDelete,onDecrypt,decNum}:{c:BankCard;T:ThemeType;onDelete:
 }
 
 function CardsPage(){
-  const{mode,setMode}=useWeb3();
+  const{isWeb3,setMode}=useWeb3();
   const{setCurrentPage,isDark,setIsDark}=useAppSettings();
-  const isWeb3=mode==="web3";
-  const[hydrated,setHydrated]=useState(false);
+  
+  // Use stable isWeb3 from provider to prevent jitter on navigation
   const T=isDark?THEME.dark:THEME.light;
 
-  useEffect(()=>{
-    setHydrated(true);
-  },[]);
   useEffect(()=>{setCurrentPage("cards");},[setCurrentPage]);
 
   const{wallets,loading:wLoading,addWallet,removeWallet}=useWallets();
@@ -271,7 +269,7 @@ function CardsPage(){
     finally{setDelL(false);}
   };
 
-  const total=hydrated?(isWeb3?wallets.reduce((s,w)=>s+w.balance,0):cards.reduce((s,c)=>s+c.balance,0)):0;
+  const total=isWeb3?wallets.reduce((s,w)=>s+w.balance,0):cards.reduce((s,c)=>s+c.balance,0);
   const inp:React.CSSProperties={width:"100%",padding:"10px 14px",background:T.pill,border:`1px solid ${T.border}`,
     borderRadius:10,color:T.textPri,fontSize:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box"};
   const lbl:React.CSSProperties={display:"block",fontSize:10,color:T.textMut,fontWeight:700,
@@ -279,7 +277,7 @@ function CardsPage(){
 
   return(
     <MasterPasscodeGuard isDark={isDark}>
-      <>
+      <PageTransition>
       <style suppressHydrationWarning>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Outfit:wght@400;500;600;700;800;900&display=swap');
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -302,10 +300,10 @@ function CardsPage(){
             backdropFilter:"blur(20px)",position:"sticky",top:0,zIndex:40}}>
             <div>
               <div style={{fontSize:10,color:T.textMut,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:2}}>
-                {hydrated&&isWeb3?"Crypto":"Finance"}
+                {isWeb3?"Crypto":"Finance"}
               </div>
               <div style={{fontSize:20,fontWeight:900,letterSpacing:"-0.03em"}} suppressHydrationWarning>
-                {hydrated&&isWeb3?"Wallets":"Cards"}
+                {isWeb3?"Wallets":"Cards"}
               </div>
             </div>
             <div style={{display:"flex",gap:8}}>
@@ -314,8 +312,8 @@ function CardsPage(){
                   <button key={m} onClick={()=>setMode(m)} suppressHydrationWarning
                     style={{padding:"6px 14px",borderRadius:7,border:"none",cursor:"pointer",
                       fontFamily:"inherit",fontSize:11,fontWeight:700,transition:"all 0.15s",
-                      background:(hydrated?isWeb3:false)===(m==="web3")?T.yellow:"transparent",
-                      color:(hydrated?isWeb3:false)===(m==="web3")?"#000":T.textMut}}>
+                      background:isWeb3===(m==="web3")?T.yellow:"transparent",
+                      color:isWeb3===(m==="web3")?"#000":T.textMut}}>
                     {m.toUpperCase()}
                   </button>
                 ))}
@@ -324,19 +322,19 @@ function CardsPage(){
                 style={{display:"flex",alignItems:"center",gap:6,padding:"7px 18px",borderRadius:99,
                   background:T.yellow,border:"none",color:"#000",fontSize:11,fontWeight:900,
                   cursor:"pointer",fontFamily:"inherit",boxShadow:`0 4px 14px ${T.yellow}40`}}>
-                <Plus size={13}/> Add {hydrated&&isWeb3?"Wallet":"Card"}
+                <Plus size={13}/> Add {isWeb3?"Wallet":"Card"}
               </button>
             </div>
           </div>
 
           {/* CONTENT */}
           <div style={{padding:"1.5rem 2rem 4rem",flex:1,animation:"slideUp 0.4s ease"}}>
-            <div style={{background:hydrated&&isWeb3?T.green:T.yellow,borderRadius:20,
+            <div style={{background:isWeb3?T.green:T.yellow,borderRadius:20,
               padding:"1.5rem 2rem",marginBottom:"1.5rem",
               display:"flex",justifyContent:"space-between",alignItems:"center"}} suppressHydrationWarning>
               <div>
                 <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(0,0,0,0.45)",marginBottom:6}}>
-                  Total {hydrated&&isWeb3?"Portfolio":"Balance"}
+                  Total {isWeb3?"Portfolio":"Balance"}
                 </div>
                 <div style={{fontFamily:"'DM Mono',monospace",fontSize:"2.5rem",fontWeight:700,color:"#000",letterSpacing:"-0.04em",lineHeight:1}}>
                   ${total.toLocaleString()}
@@ -345,12 +343,12 @@ function CardsPage(){
               <div style={{textAlign:"right"}}>
                 <div style={{fontSize:10,fontWeight:700,color:"rgba(0,0,0,0.4)",marginBottom:4}}>Connected</div>
                 <div style={{fontFamily:"'DM Mono',monospace",fontSize:"2.5rem",fontWeight:700,color:"#000"}}>
-                  {hydrated?(isWeb3?wallets.length:cards.length):0}
+                  {isWeb3?wallets.length:cards.length}
                 </div>
               </div>
             </div>
 
-            {(!hydrated||isWeb3)?(
+                {isWeb3?(
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:"1rem"}}>
                 {wLoading?Array.from({length:3}).map((_,i)=>(
                   <div key={i} style={{background:T.card,borderRadius:20,height:220,border:`1px solid ${T.border}`,animation:"pulse 1.5s ease infinite"}}/>
@@ -485,7 +483,7 @@ function CardsPage(){
           </button>
         </div>
       </Modal>}
-      </>
+      </PageTransition>
     </MasterPasscodeGuard>
   );
 }
