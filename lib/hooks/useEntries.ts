@@ -89,6 +89,8 @@ export function useEntries(isWeb3: boolean) {
     const fullEntry = { ...entry, mode: modeKey };
     const setter = isWeb3 ? setWeb3Entries : setWeb2Entries;
 
+    console.log("[useEntries] Saving entry:", fullEntry);
+
     setter(prev => {
       const exists = prev.some(e => e.id === entry.id);
       return exists
@@ -99,11 +101,18 @@ export function useEntries(isWeb3: boolean) {
     const isNew = !syncedIds.current.has(entry.id);
     if (isNew) {
       syncedIds.current.add(entry.id);
+      console.log("[useEntries] Posting new entry to API:", fullEntry);
       fetch("/api/entries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(fullEntry),
-      }).catch(err => console.error("[useEntries] POST failed", err));
+      })
+        .then(res => {
+          console.log("[useEntries] POST response status:", res.status);
+          return res.json();
+        })
+        .then(data => console.log("[useEntries] POST response data:", data))
+        .catch(err => console.error("[useEntries] POST failed", err));
     } else {
       fetch(`/api/entries/${entry.id}`, {
         method: "PUT",

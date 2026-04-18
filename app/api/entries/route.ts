@@ -69,62 +69,45 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    console.log("[POST /api/entries] Received:", { mode: body.mode, id: body.id, project: body.project });
+    
     const mode = body.mode ?? "web2";
 
     if (mode === "web3") {
+      console.log("[POST /api/entries] Creating web3 entry:", body);
       const row = await db.web3DashboardEntry.create({
         data: {
           id:               body.id,
           date:             body.date,
           project:          body.project,
-          walletAddress:    body.walletAddress,
-          walletName:       body.walletName,
+          walletAddress:    body.walletAddress || "Unknown",
+          walletName:       body.walletName || "Unknown",
           network:          body.network ?? "Ethereum",
-          investmentAmount: body.investmentAmount ?? 0,
-          currentValue:     body.currentValue ?? 0,
-          roi:              body.roi ?? 0,
+          investmentAmount: Number(body.investmentAmount) || 0,
+          currentValue:     Number(body.currentValue) || 0,
+          roi:              Number(body.roi) || 0,
         },
       });
+      console.log("[POST /api/entries] Created web3 entry:", row);
       return NextResponse.json(toWeb3Entry(row), { status: 201 });
     } else {
+      console.log("[POST /api/entries] Creating web2 entry:", body);
       const row = await db.web2DashboardEntry.create({
         data: {
           id:      body.id,
           date:    body.date,
           project: body.project,
-          earned:  body.earned ?? 0,
-          saved:   body.saved ?? 0,
-          given:   body.given ?? 0,
+          earned:  Number(body.earned) || 0,
+          saved:   Number(body.saved) || 0,
+          given:   Number(body.given) || 0,
           givenTo: body.givenTo ?? "",
         },
       });
+      console.log("[POST /api/entries] Created web2 entry:", row);
       return NextResponse.json(toWeb2Entry(row), { status: 201 });
     }
   } catch (err) {
-    console.error("[POST /api/entries]", err);
-    // Fallback to legacy table
-    try {
-      const body = await req.json();
-      const row = await db.dashboardEntry.create({
-        data: {
-          id:               body.id,
-          mode:             body.mode ?? "web2",
-          date:             body.date,
-          project:          body.project,
-          earned:           body.earned ?? 0,
-          saved:            body.saved ?? 0,
-          given:            body.given ?? 0,
-          givenTo:          body.givenTo ?? "",
-          walletAddress:    body.walletAddress ?? null,
-          walletName:       body.walletName ?? null,
-          investmentAmount: body.investmentAmount ?? null,
-          currentValue:     body.currentValue ?? null,
-        },
-      });
-      return NextResponse.json(row, { status: 201 });
-    } catch (fallbackErr) {
-      console.error("[POST /api/entries] Fallback failed", fallbackErr);
-      return NextResponse.json({ error: "Failed to create entry" }, { status: 500 });
-    }
+    console.error("[POST /api/entries] Error:", err);
+    return NextResponse.json({ error: String(err), type: typeof err }, { status: 500 });
   }
 }
