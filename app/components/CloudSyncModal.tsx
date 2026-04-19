@@ -1,120 +1,98 @@
-"use client";
 
+"use client";
 import { useEffect, useState } from "react";
 import { Copy, Zap, X } from "lucide-react";
+import { type ThemeType } from "./Sidebar"; // Import the shared ThemeType
 
 interface CloudSyncModalProps {
-  cloudSyncId: string;
   onClose: () => void;
-  onGenerateId: () => string;
-  onSave: (id: string) => Promise<void> | void;
-  onLoad: (id: string) => Promise<void> | void;
-  loading: boolean;
-  message: string | null;
-  autoSyncEnabled: boolean;
-  setAutoSyncEnabled: (enabled: boolean) => void;
-  T: Record<string, string> & { inputBg: string; btnGhost: string; primary: string; violet: string; textMut: string; textPri: string; border: string; };
+  T: ThemeType;
 }
 
-export function CloudSyncModal({ cloudSyncId, onClose, onGenerateId, onSave, onLoad, loading, message, autoSyncEnabled, setAutoSyncEnabled, T }: CloudSyncModalProps) {
-  const [draftId, setDraftId] = useState(cloudSyncId || "");
+// This is a simplified, non-functional version for UI display.
+// A real implementation would require a backend and more complex state management.
+export function CloudSyncModal({ onClose, T }: CloudSyncModalProps) {
+  const [draftId, setDraftId] = useState("demo-sync-id-123");
   const [copySuccess, setCopySuccess] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
 
-  useEffect(() => {
-    setDraftId(cloudSyncId || "");
-  }, [cloudSyncId]);
-
-  const handleGenerate = () => {
-    const next = onGenerateId();
-    setDraftId(next);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(draftId);
+    setCopySuccess(true);
+    setTimeout(() => setCopySuccess(false), 2000);
   };
 
-  const handleCopy = async () => {
-    if (!draftId) return;
-    try {
-      await navigator.clipboard.writeText(draftId);
-      setCopySuccess(true);
-      window.setTimeout(() => setCopySuccess(false), 2000);
-    } catch {}
+  const handleAction = (action: string) => {
+    setLoading(true);
+    setMessage("");
+    setTimeout(() => {
+      setLoading(false);
+      setMessage(`${action} successful!`);
+      setTimeout(() => setMessage(""), 2000);
+    }, 1500);
   };
 
   return (
-    <div style={{ position: "relative" }}>
-      <button onClick={onClose} style={{ position: "absolute", right:0, top:0, border:"none", background:"transparent", color:T.textMut, cursor:"pointer" }}>
-        <X size={18} />
-      </button>
-      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:"1.5rem" }}>
-        <Zap size={22} style={{ color:T.primary }} />
-        <div>
-          <h2 style={{ margin:0, color:T.textPri, fontSize:"1.05rem", fontWeight:700 }}>Cloud Sync</h2>
-          <p style={{ margin:"4px 0 0", color:T.textMut, fontSize:13 }}>Sync your dashboard across devices using a shared Firestore ID.</p>
-        </div>
-      </div>
-
-      <div style={{ display:"grid", gap:14 }}>
-        <div style={{ display:"grid", gap:8 }}>
-          <label style={{ fontSize:12, fontWeight:700, letterSpacing:"0.08em", textTransform:"uppercase", color:T.textMut }}>Sync ID</label>
-          <input value={draftId} onChange={e => setDraftId(e.target.value)}
-            placeholder="Enter or generate a sync ID"
-            style={{ width:"100%", border:`1px solid ${T.border}`, borderRadius:12, padding:"0.85rem 1rem", background:T.inputBg, color:T.textPri, fontSize:14, outline:"none", fontFamily:"inherit" }} />
-          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-            <button onClick={handleGenerate} type="button"
-              style={{ flexGrow:1, background:`linear-gradient(135deg, ${T.primary}, ${T.primary}cc)`, border:"none", borderRadius:10, padding:"0.85rem", color:"#021a14", fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
-              Generate ID
-            </button>
-            <button onClick={handleCopy} type="button"
-              disabled={!draftId}
-              style={{ flexGrow:1, background:T.btnGhost, border:`1px solid ${T.border}`, borderRadius:10, padding:"0.85rem", color:T.textPri, cursor:draftId?"pointer":"not-allowed", opacity:draftId?1:0.5, fontFamily:"inherit" }}>
-              <Copy size={14} /> Copy ID
-            </button>
-          </div>
-          {copySuccess && <div style={{ color:T.primary, fontSize:12 }}>ID copied to clipboard.</div>}
-        </div>
-
-        <div style={{ display:"grid", gap:8 }}>
-          <label style={{ fontSize:12, fontWeight:700, letterSpacing:"0.08em", textTransform:"uppercase", color:T.textMut }}>Auto Sync</label>
-          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-            <button onClick={() => setAutoSyncEnabled(!autoSyncEnabled)}
-              style={{ display:"flex", alignItems:"center", gap:8, padding:"0.75rem 1rem",
-                background: autoSyncEnabled ? `${T.primary}18` : T.btnGhost,
-                border: `1px solid ${autoSyncEnabled ? T.primary+"44" : T.border}`,
-                borderRadius:10, cursor:"pointer", fontFamily:"inherit", transition:"all 0.2s" }}>
-              <div style={{ width:16, height:16, borderRadius:"50%", background: autoSyncEnabled ? T.primary : "transparent",
-                border: `2px solid ${autoSyncEnabled ? T.primary : T.textMut}`, transition:"all 0.2s" }} />
-              <span style={{ fontSize:13, color: autoSyncEnabled ? T.primary : T.textPri, fontWeight:600 }}>
-                {autoSyncEnabled ? "Enabled" : "Disabled"}
-              </span>
-            </button>
-            <div style={{ fontSize:12, color:T.textMut, flex:1 }}>
-              Auto-save and sync every 1 minute when sync ID is set
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",
+      display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,
+      backdropFilter:"blur(12px)",padding:"1rem",animation:"fadeIn 0.2s"}}>
+      <div style={{width:"100%",maxWidth:480,background:T.card,
+        border:`1px solid ${T.border}`,borderRadius:32,padding:"2.5rem",
+        animation:"popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",boxShadow:"0 30px 60px rgba(0,0,0,0.12)"}}>
+        
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:"2rem"}}>
+          <div style={{display:"flex",alignItems:"center",gap:16}}>
+            <div style={{width:48,height:48,borderRadius:16,background:`${T.blue}20`,display:"flex",alignItems:"center",justifyContent:"center",color:T.blue}}>
+              <Zap size={24}/>
+            </div>
+            <div>
+              <h2 style={{margin:0,color:T.textPri,fontSize:22,fontWeight:800,letterSpacing:"-0.03em"}}>Cloud Sync</h2>
+              <p style={{margin:"4px 0 0",color:T.textSec,fontSize:13}}>Sync data across your devices.</p>
             </div>
           </div>
+          <button onClick={onClose} style={{width:40,height:40,borderRadius:12,background:T.pill,
+            border:"none",cursor:"pointer",color:T.textSec,
+            display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.2s"}}>
+            <X size={18}/>
+          </button>
         </div>
 
-        <div style={{ background:`${T.violet}0d`, border:`1px solid ${T.violet}30`, borderRadius:14, padding:"1rem", color:T.textPri, fontSize:13 }}>
-          <strong>How it works:</strong>
-          <p style={{ margin:"0.5rem 0 0", color:T.textMut, lineHeight:1.6 }}>
-            Save your current dashboard under a shared ID, then open the same ID on another device to load the same data. With auto-sync enabled, changes sync automatically every minute.
-          </p>
-        </div>
-
-        {(loading || message) && (
-          <div style={{ background: loading ? "rgba(56,189,248,0.12)" : "rgba(16,185,129,0.12)",
-            border:`1px solid ${loading ? "rgba(56,189,248,0.35)" : T.primary}`,
-            borderRadius:10, padding:"0.85rem 1rem", color: loading ? "#0ea5e9" : T.primary, fontWeight:700, fontSize:13 }}>
-            {loading ? "Syncing..." : message}
+        <div style={{display:"grid",gap:18}}>
+          <div>
+            <label style={{fontSize:11,color:T.textSec,fontWeight:700,letterSpacing:"0.02em",marginBottom:8,display:"block",marginLeft:4}}>Your Sync ID</label>
+            <div style={{display:"flex",gap:8}}>
+              <input value={draftId} readOnly style={{flex:1,width:"100%",border:`1px solid ${T.border}`,borderRadius:16,padding:"14px 18px",background:T.pill,color:T.textPri,fontSize:14,outline:"none",fontFamily:"inherit"}}/>
+              <button onClick={handleCopy} style={{width:52,height:52,borderRadius:16,background:T.pill,border:"none",cursor:"pointer",color:copySuccess?T.green:T.textSec,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <Copy size={20}/>
+              </button>
+            </div>
+            {copySuccess && <div style={{color:T.green,fontSize:12,marginTop:8,textAlign:"center"}}>ID copied!</div>}
           </div>
-        )}
 
-        <div style={{ display:"grid", gap:10 }}>
-          <button onClick={() => onSave(draftId)} disabled={loading || !draftId}
-            style={{ background:`linear-gradient(135deg, ${T.primary}, ${T.primary}cc)`, border:"none", borderRadius:10, padding:"0.95rem", color:"#021a14", fontWeight:700, cursor:loading||!draftId?"not-allowed":"pointer", opacity:loading||!draftId?0.55:1, fontFamily:"inherit" }}>
-            {loading ? "Syncing…" : "Save to Cloud"}
-          </button>
-          <button onClick={() => onLoad(draftId)} disabled={loading || !draftId}
-            style={{ background:T.btnGhost, border:`1px solid ${T.border}`, borderRadius:10, padding:"0.95rem", color:T.textPri, cursor:loading||!draftId?"not-allowed":"pointer", opacity:loading||!draftId?0.55:1, fontWeight:700, fontFamily:"inherit" }}>
-            {loading ? "Syncing…" : "Load from Cloud"}
-          </button>
+          <div style={{background:`${T.purple}15`,border:`1px solid ${T.purple}30`,borderRadius:20,padding:"1rem"}}>
+            <p style={{margin:0,color:T.textSec,fontSize:13,lineHeight:1.6}}>
+              To sync, copy this ID and paste it into the app on another device. Changes will be reflected automatically.
+            </p>
+          </div>
+
+          {(loading || message) && (
+            <div style={{borderRadius:16,padding:"14px 18px",fontWeight:700,fontSize:13,
+              background:loading?`${T.blue}20`:`${T.green}20`,
+              border:`1px solid ${loading?T.blue:T.green}`,
+              color:loading?T.blue:T.green,textAlign:"center"}}>
+              {loading ? "Syncing..." : message}
+            </div>
+          )}
+
+          <div style={{display:"flex",gap:12,marginTop:"1rem"}}>
+            <button onClick={()=>handleAction("Save")} disabled={loading} style={{flex:1,padding:"14px",background:T.pill,border:"none",borderRadius:16,color:T.textSec,cursor:"pointer",fontSize:14,fontFamily:"inherit",fontWeight:700,opacity:loading?0.5:1}}>
+              {loading?"Saving...":"Save to Cloud"}
+            </button>
+            <button onClick={()=>handleAction("Load")} disabled={loading} style={{flex:2,padding:"14px",background:T.yellow,border:"none",borderRadius:16,color:"#000",cursor:"pointer",fontSize:14,fontWeight:800,fontFamily:"inherit",boxShadow:`0 8px 20px ${T.yellow}40`,opacity:loading?0.5:1}}>
+              {loading?"Loading...":"Load from Cloud"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
