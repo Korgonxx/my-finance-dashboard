@@ -8,7 +8,7 @@ import {
   Bell, Home, Search, LayoutGrid, PieChart, Wallet, CreditCard,
   ArrowUpRight, ArrowDownRight, Plus, Monitor, Edit2, Trash2, X, User,
   MoreHorizontal, Briefcase, Zap, Shield, HelpCircle, Settings, ChevronRight, Calendar,
-  Sun, Moon, Camera, Mail, Smartphone, Key, MapPin, Globe, CheckCircle2, Lock,
+  Sun, Moon, Camera, Mail, Smartphone, Key, MapPin, Globe, CheckCircle2, Lock, Menu,
   TrendingUp, TrendingDown, RefreshCw, Snowflake, Eye, EyeOff, ExternalLink, Activity, ArrowRightLeft, Download
 } from "lucide-react";
 import Image from "next/image";
@@ -343,6 +343,7 @@ export default function FinanceDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [activeTab, setActiveTab] = useState("Dashboard");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [web2Goal, setWeb2Goal] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('fv_web2Goal');
@@ -422,6 +423,7 @@ export default function FinanceDashboard() {
   const [showAddWallet, setShowAddWallet] = useState(false);
   const [walletForm, setWalletForm] = useState({ name: '', address: '', network: 'Ethereum', balance: '', encrypt: false });
   const [walletError, setWalletError] = useState('');
+  const [encryptPasscode, setEncryptPasscode] = useState('');
   const [deletingWalletId, setDeletingWalletId] = useState<string | null>(null);
   const [decryptingWalletId, setDecryptingWalletId] = useState<string | null>(null);
   const [decryptPasscode, setDecryptPasscode] = useState('');
@@ -754,37 +756,40 @@ export default function FinanceDashboard() {
       `}</style>
       
       {/* SIDEBAR NAVIGATION */}
-      <aside className="w-[260px] border-r border-[#222226] bg-[#09090B] hidden md:flex flex-col flex-shrink-0 z-10 transition-all duration-300">
-        <div className="p-8 flex items-center gap-3">
+      <aside className={`${sidebarCollapsed ? 'w-[70px]' : 'w-[260px]'} border-r border-[#222226] bg-[#09090B] hidden md:flex flex-col flex-shrink-0 z-10 transition-all duration-300`}>
+        <div className={`${sidebarCollapsed ? 'p-4 justify-center' : 'p-8'} flex items-center gap-3`}>
           <div className="w-8 h-8 rounded-lg flex items-center justify-center relative shadow-[0_0_15px_rgba(212,254,68,0.2)]">
             <Image src="/favicon.svg" alt="korgon logo" fill className="object-contain" />
           </div>
-          <span className="text-xl font-bold tracking-tight">korgon</span>
+          {!sidebarCollapsed && <span className="text-xl font-bold tracking-tight">korgon</span>}
+          <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className={`${sidebarCollapsed ? 'ml-0' : 'ml-auto'} w-8 h-8 rounded-lg flex items-center justify-center text-zinc-500 hover:text-zinc-300 hover:bg-white/5 transition-colors`}>
+            {sidebarCollapsed ? <ChevronRight size={16} /> : <Menu size={16} />}
+          </button>
         </div>
 
-        <nav className="flex-1 px-4 space-y-1 overflow-y-auto custom-scrollbar pt-2">
-          <p className="px-4 text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-4">Main Menu</p>
-          <button onClick={() => setActiveTab('Dashboard')} className={cn("flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full", activeTab === 'Dashboard' ? "bg-white/5 text-zinc-50 border border-white/5" : "text-zinc-400 hover:text-zinc-50 hover:bg-white/5")}>
+        <nav className={`flex-1 ${sidebarCollapsed ? 'px-2' : 'px-4'} space-y-1 overflow-y-auto custom-scrollbar pt-2`}>
+          {!sidebarCollapsed && <p className="px-4 text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-4">Main Menu</p>}
+          <button onClick={() => setActiveTab('Dashboard')} title="Dashboard" className={cn("flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full", activeTab === 'Dashboard' ? "bg-white/5 text-zinc-50 border border-white/5" : "text-zinc-400 hover:text-zinc-50 hover:bg-white/5")}>
             <Home size={20} className={activeTab === 'Dashboard' ? "text-[#D4FE44]" : ""} />
-            <span className="font-medium">Dashboard</span>
+            {!sidebarCollapsed && <span className="font-medium">Dashboard</span>}
           </button>
-          <button onClick={() => setActiveTab('Analytics')} className={cn("flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full", activeTab === 'Analytics' ? "bg-white/5 text-zinc-50 border border-white/5" : "text-zinc-400 hover:text-zinc-50 hover:bg-white/5")}>
+          <button onClick={() => setActiveTab('Analytics')} title="Analytics" className={cn("flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full", activeTab === 'Analytics' ? "bg-white/5 text-zinc-50 border border-white/5" : "text-zinc-400 hover:text-zinc-50 hover:bg-white/5")}>
             <PieChart size={20} />
-            <span className="font-medium">Analytics</span>
+            {!sidebarCollapsed && <span className="font-medium">Analytics</span>}
           </button>
-          <button onClick={() => setActiveTab('Cards')} className={cn("flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full", activeTab === 'Cards' ? "bg-white/5 text-zinc-50 border border-white/5" : "text-zinc-400 hover:text-zinc-50 hover:bg-white/5")}>
+          <button onClick={() => setActiveTab('Cards')} title={mode === 'web2' ? 'My Cards' : 'My Wallets'} className={cn("flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full", activeTab === 'Cards' ? "bg-white/5 text-zinc-50 border border-white/5" : "text-zinc-400 hover:text-zinc-50 hover:bg-white/5")}>
             <CreditCard size={20} />
-            <span className="font-medium">{mode === 'web2' ? 'My Cards' : 'My Wallets'}</span>
+            {!sidebarCollapsed && <span className="font-medium">{mode === 'web2' ? 'My Cards' : 'My Wallets'}</span>}
           </button>
-          <button onClick={() => setActiveTab('Security')} className={cn("flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full", activeTab === 'Security' ? "bg-white/5 text-zinc-50 border border-white/5" : "text-zinc-400 hover:text-zinc-50 hover:bg-white/5")}>
+          <button onClick={() => setActiveTab('Security')} title="Security" className={cn("flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full", activeTab === 'Security' ? "bg-white/5 text-zinc-50 border border-white/5" : "text-zinc-400 hover:text-zinc-50 hover:bg-white/5")}>
             <Shield size={20} />
-            <span className="font-medium">Security</span>
+            {!sidebarCollapsed && <span className="font-medium">Security</span>}
           </button>
 
-          <p className="px-4 text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-4 mt-8">General</p>
-          <button onClick={() => setActiveTab('Settings')} className={cn("flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full", activeTab === 'Settings' ? "bg-white/5 text-zinc-50 border border-white/5" : "text-zinc-400 hover:text-zinc-50 hover:bg-white/5")}>
+          {!sidebarCollapsed && <p className="px-4 text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-4 mt-8">General</p>}
+          <button onClick={() => setActiveTab('Settings')} title="Settings" className={cn("flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full", activeTab === 'Settings' ? "bg-white/5 text-zinc-50 border border-white/5" : "text-zinc-400 hover:text-zinc-50 hover:bg-white/5")}>
             <Settings size={20} />
-            <span className="font-medium">Settings</span>
+            {!sidebarCollapsed && <span className="font-medium">Settings</span>}
           </button>
           
         </nav>
@@ -1819,10 +1824,17 @@ export default function FinanceDashboard() {
                   <p className="text-xs text-zinc-500">Hide wallet address behind your passcode</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" checked={walletForm.encrypt || false} onChange={e => setWalletForm({...walletForm, encrypt: e.target.checked})} className="sr-only peer" />
+                  <input type="checkbox" checked={walletForm.encrypt || false} onChange={e => { setWalletForm({...walletForm, encrypt: e.target.checked}); if (!e.target.checked) setEncryptPasscode(''); }} className="sr-only peer" />
                   <div className="w-9 h-5 bg-[#222226] rounded-full peer peer-checked:bg-[#D4FE44] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
                 </label>
               </div>
+              {walletForm.encrypt && (
+                <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4 space-y-2">
+                  <label className="text-xs font-medium text-amber-400">Enter Passcode to Encrypt</label>
+                  <input type="password" maxLength={6} value={encryptPasscode} onChange={e => setEncryptPasscode(e.target.value)} placeholder="••••••" className="w-full bg-[#09090B] border border-amber-500/30 rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-amber-400 transition-colors font-mono tracking-widest text-center" />
+                  <p className="text-[10px] text-zinc-500">You'll need this passcode to reveal the address later.</p>
+                </div>
+              )}
             </div>
             <button onClick={async () => {
               setWalletError('');
@@ -1838,9 +1850,9 @@ export default function FinanceDashboard() {
                   balance: bal,
                 };
                 if (doEncrypt) {
+                  if (!encryptPasscode || encryptPasscode.length !== 6) { setWalletError('Enter a 6-digit passcode to encrypt.'); return; }
                   const { encryptData } = await import('./utils/encryption');
-                  const appPasscode = localStorage.getItem('fv_passcode') || '123456';
-                  const encrypted = await encryptData(walletForm.address.trim(), appPasscode);
+                  const encrypted = await encryptData(walletForm.address.trim(), encryptPasscode);
                   payload = {
                     ...payload,
                     address: walletForm.address.trim().slice(0, 4) + '••••••••' + walletForm.address.trim().slice(-4),
