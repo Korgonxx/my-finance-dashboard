@@ -64,12 +64,7 @@ export async function GET(req: NextRequest) {
     }
   } catch (err) {
     console.error("[GET /api/entries]", err);
-    try {
-      const rows = await db.dashboardEntry.findMany({ where: { mode }, orderBy: { date: "desc" } });
-      return NextResponse.json(rows.map(toLegacyEntry));
-    } catch (fallbackErr) {
-      return NextResponse.json([], { status: 200 }); // Return empty array instead of error for better UX
-    }
+    return NextResponse.json([], { status: 200 });
   }
 }
 

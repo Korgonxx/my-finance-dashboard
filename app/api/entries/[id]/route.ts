@@ -1,47 +1,102 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/db";
 
-function toEntry(row: any) {
+function toEntry(row: any, mode: string) {
+  if (mode === "web3") {
+    return {
+      id:               row.id,
+      mode:             "web3",
+      date:             row.date,
+      project:          row.project,
+      walletAddress:    row.walletAddress,
+      walletName:       row.walletName,
+      network:          row.network,
+      investmentAmount: Number(row.investmentAmount),
+      currentValue:     Number(row.currentValue),
+      roi:              Number(row.roi),
+      earned:           Number(row.currentValue),
+      saved:            Number(row.investmentAmount),
+      given:            0,
+      givenTo:          row.network,
+    };
+  }
   return {
-    id:               row.id,
-    mode:             row.mode,
-    date:             row.date,
-    project:          row.project,
-    earned:           Number(row.earned),
-    saved:            Number(row.saved),
-    given:            Number(row.given),
-    givenTo:          row.givenTo,
-    walletAddress:    row.walletAddress ?? "",
-    walletName:       row.walletName    ?? "",
-    investmentAmount: row.investmentAmount ? Number(row.investmentAmount) : undefined,
-    currentValue:     row.currentValue     ? Number(row.currentValue)     : undefined,
+    id:      row.id,
+    mode:    "web2",
+    date:    row.date,
+    project: row.project,
+    earned:  Number(row.earned),
+    saved:   Number(row.saved),
+    given:   Number(row.given),
+    givenTo: row.givenTo,
   };
 }
 
+async function findEntry(id: string) {
+  // Try web2 first, then web3
+  const web2 = await db.web2DashboardEntry.findUnique({ where: { id } });
+  if (web2) return { row: web2, mode: "web2" };
+  const web3 = await db.web3DashboardEntry.findUnique({ where: { id } });
+  if (web3) return { row: web3, mode: "web3" };
+  return null;
+}
+
 export async function PUT(req: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const { id } = await context.params;
-  const body = await req.json();
-  const row = await db.dashboardEntry.update({
-    where: { id },
-    data: {
-      mode:             body.mode,
-      date:             body.date,
-      project:          body.project,
-      earned:           body.earned    ?? 0,
-      saved:            body.saved     ?? 0,
-      given:            body.given     ?? 0,
-      givenTo:          body.givenTo   ?? "",
-      walletAddress:    body.walletAddress  ?? null,
-      walletName:       body.walletName     ?? null,
-      investmentAmount: body.investmentAmount ?? null,
-      currentValue:     body.currentValue    ?? null,
-    },
-  });
-  return NextResponse.json(toEntry(row));
+  try {
+    const { id } = await context.params;
+    const body = await req.json();
+    const mode = body.mode ?? "web2";
+
+    let row;
+    if (mode === "web3") {
+      row = await db.web3DashboardEntry.update({
+        where: { id },
+        data: {
+          date:             body.date,
+          project:          body.project,
+          walletAddress:    body.walletAddress  ?? "",
+          walletName:       body.walletName     ?? "",
+          network:          body.network        ?? "Ethereum",
+          investmentAmount: body.investmentAmount ?? body.saved ?? 0,
+          currentValue:     body.currentValue    ?? body.earned ?? 0,
+          roi:              body.roi             ?? 0,
+        },
+      });
+    } else {
+      row = await db.web2DashboardEntry.update({
+        where: { id },
+        data: {
+          date:    body.date,
+          project: body.project,
+          earned:  body.earned  ?? 0,
+          saved:   body.saved   ?? 0,
+          given:   body.given   ?? 0,
+          givenTo: body.givenTo ?? "",
+        },
+      });
+    }
+    return NextResponse.json(toEntry(row, mode));
+  } catch (err) {
+    console.error("[PUT /api/entries/[id]]", err);
+    return NextResponse.json({ error: "Failed to update entry" }, { status: 500 });
+  }
 }
 
 export async function DELETE(_req: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const { id } = await context.params;
-  await db.dashboardEntry.delete({ where: { id } });
-  return NextResponse.json({ ok: true });
+  try {
+    const { id } = await context.params;
+    const found = await findEntry(id);
+    if (!found) {
+      return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+    }
+    if (found.mode === "web3") {
+      await db.web3DashboardEntry.delete({ where: { id } });
+    } else {
+      await db.web2DashboardEntry.delete({ where: { id } });
+    }
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("[DELETE /api/entries/[id]]", err);
+    return NextResponse.json({ error: "Failed to delete entry" }, { status: 500 });
+  }
 }

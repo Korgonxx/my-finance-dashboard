@@ -16,15 +16,7 @@ export async function GET(req: NextRequest) {
     }
   } catch (err) {
     console.error("[GET /api/goal]", err);
-    // Fallback to legacy table
-    try {
-      const row = await db.dashboardGoal.findUnique({ where: { mode } });
-      if (!row) return NextResponse.json({ amount: 60000, currency: "USD" });
-      return NextResponse.json({ amount: Number(row.amount), currency: row.currency });
-    } catch (fallbackErr) {
-      console.error("[GET /api/goal] Fallback failed", fallbackErr);
-      return NextResponse.json({ amount: 60000, currency: "USD" });
-    }
+    return NextResponse.json({ amount: 60000, currency: "USD" });
   }
 }
 
@@ -63,17 +55,6 @@ export async function POST(req: NextRequest) {
     }
   } catch (err) {
     console.error("[POST /api/goal]", err);
-    // Fallback to legacy table
-    try {
-      const row = await db.dashboardGoal.upsert({
-        where: { mode },
-        update: { amount, currency },
-        create: { mode, amount, currency },
-      });
-      return NextResponse.json({ amount: Number(row.amount), currency: row.currency });
-    } catch (fallbackErr) {
-      console.error("[POST /api/goal] Fallback failed", fallbackErr);
-      return NextResponse.json({ error: "Failed to update goal" }, { status: 500 });
-    }
+    return NextResponse.json({ error: "Failed to update goal" }, { status: 500 });
   }
 }
