@@ -333,17 +333,65 @@ export default function FinanceDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [activeTab, setActiveTab] = useState("Dashboard");
-  const [web2Goal, setWeb2Goal] = useState({ amount: 10000, currency: "USD" });
-  const [web3Goal, setWeb3Goal] = useState({ amount: 5, currency: "ETH" });
+  const [web2Goal, setWeb2Goal] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('fv_web2Goal');
+      if (saved) try { return JSON.parse(saved); } catch {}
+    }
+    return { amount: 10000, currency: "USD" };
+  });
+  const [web3Goal, setWeb3Goal] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('fv_web3Goal');
+      if (saved) try { return JSON.parse(saved); } catch {}
+    }
+    return { amount: 5, currency: "ETH" };
+  });
   
-  const [theme, setTheme] = useState<'dark' | 'light'>('light');
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('fv_theme');
+      if (saved === 'dark' || saved === 'light') return saved;
+    }
+    return 'dark';
+  });
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [appPasscode, setAppPasscode] = useState("123456");
+  const [appPasscode, setAppPasscode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('fv_passcode');
+      if (saved) return saved;
+    }
+    return "123456";
+  });
   const [passcode, setPasscode] = useState("");
-  const [profilePic, setProfilePic] = useState<string>("https://picsum.photos/seed/avatar5/150/150");
-  const [firstName, setFirstName] = useState("Annette");
-  const [lastName, setLastName] = useState("Black");
-  const [email, setEmail] = useState("annette.b@example.com");
+  const [profilePic, setProfilePic] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('fv_profilePic');
+      if (saved) return saved;
+    }
+    return "https://picsum.photos/seed/avatar5/150/150";
+  });
+  const [firstName, setFirstName] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('fv_firstName');
+      if (saved) return saved;
+    }
+    return "Annette";
+  });
+  const [lastName, setLastName] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('fv_lastName');
+      if (saved) return saved;
+    }
+    return "Black";
+  });
+  const [email, setEmail] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('fv_email');
+      if (saved) return saved;
+    }
+    return "annette.b@example.com";
+  });
   const [isSaving, setIsSaving] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([
@@ -440,6 +488,16 @@ export default function FinanceDashboard() {
       setPasscode("");
     }
   }, [passcode, appPasscode, isAuthenticated]);
+
+  // Persist settings to localStorage
+  useEffect(() => { localStorage.setItem('fv_theme', theme); }, [theme]);
+  useEffect(() => { localStorage.setItem('fv_passcode', appPasscode); }, [appPasscode]);
+  useEffect(() => { localStorage.setItem('fv_firstName', firstName); }, [firstName]);
+  useEffect(() => { localStorage.setItem('fv_lastName', lastName); }, [lastName]);
+  useEffect(() => { localStorage.setItem('fv_email', email); }, [email]);
+  useEffect(() => { localStorage.setItem('fv_profilePic', profilePic); }, [profilePic]);
+  useEffect(() => { localStorage.setItem('fv_web2Goal', JSON.stringify(web2Goal)); }, [web2Goal]);
+  useEffect(() => { localStorage.setItem('fv_web3Goal', JSON.stringify(web3Goal)); }, [web3Goal]);
 
   // Fetch entries from API on mount and mode change
   useEffect(() => {
