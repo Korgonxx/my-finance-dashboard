@@ -30,6 +30,7 @@ type Entry = {
   given: number;
   givenTo: string;
   mode: Mode;
+  walletId?: string;
 };
 
 import { useAppSettings } from './context/AppSettingsContext';
@@ -45,14 +46,25 @@ const COLORS = [BRAND, "#3B82F6", "#A855F7", "#F97316"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 // --- Entry Modal Component with real form fields ---
-function EntryModal({ onClose, onSave }: { onClose: () => void; onSave: (entry: Omit<Entry, 'id'>) => void }) {
+function EntryModal({ onClose, onSave, mode, bankCards, wallets }: { 
+  onClose: () => void; 
+  onSave: (entry: Omit<Entry, 'id'>) => void;
+  mode: Mode;
+  bankCards: Array<{ id: string; name: string; last4: string }>;
+  wallets: Array<{ id: string; name: string; address: string }>;
+}) {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [project, setProject] = useState("");
   const [earned, setEarned] = useState("");
   const [saved, setSaved] = useState("");
   const [given, setGiven] = useState("");
   const [givenTo, setGivenTo] = useState("");
+  const [walletId, setWalletId] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  const items = mode === 'web2' 
+    ? bankCards.map(c => ({ id: c.id, label: `${c.name} (**** ${c.last4})` }))
+    : wallets.map(w => ({ id: w.id, label: `${w.name} (${w.address.slice(0,6)}...${w.address.slice(-4)})` }));
 
   const handleSubmit = async () => {
     setSubmitting(true);
@@ -64,7 +76,8 @@ function EntryModal({ onClose, onSave }: { onClose: () => void; onSave: (entry: 
         saved: parseFloat(saved) || 0,
         given: parseFloat(given) || 0,
         givenTo,
-        mode: "web2", // will be overridden by parent
+        mode,
+        walletId: walletId || undefined,
       });
     } finally {
       setSubmitting(false);
@@ -112,6 +125,15 @@ function EntryModal({ onClose, onSave }: { onClose: () => void; onSave: (entry: 
               className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
             />
           </div>
+          {items.length > 0 && (
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-zinc-400">{mode === 'web2' ? 'Card' : 'Wallet'}</label>
+            <select value={walletId} onChange={e => setWalletId(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors">
+              <option value="">Select {mode === 'web2' ? 'card' : 'wallet'}...</option>
+              {items.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+            </select>
+          </div>
+          )}
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-zinc-400">Earned</label>
@@ -1158,7 +1180,17 @@ export default function FinanceDashboard() {
                           </div>
                           <div>
                             <h4 className="text-sm font-bold text-zinc-100">{entry.project}</h4>
-                            <p className="text-xs text-zinc-400 dark:text-zinc-500 font-medium">{entry.date} • {entry.givenTo}</p>
+                            <p className="text-xs text-zinc-400 dark:text-zinc-500 font-medium">
+                              {entry.date} • {entry.givenTo}
+                              {entry.walletId && (
+                                <span className="ml-1 text-[#D4FE44]/70">
+                                  • {mode === 'web2' 
+                                    ? (bankCards.find(c => c.id === entry.walletId)?.name || 'Card')
+                                    : (wallets.find(w => w.id === entry.walletId)?.name || 'Wallet')
+                                  }
+                                </span>
+                              )}
+                            </p>
                           </div>
                         </div>
                         <div className="text-right">
@@ -1699,7 +1731,12 @@ export default function FinanceDashboard() {
       </div>
 
       {/* MODALS */}
-      {showAdd && <EntryModal onClose={() => setShowAdd(false)} onSave={async (entryData) => {
+      {showAdd && <EntryModal 
+        onClose={() => setShowAdd(false)} 
+        mode={mode}
+        bankCards={bankCards.map(c => ({ id: c.id, name: c.name, last4: c.last4 }))}
+        wallets={wallets.map(w => ({ id: w.id, name: w.name, address: w.address }))}
+        onSave={async (entryData) => {
         const newEntry = { ...entryData, id: Math.random().toString(36).substr(2, 9), mode };
         setEntries(prev => [newEntry, ...prev]);
         setShowAdd(false);
