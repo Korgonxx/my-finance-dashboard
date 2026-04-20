@@ -792,6 +792,11 @@ export default function FinanceDashboard() {
         .theme-light .force-dark-card { background-color: #0A0A0A !important; color: white !important;}
         .theme-light .force-dark-card .text-zinc-300 { color: #A1A1AA !important; }
         .theme-light .force-dark-card .text-zinc-100 { color: white !important; }
+
+        /* Hide number input spinners */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type="number"] { -moz-appearance: textfield; }
       `}</style>
       
       {/* SIDEBAR NAVIGATION */}
