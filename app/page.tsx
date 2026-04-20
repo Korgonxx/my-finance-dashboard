@@ -1,356 +1,1770 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+
+import React, { useState, useMemo, useEffect } from 'react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Area, AreaChart,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, AreaChart, Area, CartesianGrid
 } from "recharts";
 import {
-  Plus, Edit2, Trash2, X, Target, Download, Zap,
-  Send, TrendingUp, TrendingDown, Eye, EyeOff,
-  ArrowUpRight, ArrowDownRight, DollarSign, Wallet, CreditCard, Activity, Calendar
+  Bell, Home, Search, LayoutGrid, PieChart, Wallet, CreditCard,
+  ArrowUpRight, ArrowDownRight, Plus, Monitor, Edit2, Trash2, X, User,
+  MoreHorizontal, Briefcase, Zap, Shield, HelpCircle, Settings, ChevronRight, Calendar,
+  Sun, Moon, Camera, Mail, Smartphone, Key, MapPin, Globe, CheckCircle2, Lock,
+  TrendingUp, TrendingDown, RefreshCw, Snowflake, Eye, EyeOff, ExternalLink, Activity, ArrowRightLeft, Download
 } from "lucide-react";
-import { useWeb3 } from "./context/Web3Context";
-import { useEntries, useGoal } from "@/lib/hooks/useEntries";
-import { useAppSettings, type Currency } from "./context/AppSettingsContext";
-import { MasterPasscodeGuard } from "./components/MasterPasscodeGuard";
-import { Sidebar, THEME, type ThemeType } from "./components/Sidebar";
-import { CloudSyncModal } from "./components/CloudSyncModal";
-import { PageTransition } from "./components/PageTransition";
+import Image from "next/image";
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+type Mode = "web2" | "web3";
 
 type Entry = {
-  id:string;date:string;project:string;
-  earned:number;saved:number;given:number;givenTo:string;
-  walletAddress?:string;walletName?:string;
-  mode:"web2"|"web3";
-  investmentAmount?:number;currentValue?:number;
+  id: string;
+  date: string;
+  project: string;
+  earned: number;
+  saved: number;
+  given: number;
+  givenTo: string;
+  mode: Mode;
 };
 
-function uid(){return Math.random().toString(36).slice(2,10);}
-function pct(a:number,b:number){return b>0?((a/b)*100).toFixed(1):"0.0";}
-function shortAddr(a:string){return a?`${a.slice(0,6)}…${a.slice(-4)}`:"" ;}
-const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+// Finview Brand Colors
+const BRAND = "#D4FE44";
+const SURFACE = "#131316";
+const BORDER = "#222226";
 
-function buildMonthly(entries:Entry[]){
-  return MONTHS.map(month=>{
-    const me=entries.filter(e=>MONTHS[new Date(e.date).getMonth()]===month);
-    return{month,earned:me.reduce((s,e)=>s+e.earned,0),saved:me.reduce((s,e)=>s+e.saved,0),given:me.reduce((s,e)=>s+e.given,0)};
-  });
-}
+const COLORS = [BRAND, "#3B82F6", "#A855F7", "#F97316"];
 
-// ── Entry Modal ───────────────────────────────────────────────────────────────
-function EntryModal({onSave,onClose,initial,isWeb3,T}:{
-  onSave:(e:Entry)=>void;onClose:()=>void;
-  initial?:Partial<Entry>;
-  isWeb3:boolean;T:ThemeType;
-}){
-  const[form,setForm]=useState({
-    date:initial?.date??new Date().toISOString().slice(0,10),
-    project:initial?.project??"",
-    earned:initial?.earned !== undefined ? String(initial.earned) : "",
-    saved:initial?.saved !== undefined ? String(initial.saved) : "",
-    given:initial?.given !== undefined ? String(initial.given) : "",
-    givenTo:initial?.givenTo??"",
-    walletAddress:initial?.walletAddress??"",walletName:initial?.walletName??"",
-  });
-  const inp:React.CSSProperties={width:"100%",padding:"12px 16px",
-    background:T.pill,border:`1px solid ${T.border}`,
-    borderRadius:14,color:T.textPri,fontSize:14,fontFamily:"inherit",
-    outline:"none",boxSizing:"border-box",transition:"all 0.2s"};
-  const lbl:React.CSSProperties={fontSize:11,color:T.textSec,fontWeight:700,
-    letterSpacing:"0.02em",marginBottom:6,display:"block",marginLeft:4};
-  return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",
-      display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,
-      backdropFilter:"blur(12px)",padding:"1rem",animation:"fadeIn 0.2s"}}>
-      <style>{`@keyframes fadeIn{from{opacity:0}to{opacity:1}} @keyframes popIn{from{opacity:0;transform:scale(0.96) translateY(10px)}to{opacity:1;transform:none}}`}</style>
-      <div style={{width:"100%",maxWidth:480,background:T.card,
-        border:`1px solid ${T.border}`,borderRadius:32,padding:"2.5rem",
-        animation:"popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",boxShadow:"0 30px 60px rgba(0,0,0,0.12)"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"2rem"}}>
-          <div>
-            <div style={{fontSize:22,fontWeight:800,letterSpacing:"-0.03em",color:T.textPri}}>
-              {initial?.id?"Edit Entry":"New Entry"}
-            </div>
-            <div style={{fontSize:13,color:T.textSec,marginTop:4}}>
-              {isWeb3?"Record a crypto transaction":"Track your personal finances"}
-            </div>
-          </div>
-          <button onClick={onClose} style={{width:40,height:40,borderRadius:12,background:T.pill,
-            border:"none",cursor:"pointer",color:T.textSec,
-            display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.2s"}}>
-            <X size={18}/>
-          </button>
-        </div>
-        <div style={{display:"grid",gap:18}}>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-            <div><label style={lbl}>Date</label>
-              <input type="date" style={inp} value={form.date}
-                onChange={e=>setForm(f=>({...f,date:e.target.value}))}/></div>
-            <div><label style={lbl}>Category</label>
-              <input style={inp} value={form.givenTo} placeholder="e.g. Work, Gift"
-                onChange={e=>setForm(f=>({...f,givenTo:e.target.value}))}/></div>
-          </div>
-          <div><label style={lbl}>{isWeb3?"Description":"Project Name"}</label>
-            <input style={inp} value={form.project}
-              placeholder={isWeb3?"e.g. ETH staking reward":"e.g. Client project"}
-              onChange={e=>setForm(f=>({...f,project:e.target.value}))}/></div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
-            {[{k:"earned",l:isWeb3?"Received":"Earned",c:T.yellow},
-              {k:"saved",l:isWeb3?"Staked":"Saved",c:T.green},
-              {k:"given",l:isWeb3?"Sent":"Given",c:T.red}].map(({k,l,c})=>(
-              <div key={k}>
-                <label style={lbl}>{l}</label>
-                <input type="number" style={inp}
-                  value={(form as any)[k]} placeholder="0"
-                  onChange={e=>setForm(f=>({...f,[k]:e.target.value}))}/>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div style={{display:"flex",gap:12,marginTop:"2.5rem"}}>
-          <button onClick={onClose} style={{flex:1,padding:"14px",
-            background:T.pill,border:"none",borderRadius:16,
-            color:T.textSec,cursor:"pointer",fontSize:14,fontFamily:"inherit",fontWeight:700}}>Cancel</button>
-          <button onClick={()=>onSave({
-            id:initial?.id??uid(),date:form.date,project:form.project,
-            earned:parseFloat(String(form.earned))||0,
-            saved:parseFloat(String(form.saved))||0,
-            given:parseFloat(String(form.given))||0,
-            givenTo:form.givenTo,walletAddress:form.walletAddress,
-            walletName:form.walletName,mode:isWeb3?"web3":"web2",
-          })} style={{flex:2,padding:"14px",background:T.yellow,border:"none",
-            borderRadius:16,color:"#000",cursor:"pointer",fontSize:14,
-            fontWeight:800,fontFamily:"inherit",boxShadow:`0 8px 20px ${T.yellow}40`}}>
-            {initial?.id?"Save Changes":"Add Entry"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+// Entries are fetched from API
 
-function DeleteModal({entry,onConfirm,onClose,T}:{entry:Entry;onConfirm:()=>void;onClose:()=>void;T:ThemeType}){
-  return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",
-      display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,
-      backdropFilter:"blur(12px)",padding:"1rem"}}>
-      <div style={{width:"100%",maxWidth:380,background:T.card,
-        border:`1px solid ${T.border}`,borderRadius:32,padding:"2.5rem",textAlign:"center",
-        boxShadow:"0 30px 60px rgba(0,0,0,0.12)"}}>
-        <div style={{width:60,height:60,borderRadius:20,background:`${T.red}15`,
-          display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 1.5rem"}}>
-          <Trash2 size={24} color={T.red}/>
-        </div>
-        <div style={{fontSize:20,fontWeight:800,marginBottom:8,color:T.textPri,letterSpacing:"-0.03em"}}>Delete Entry?</div>
-        <div style={{fontSize:14,color:T.textSec,marginBottom:"2rem",lineHeight:1.6}}>
-          "{entry.project}" will be permanently removed.
-        </div>
-        <div style={{display:"flex",gap:12}}>
-          <button onClick={onClose} style={{flex:1,padding:"14px",
-            background:T.pill,border:"none",borderRadius:16,
-            color:T.textSec,cursor:"pointer",fontSize:14,fontFamily:"inherit",fontWeight:700}}>Cancel</button>
-          <button onClick={onConfirm} style={{flex:1,padding:"14px",
-            background:T.red,border:"none",borderRadius:16,
-            color:"#fff",cursor:"pointer",fontSize:14,fontWeight:800,fontFamily:"inherit"}}>Delete</button>
-        </div>
-      </div>
-    </div>
-  );
-}
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-// ── Main Dashboard ────────────────────────────────────────────────────────────
-export default function FinanceDashboard(){
-  const { isWeb3, mode, setMode } = useWeb3();
-  const { currency, hideBalances, isDark, setIsDark, appPasscodeVerified } = useAppSettings();
-  const { web2Entries, web3Entries, loaded, save, remove } = useEntries(mode === "web3");
-  const { goal, setGoal } = useGoal(mode);
+// --- Entry Modal Component with real form fields ---
+function EntryModal({ onClose, onSave }: { onClose: () => void; onSave: (entry: Omit<Entry, 'id'>) => void }) {
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [project, setProject] = useState("");
+  const [earned, setEarned] = useState("");
+  const [saved, setSaved] = useState("");
+  const [given, setGiven] = useState("");
+  const [givenTo, setGivenTo] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const [hydrated, setHydrated] = useState(false);
-  const [addModal, setAddModal] = useState(false);
-  const [editEntry, setEditEntry] = useState<Entry|null>(null);
-  const [delEntry, setDelEntry] = useState<Entry|null>(null);
-  const [syncModal, setSyncModal] = useState(false);
-  const [filter, setFilter] = useState("All");
-
-  useEffect(() => { setHydrated(true); }, []);
-
-  const entries = mode === "web2" ? web2Entries : web3Entries;
-  const sorted = entries
-    .filter(e => filter === "All" || e.givenTo === filter)
-    .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-  const totalEarned = entries.reduce((s,e) => s+e.earned, 0);
-  const totalSaved  = entries.reduce((s,e) => s+e.saved, 0);
-  const totalGiven  = entries.reduce((s,e) => s+e.given, 0);
-  const netIncome   = totalEarned - totalGiven;
-
-  const monthly = buildMonthly(entries);
-  const categories = ["All", ...Array.from(new Set(entries.map(e => e.givenTo).filter(Boolean)))];
-
-  const T = isDark ? THEME.dark : THEME.light;
-  const sym = currency === "USD" ? "$" : currency === "EUR" ? "€" : "£";
-  const money = (n: number) => hideBalances ? "••••" : `${sym}${n.toLocaleString(undefined, {maximumFractionDigits:0})}`;
-
-  if (!hydrated) return null;
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    try {
+      await onSave({
+        date,
+        project,
+        earned: parseFloat(earned) || 0,
+        saved: parseFloat(saved) || 0,
+        given: parseFloat(given) || 0,
+        givenTo,
+        mode: "web2", // will be overridden by parent
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
-    <MasterPasscodeGuard isDark={isDark}>
-      <PageTransition>
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-[#131316] border border-[#222226] max-w-md w-full rounded-3xl p-8 shadow-2xl relative">
+        <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-zinc-400 dark:text-zinc-400 hover:text-zinc-50 hover:bg-white/10 transition-colors">
+          <X size={18} />
+        </button>
+        <h2 className="text-2xl font-semibold mb-2 text-zinc-50">New Transaction</h2>
+        <p className="text-sm text-zinc-400 dark:text-zinc-400 mb-8">Record your incoming and outgoing finances.</p>
+        
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-400">Date</label>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-400">Category</label>
+              <input
+                type="text"
+                value={givenTo}
+                onChange={(e) => setGivenTo(e.target.value)}
+                placeholder="e.g. Freelance, DeFi"
+                className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-zinc-400">Project / Description</label>
+            <input
+              type="text"
+              value={project}
+              onChange={(e) => setProject(e.target.value)}
+              placeholder="e.g. Client project, ETH staking"
+              className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
+            />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-400">Earned</label>
+              <input
+                type="number"
+                value={earned}
+                onChange={(e) => setEarned(e.target.value)}
+                placeholder="0"
+                className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-400">Saved</label>
+              <input
+                type="number"
+                value={saved}
+                onChange={(e) => setSaved(e.target.value)}
+                placeholder="0"
+                className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-400">Given</label>
+              <input
+                type="number"
+                value={given}
+                onChange={(e) => setGiven(e.target.value)}
+                placeholder="0"
+                className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
+              />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-4">
+            <button onClick={onClose} className="flex-1 py-3.5 bg-white/5 hover:bg-white/10 transition-colors text-zinc-600 dark:text-zinc-300 rounded-2xl font-medium">Cancel</button>
+            <button
+              onClick={handleSubmit}
+              disabled={submitting || !project}
+              className={cn(
+                "flex-[2] py-3.5 rounded-2xl font-semibold transition-colors shadow-[0_0_20px_rgba(212,254,68,0.2)] flex items-center justify-center gap-2",
+                submitting || !project
+                  ? "bg-[#D4FE44]/70 text-[#0A0A0A]/70 cursor-not-allowed"
+                  : "bg-[#D4FE44] text-[#0A0A0A] hover:bg-[#bceb29]"
+              )}
+            >
+              {submitting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-[#0A0A0A]/50 border-t-[#0A0A0A] rounded-full animate-spin"></div>
+                  Saving...
+                </>
+              ) : "Add Transaction"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TransferModal({ onClose, onTransfer }: { onClose: () => void, onTransfer: () => void }) {
+  const [amount, setAmount] = useState("");
+  const [recipient, setRecipient] = useState("");
+  const [isTransferring, setIsTransferring] = useState(false);
+
+  const handleTransfer = () => {
+    setIsTransferring(true);
+    setTimeout(() => {
+      setIsTransferring(false);
+      onTransfer();
+      onClose();
+    }, 1000);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-[#131316] border border-[#222226] max-w-md w-full rounded-3xl p-8 shadow-2xl relative">
+        <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-zinc-400 dark:text-zinc-400 hover:text-zinc-50 hover:bg-white/10 transition-colors">
+          <X size={18} />
+        </button>
+        <h2 className="text-2xl font-bold mb-2 text-zinc-50 border-b-2 border-[#D4FE44] inline-block pb-1">Transfer Funds</h2>
+        <p className="text-sm text-zinc-400 dark:text-zinc-400 mb-8 mt-2">Send money securely to friends or external wallets.</p>
+        
+        <div className="space-y-5">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-zinc-400">Recipient Address / Email</label>
+            <input 
+              type="text" 
+              value={recipient}
+              onChange={(e) => setRecipient(e.target.value)}
+              placeholder="e.g. 0x1A4... or user@email.com" 
+              className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors" 
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-zinc-400">Amount</label>
+            <div className="relative">
+               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 font-bold">$</span>
+               <input 
+                 type="number" 
+                 value={amount}
+                 onChange={(e) => setAmount(e.target.value)}
+                 placeholder="0.00" 
+                 className="w-full bg-[#09090B] border border-[#222226] rounded-xl pl-8 pr-4 py-3 text-lg font-bold text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors" 
+               />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-4">
+            <button onClick={onClose} className="flex-1 py-3.5 bg-white/5 hover:bg-white/10 transition-colors text-zinc-300 rounded-2xl font-semibold">Cancel</button>
+            <button 
+              onClick={handleTransfer} 
+              disabled={isTransferring || !amount || !recipient}
+              className={cn("flex-[2] py-3.5 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-[0_5px_20px_rgba(212,254,68,0.15)]", 
+                isTransferring || !amount || !recipient ? "bg-[#D4FE44]/70 text-[#0A0A0A]/70 cursor-not-allowed" : "bg-[#D4FE44] text-[#0A0A0A] hover:bg-[#bceb29] hover:-translate-y-0.5"
+              )}
+            >
+              {isTransferring ? (
+                 <>
+                   <div className="w-4 h-4 border-2 border-[#0A0A0A]/50 border-t-[#0A0A0A] rounded-full animate-spin"></div>
+                   Processing...
+                 </>
+              ) : "Send Transfer"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TransferToWeb2Modal({ onClose, onTransfer }: { onClose: () => void, onTransfer: (amount: number) => void }) {
+  const [amount, setAmount] = useState("");
+  const [isTransferring, setIsTransferring] = useState(false);
+
+  const handleTransfer = () => {
+    setIsTransferring(true);
+    setTimeout(() => {
+      setIsTransferring(false);
+      onTransfer(Number(amount));
+      onClose();
+    }, 1000);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-[#131316] border border-[#222226] max-w-md w-full rounded-3xl p-8 shadow-2xl relative">
+        <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-zinc-400 dark:text-zinc-400 hover:text-zinc-50 hover:bg-white/10 transition-colors">
+          <X size={18} />
+        </button>
+        <h2 className="text-2xl font-bold mb-2 text-zinc-50 border-b-2 border-emerald-400 inline-block pb-1">Transfer to Web2</h2>
+        <p className="text-sm text-zinc-400 dark:text-zinc-400 mb-8 mt-2">Off-ramp crypto to your connected bank account.</p>
+        
+        <div className="space-y-5">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-zinc-400">Amount to Transfer (USD)</label>
+            <div className="relative">
+               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 font-bold">$</span>
+               <input 
+                 type="number" 
+                 value={amount}
+                 onChange={(e) => setAmount(e.target.value)}
+                 placeholder="0.00" 
+                 className="w-full bg-[#09090B] border border-[#222226] rounded-xl pl-8 pr-4 py-3 text-lg font-bold text-zinc-100 outline-none focus:border-emerald-400 transition-colors" 
+               />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-4">
+            <button onClick={onClose} className="flex-1 py-3.5 bg-white/5 hover:bg-white/10 transition-colors text-zinc-300 rounded-2xl font-semibold">Cancel</button>
+            <button 
+              onClick={handleTransfer} 
+              disabled={isTransferring || !amount || Number(amount) <= 0}
+              className={cn("flex-[2] py-3.5 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-[0_5px_20px_rgba(52,211,153,0.15)]", 
+                isTransferring || !amount || Number(amount) <= 0 ? "bg-emerald-400/70 text-[#0A0A0A]/70 cursor-not-allowed" : "bg-emerald-400 text-[#0A0A0A] hover:bg-emerald-300 hover:-translate-y-0.5"
+              )}
+            >
+              {isTransferring ? (
+                 <>
+                   <div className="w-4 h-4 border-2 border-[#0A0A0A]/50 border-t-[#0A0A0A] rounded-full animate-spin"></div>
+                   Processing...
+                 </>
+              ) : "Confirm Transfer"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Custom Chart Tooltip ---
+const CustomTooltip = ({ active, payload, label, selectedYear }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-[#131316] border border-[#222226] p-4 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.5)]">
+        <p className="font-bold text-zinc-100 mb-2">{label} {selectedYear}</p>
+        <div className="space-y-1">
+          <p className="text-sm font-semibold text-[#D4FE44]">
+            Income: ${payload[0]?.value?.toLocaleString()}
+          </p>
+          <p className="text-sm font-semibold text-zinc-300">
+            Expenses: ${payload[1]?.value?.toLocaleString()}
+          </p>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
+// --- Main Dashboard component ---
+export default function FinanceDashboard() {
+  const [entries, setEntries] = useState<Entry[]>([]);
+  const [loadingEntries, setLoadingEntries] = useState(true);
+  const [mode, setMode] = useState<Mode>("web2");
+  const [filter, setFilter] = useState("All");
+  const [showAdd, setShowAdd] = useState(false);
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [showTransferToWeb2, setShowTransferToWeb2] = useState(false);
+  const [deletingTransactionId, setDeletingTransactionId] = useState<string | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const [selectedYear, setSelectedYear] = useState<number>(2026);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showSearch, setShowSearch] = useState(false);
+  const [activeTab, setActiveTab] = useState("Dashboard");
+  const [web2Goal, setWeb2Goal] = useState({ amount: 10000, currency: "USD" });
+  const [web3Goal, setWeb3Goal] = useState({ amount: 5, currency: "ETH" });
+  
+  const [theme, setTheme] = useState<'dark' | 'light'>('light');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [appPasscode, setAppPasscode] = useState("123456");
+  const [passcode, setPasscode] = useState("");
+  const [profilePic, setProfilePic] = useState<string>("https://picsum.photos/seed/avatar5/150/150");
+  const [firstName, setFirstName] = useState("Annette");
+  const [lastName, setLastName] = useState("Black");
+  const [email, setEmail] = useState("annette.b@example.com");
+  const [isSaving, setIsSaving] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState([
+    { id: 1, title: 'New login from Mac OS', time: '2 mins ago', read: false },
+    { id: 2, title: 'Transfer of $200.00 clear', time: '1 hour ago', read: false },
+    { id: 3, title: 'Your weekly report is ready', time: '1 day ago', read: true }
+  ]);
+  const unreadCount = notifications.filter(n => !n.read).length;
+  
+  const [securityCurrentPass, setSecurityCurrentPass] = useState("");
+  const [securityNewPass, setSecurityNewPass] = useState("");
+  const [securityPassMessage, setSecurityPassMessage] = useState({ text: "", type: "" });
+  
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleProfileImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          setProfilePic(reader.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveChanges = () => {
+    setIsSaving(true);
+    // Simulate an API call to save settings
+    setTimeout(() => {
+      setIsSaving(false);
+    }, 1000);
+  };
+
+  const handleExportCSV = () => {
+    const headers = ["ID", "Date", "Project / Payee", "Category", "Amount Earned", "Amount Spent", "Savings"];
+    const csvRows = [headers.join(",")];
+    
+    filteredEntries.forEach(entry => {
+      const row = [
+        entry.id,
+        entry.date,
+        `"${entry.project.replace(/"/g, '""')}"`,
+        `"${entry.givenTo.replace(/"/g, '""')}"`,
+        entry.earned,
+        entry.given,
+        entry.saved
+      ];
+      csvRows.push(row.join(","));
+    });
+
+    const csvData = csvRows.join("\n");
+    const blob = new Blob([csvData], { type: "text/csv;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.setAttribute("href", url);
+    a.setAttribute("download", `finview_export_${mode}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  };
+  
+  const filteredEntries = useMemo(() => {
+    let res = entries.filter(e => e.mode === mode && new Date(e.date).getFullYear() === selectedYear);
+    if (filter !== "All") res = res.filter(e => e.givenTo === filter);
+    if (selectedMonth) res = res.filter(e => MONTHS[new Date(e.date).getMonth()] === selectedMonth);
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      res = res.filter(e => e.project.toLowerCase().includes(q) || e.givenTo.toLowerCase().includes(q));
+    }
+    return res.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [entries, mode, filter, selectedMonth, selectedYear, searchQuery]);
+
+  const categories = ["All", ...Array.from(new Set(entries.filter(e => e.mode === mode).map(e => e.givenTo)))];
+
+  const monthlyData = useMemo(() => {
+    return MONTHS.map(month => {
+      const me = entries.filter(e => e.mode === mode && MONTHS[new Date(e.date).getMonth()] === month && new Date(e.date).getFullYear() === selectedYear);
+      return {
+        month,
+        earned: me.reduce((s, e) => s + e.earned, 0),
+        saved: me.reduce((s, e) => s + e.saved, 0),
+        given: me.reduce((s, e) => s + e.given, 0),
+      };
+    });
+  }, [entries, mode]);
+
+  useEffect(() => {
+    if (!isAuthenticated && passcode === appPasscode) {
+      setIsAuthenticated(true);
+      setPasscode("");
+    }
+  }, [passcode, appPasscode, isAuthenticated]);
+
+  // Fetch entries from API on mount and mode change
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchEntries() {
+      setLoadingEntries(true);
+      try {
+        const res = await fetch(`/api/entries?mode=${mode}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!cancelled) setEntries(data);
+      } catch (err) {
+        console.error("[fetchEntries] failed:", err);
+        if (!cancelled) setEntries([]);
+      } finally {
+        if (!cancelled) setLoadingEntries(false);
+      }
+    }
+    fetchEntries();
+    return () => { cancelled = true; };
+  }, [mode]);
+
+  // Fetch goal from API on mount and mode change
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchGoal() {
+      try {
+        const res = await fetch(`/api/goal?mode=${mode}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!cancelled && data.amount) {
+          if (mode === "web2") {
+            setWeb2Goal({ amount: data.amount, currency: data.currency || "USD" });
+          } else {
+            setWeb3Goal({ amount: data.amount, currency: data.currency || "ETH" });
+          }
+        }
+      } catch (err) {
+        console.error("[fetchGoal] failed:", err);
+      }
+    }
+    fetchGoal();
+    return () => { cancelled = true; };
+  }, [mode]);
+
+  const totalEarned = entries.filter(e => e.mode === mode).reduce((s,e) => s+e.earned, 0);
+  const totalGiven = entries.filter(e => e.mode === mode).reduce((s,e) => s+e.given, 0);
+  const totalSaved = entries.filter(e => e.mode === mode).reduce((s,e) => s+e.saved, 0);
+  const netIncome = totalEarned - totalGiven;
+
+  if (!isAuthenticated) {
+    return (
+      <div className={cn("bg-[#09090B] text-zinc-50 min-h-screen w-full flex font-sans overflow-hidden", theme === 'light' ? 'theme-light' : 'theme-dark')}>
         <style>{`
-          .bento-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; }
-          .bento-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px rgba(0,0,0,0.08); }
-          .tr-row:hover { background: ${T.pill}; }
+          .theme-light {
+            --bg-main: #F5F5F8;
+            --bg-card: #FFFFFF;
+            --bg-hover: #F1F1F5;
+            --border-color: #E2E8F0;
+            --text-main: #18181A;
+            --text-muted: #71717A;
+            --primary: #83B72D;
+            --primary-bright: #D7FE03;
+            --bg-white-5: rgba(0,0,0,0.03);
+            --bg-white-10: rgba(0,0,0,0.06);
+          }
+          .theme-light .bg-\\[\\#09090B\\] { background-color: var(--bg-main) !important; }
+          .theme-light .bg-\\[\\#131316\\] { background-color: var(--bg-card) !important; box-shadow: 0 4px 15px rgba(0,0,0,0.03) !important; }
+          .theme-light .text-zinc-50, .theme-light .text-zinc-100 { color: var(--text-main) !important; }
+          .theme-light .text-zinc-400, .theme-light .text-zinc-500 { color: var(--text-muted) !important; }
+          .theme-light .border-\\[\\#222226\\] { border-color: var(--border-color) !important; }
+          .theme-light button.theme-toggle:hover { background-color: var(--bg-white-5) !important; color: var(--text-main) !important; }
+          
+          .theme-light .auth-left-pane {
+            background-color: #0A0A0A !important;
+          }
+          .theme-light .auth-left-pane .text-zinc-400 {
+            color: #A1A1AA !important;
+          }
+          .theme-light .auth-left-pane .text-zinc-500 {
+            color: #71717A !important;
+          }
         `}</style>
+        
+        {/* Left Side: Branding / Visual (Hidden on mobile) */}
+        <div className="auth-left-pane hidden lg:flex lg:w-1/2 relative bg-zinc-950 flex-col justify-between p-12 border-r border-[#222226]">
+           {/* Abstract shapes / glow */}
+           <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[#D4FE44]/10 rounded-full blur-[100px] pointer-events-none"></div>
+           <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-emerald-500/10 rounded-full blur-[80px] pointer-events-none"></div>
+           
+           <div className="relative z-10 w-full max-w-lg mx-auto mt-12">
+             <div className="flex items-center gap-3 mb-16">
+               <div className="w-10 h-10 rounded-xl flex items-center justify-center relative shadow-[0_0_15px_rgba(212,254,68,0.2)] bg-[#131316]">
+                 <Image src="/favicon.svg" alt="finview logo" fill className="object-contain p-2" />
+               </div>
+               <span className="text-2xl font-bold tracking-tight text-white">finview</span>
+             </div>
+             
+             <h1 className="text-5xl font-extrabold leading-[1.1] tracking-tight text-white mb-6">
+               The next generation <br/>
+               <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#D4FE44] to-[#A3D121]">
+                 financial operating system.
+               </span>
+             </h1>
+             <p className="text-lg text-zinc-400 max-w-md">
+               Manage your web2 banking alongside your web3 portfolio in one seamless, unified dashboard.
+             </p>
+           </div>
+           
+           <div className="relative z-10 text-zinc-500 text-sm font-medium max-w-lg mx-auto w-full">
+             &copy; {new Date().getFullYear()} finview Inc. All rights reserved.
+           </div>
+        </div>
 
-        <div style={{ display: "flex", minHeight: "100vh", background: T.bg, fontFamily: "'Outfit', sans-serif", color: T.textPri }}>
-          <Sidebar isDark={isDark} setIsDark={setIsDark} />
+        {/* Right Side: Authentication */}
+        <div className="w-full lg:w-1/2 flex flex-col relative bg-[#09090B]">
+          
+          <div className="absolute top-6 right-6 md:top-8 md:right-8 z-50">
+            <button 
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className="theme-toggle w-11 h-11 bg-[#131316] border border-[#222226] rounded-xl flex items-center justify-center text-zinc-400 hover:text-zinc-50 hover:bg-white/5 transition-colors"
+            >
+              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+          </div>
 
-          <main style={{ marginLeft: 80, flex: 1, padding: "2.5rem 3rem", maxWidth: 1400, margin: "0 auto", width: "calc(100% - 80px)" }}>
-            
-            {/* Header */}
-            <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "3rem" }}>
-              <div>
-                <h1 style={{ fontSize: 42, fontWeight: 800, letterSpacing: "-0.04em", marginBottom: 8 }}>
-                  {mode === "web3" ? "Crypto Portfolio" : "Financial Overview"}
-                </h1>
-                <div style={{ display: "flex", gap: 12 }}>
-                  {["web2", "web3"].map(m => (
-                    <button key={m} onClick={() => setMode(m as any)}
-                      style={{ padding: "8px 20px", borderRadius: 99, border: "none", fontSize: 13, fontWeight: 700,
-                        background: mode === m ? T.textPri : T.pill, color: mode === m ? T.bg : T.textSec, cursor: "pointer", transition: "all 0.2s" }}>
-                      {m.toUpperCase()}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 12 }}>
-                <button onClick={() => setSyncModal(true)} style={{ width: 48, height: 48, borderRadius: 16, background: T.pill, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: T.textSec }}>
-                  <Zap size={20} />
-                </button>
-                <button onClick={() => setAddModal(true)} style={{ padding: "0 24px", height: 48, borderRadius: 16, background: T.yellow, border: "none", cursor: "pointer", fontSize: 14, fontWeight: 800, color: "#000", display: "flex", alignItems: "center", gap: 8, boxShadow: `0 8px 20px ${T.yellow}40` }}>
-                  <Plus size={20} strokeWidth={3} /> New Entry
-                </button>
-              </div>
-            </header>
-
-            {/* Bento Grid Layout */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: "1.5rem", gridAutoRows: "minmax(160px, auto)" }}>
+          <div className="flex-1 flex flex-col items-center justify-center w-full max-w-md mx-auto p-6 md:p-8 animate-in fade-in zoom-in-95 duration-500">
               
-              {/* Main Metric: Net Income */}
-              <div className="bento-card" style={{ gridColumn: "span 4", gridRow: "span 2", background: T.card, borderRadius: 32, padding: "2rem", border: `1px solid ${T.border}`, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div style={{ width: 48, height: 48, borderRadius: 16, background: `${T.blue}20`, display: "flex", alignItems: "center", justifyContent: "center", color: T.blue }}>
-                    <Activity size={24} />
-                  </div>
-                  <div style={{ padding: "6px 12px", borderRadius: 99, background: netIncome >= 0 ? `${T.green}20` : `${T.red}20`, color: netIncome >= 0 ? T.green : T.red, fontSize: 12, fontWeight: 800 }}>
-                    {netIncome >= 0 ? "+" : ""}{pct(Math.abs(netIncome), totalEarned)}%
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: T.textSec, marginBottom: 4 }}>Net Income</div>
-                  <div style={{ fontSize: 48, fontWeight: 800, letterSpacing: "-0.05em", color: netIncome >= 0 ? T.green : T.red }}>{money(netIncome)}</div>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div style={{ background: T.pill, padding: "12px 16px", borderRadius: 20 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: T.textSec, textTransform: "uppercase", marginBottom: 4 }}>Earned</div>
-                    <div style={{ fontSize: 16, fontWeight: 800 }}>{money(totalEarned)}</div>
-                  </div>
-                  <div style={{ background: T.pill, padding: "12px 16px", borderRadius: 20 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: T.textSec, textTransform: "uppercase", marginBottom: 4 }}>Saved</div>
-                    <div style={{ fontSize: 16, fontWeight: 800 }}>{money(totalSaved)}</div>
-                  </div>
-                </div>
+              {/* Mobile Only Logo */}
+              <div className="lg:hidden flex items-center gap-3 mb-12 sm:mb-16">
+                 <div className="w-10 h-10 rounded-xl relative shadow-[0_0_15px_rgba(212,254,68,0.2)] bg-[#131316]">
+                   <Image src="/favicon.svg" alt="finview logo" fill className="object-contain p-2" />
+                 </div>
+                 <span className="text-2xl font-bold tracking-tight">finview</span>
               </div>
 
-              {/* Chart: Monthly Breakdown */}
-              <div className="bento-card" style={{ gridColumn: "span 5", gridRow: "span 2", background: T.card, borderRadius: 32, padding: "2rem", border: `1px solid ${T.border}` }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
-                  <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: "-0.02em" }}>Activity</div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    {[{c:T.yellow,l:"E"},{c:T.green,l:"S"},{c:T.red,l:"G"}].map(x=>(
-                      <div key={x.l} style={{ width: 12, height: 12, borderRadius: 4, background: x.c }} title={x.l} />
-                    ))}
-                  </div>
-                </div>
-                <div style={{ height: 240 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={monthly} barCategoryGap="40%" barGap={4}>
-                      <CartesianGrid strokeDasharray="0" stroke={T.border} vertical={false} />
-                      <XAxis dataKey="month" tick={{fill:T.textMut,fontSize:11,fontWeight:600}} axisLine={false} tickLine={false} />
-                      <YAxis hide />
-                      <Tooltip cursor={{fill: T.pill}} contentStyle={{background:T.card, border:`1px solid ${T.border}`, borderRadius:16, boxShadow: "0 10px 30px rgba(0,0,0,0.1)"}} />
-                      <Bar dataKey="earned" fill={T.yellow} radius={[6,6,6,6]} />
-                      <Bar dataKey="saved" fill={T.green} radius={[6,6,6,6]} />
-                      <Bar dataKey="given" fill={T.red} radius={[6,6,6,6]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+              <div className="w-16 h-16 mb-8 rounded-[1.2rem] bg-[#131316] border border-[#222226] flex items-center justify-center text-zinc-300 shadow-sm relative overflow-hidden group">
+                 <Lock size={26} strokeWidth={2.5} />
               </div>
-
-              {/* User / Profile Card */}
-              <div className="bento-card" style={{ gridColumn: "span 3", gridRow: "span 2", background: T.purple + "15", borderRadius: 32, padding: "2rem", border: `1px solid ${T.purple}30`, display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
-                <div style={{ width: 80, height: 80, borderRadius: 30, background: T.purple, marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32 }}>👤</div>
-                <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>Korgon User</div>
-                <div style={{ fontSize: 13, color: T.textSec, marginBottom: 20 }}>Financial Master</div>
-                <div style={{ width: "100%", height: 1, background: `${T.purple}30`, marginBottom: 20 }} />
-                <div style={{ display: "flex", gap: 16 }}>
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: T.textSec, textTransform: "uppercase" }}>Entries</div>
-                    <div style={{ fontSize: 18, fontWeight: 800 }}>{entries.length}</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: T.textSec, textTransform: "uppercase" }}>Goal</div>
-                    <div style={{ fontSize: 18, fontWeight: 800 }}>{pct(totalSaved, goal)}%</div>
-                  </div>
-                </div>
+              
+              <h2 className="text-2xl sm:text-3xl font-bold text-zinc-100 mb-2 tracking-tight text-center">Passcode</h2>
+              <p className="text-zinc-500 font-medium text-sm text-center mb-8 sm:mb-10">To protect your account, please verify your identity.</p>
+              
+              <div className="w-full max-w-[280px]">
+                <input
+                  type="password"
+                  maxLength={6}
+                  placeholder="Enter passcode..."
+                  value={passcode}
+                  onChange={(e) => setPasscode(e.target.value)}
+                  className="w-full px-5 py-4 bg-[#131316] border border-[#222226] rounded-xl text-center text-2xl tracking-[0.5em] text-zinc-100 focus:outline-none focus:border-[#D4FE44] focus:ring-1 focus:ring-[#D4FE44]/50 transition-all font-mono placeholder:tracking-normal placeholder:text-base placeholder:text-zinc-600"
+                  autoFocus
+                />
               </div>
+              
+              <div className="h-10 mt-8 flex items-center justify-center w-full">
+                 {passcode.length === appPasscode.length && passcode !== appPasscode && (
+                   <div className="flex items-center gap-2 text-red-500 font-medium text-sm">
+                     Incorrect Passcode
+                   </div>
+                 )}
+              </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-              {/* Transactions List */}
-              <div style={{ gridColumn: "span 12", background: T.card, borderRadius: 32, padding: "2rem", border: `1px solid ${T.border}`, marginTop: "1rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
-                  <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.02em" }}>Recent Transactions</div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    {categories.slice(0, 5).map(cat => (
-                      <button key={cat} onClick={() => setFilter(cat)}
-                        style={{ padding: "8px 16px", borderRadius: 99, border: "none", fontSize: 12, fontWeight: 700,
-                          background: filter === cat ? T.textPri : T.pill, color: filter === cat ? T.bg : T.textSec, cursor: "pointer", transition: "all 0.2s" }}>
-                        {cat}
+  return (
+    <div className={cn("bg-[#09090B] text-zinc-50 min-h-screen w-full flex overflow-hidden font-sans", theme === 'light' ? 'theme-light' : 'theme-dark')}>
+      <style>{`
+        .theme-light {
+          --bg-main: #F5F5F8;
+          --bg-card: #FFFFFF;
+          --bg-hover: #F1F1F5;
+          --border-color: #E2E8F0;
+          --text-main: #18181A;
+          --text-muted: #71717A;
+          --primary: #83B72D;
+          --primary-bright: #D7FE03;
+          --bg-white-5: rgba(0,0,0,0.03);
+          --bg-white-10: rgba(0,0,0,0.06);
+        }
+
+        .theme-light .bg-\\[\\#09090B\\] { background-color: var(--bg-main) !important; }
+        .theme-light .bg-\\[\\#131316\\] { background-color: var(--bg-card) !important; box-shadow: 0 4px 15px rgba(0,0,0,0.03) !important; }
+        .theme-light .bg-zinc-950\\/80 { background-color: rgba(245, 245, 248, 0.8) !important; }
+        .theme-light .bg-\\[\\#1C1C21\\] { background-color: var(--bg-hover) !important; }
+        .theme-light .text-zinc-50, .theme-light .text-zinc-100 { color: var(--text-main) !important; }
+        .theme-light .text-zinc-400, .theme-light .text-zinc-500 { color: var(--text-muted) !important; }
+        .theme-light .border-\\[\\#222226\\], .theme-light .border-\\[\\#2A2A30\\] { border-color: var(--border-color) !important; }
+        .theme-light .bg-white\\/5 { background-color: var(--bg-white-5) !important; border-color: var(--border-color) !important; }
+        .theme-light .bg-white\\/10 { background-color: var(--bg-white-10) !important; border-color: var(--border-color) !important; color: var(--text-main) !important; }
+        .theme-light .text-\\[\\#D4FE44\\] { color: var(--primary) !important; }
+        .theme-light .bg-\\[\\#D4FE44\\] { background-color: var(--primary-bright) !important; color: #0A0A0A !important; border-color: var(--primary) !important; }
+        .theme-light .bg-\\[\\#D4FE44\\]\\/10 { background-color: rgba(131, 183, 45, 0.1) !important; border-color: rgba(131, 183, 45, 0.3) !important; color: var(--primary) !important; }
+        
+        .theme-light nav button.text-zinc-400:hover { color: var(--text-main) !important; background-color: var(--bg-white-5) !important; }
+        .theme-light input { color: var(--text-main) !important; }
+        .theme-light input::placeholder { color: var(--text-muted) !important; }
+        .theme-light .recharts-cartesian-grid-line { stroke: var(--border-color) !important; }
+        
+        /* Stop overriding the dark card specifically requested by design */
+        .theme-light .force-dark-card { background-color: #0A0A0A !important; color: white !important;}
+        .theme-light .force-dark-card .text-zinc-300 { color: #A1A1AA !important; }
+        .theme-light .force-dark-card .text-zinc-100 { color: white !important; }
+      `}</style>
+      
+      {/* SIDEBAR NAVIGATION */}
+      <aside className="w-[260px] border-r border-[#222226] bg-[#09090B] hidden md:flex flex-col flex-shrink-0 z-10 transition-all duration-300">
+        <div className="p-8 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center relative shadow-[0_0_15px_rgba(212,254,68,0.2)]">
+            <Image src="/favicon.svg" alt="finview logo" fill className="object-contain" />
+          </div>
+          <span className="text-xl font-bold tracking-tight">finview</span>
+        </div>
+
+        <nav className="flex-1 px-4 space-y-1 overflow-y-auto custom-scrollbar pt-2">
+          <p className="px-4 text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-4">Main Menu</p>
+          <button onClick={() => setActiveTab('Dashboard')} className={cn("flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full", activeTab === 'Dashboard' ? "bg-white/5 text-zinc-50 border border-white/5" : "text-zinc-400 hover:text-zinc-50 hover:bg-white/5")}>
+            <Home size={20} className={activeTab === 'Dashboard' ? "text-[#D4FE44]" : ""} />
+            <span className="font-medium">Dashboard</span>
+          </button>
+          <button onClick={() => setActiveTab('Analytics')} className={cn("flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full", activeTab === 'Analytics' ? "bg-white/5 text-zinc-50 border border-white/5" : "text-zinc-400 hover:text-zinc-50 hover:bg-white/5")}>
+            <PieChart size={20} />
+            <span className="font-medium">Analytics</span>
+          </button>
+          <button onClick={() => setActiveTab('Cards')} className={cn("flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full", activeTab === 'Cards' ? "bg-white/5 text-zinc-50 border border-white/5" : "text-zinc-400 hover:text-zinc-50 hover:bg-white/5")}>
+            <CreditCard size={20} />
+            <span className="font-medium">{mode === 'web2' ? 'My Cards' : 'My Wallets'}</span>
+          </button>
+          <button onClick={() => setActiveTab('Security')} className={cn("flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full", activeTab === 'Security' ? "bg-white/5 text-zinc-50 border border-white/5" : "text-zinc-400 hover:text-zinc-50 hover:bg-white/5")}>
+            <Shield size={20} />
+            <span className="font-medium">Security</span>
+          </button>
+
+          <p className="px-4 text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-4 mt-8">General</p>
+          <button onClick={() => setActiveTab('Settings')} className={cn("flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full", activeTab === 'Settings' ? "bg-white/5 text-zinc-50 border border-white/5" : "text-zinc-400 hover:text-zinc-50 hover:bg-white/5")}>
+            <Settings size={20} />
+            <span className="font-medium">Settings</span>
+          </button>
+          
+        </nav>
+
+        </aside>
+
+      {/* MAIN CONTENT */}
+      <main className="flex-1 flex flex-col h-screen overflow-hidden bg-[#09090B] pb-16 md:pb-0">
+        {/* HEADER */}
+        <header className="h-auto md:h-24 py-4 md:py-0 flex flex-col-reverse md:flex-row items-start md:items-center justify-between px-4 md:px-8 bg-zinc-950/80 backdrop-blur-xl border-b border-[#222226] sticky top-0 z-20 gap-4 md:gap-0">
+          <div>
+            <h1 className="text-xl md:text-2xl font-bold text-zinc-50">Hello, {firstName}</h1>
+            <p className="text-sm text-zinc-400 dark:text-zinc-400">Welcome to your financial dashboard</p>
+          </div>
+
+          <div className="flex items-center justify-between w-full md:w-auto gap-4">
+            {/* Context Switcher (Overview / Crypto) */}
+            <div className="bg-[#131316] p-1 rounded-xl flex border border-[#222226] flex-1 md:flex-initial">
+              <button 
+                onClick={() => setMode('web2')} 
+                className={cn("flex-1 md:flex-none px-4 md:px-5 py-2 rounded-lg text-sm font-semibold transition-all", mode === 'web2' ? "bg-white/10 text-zinc-50 shadow-md" : "text-zinc-400 dark:text-zinc-400 hover:text-zinc-200")}
+              >
+                Banking
+              </button>
+              <button 
+                onClick={() => setMode('web3')} 
+                className={cn("flex-1 md:flex-none px-4 md:px-5 py-2 rounded-lg text-sm font-semibold transition-all", mode === 'web3' ? "bg-white/10 text-zinc-50 shadow-md" : "text-zinc-400 dark:text-zinc-400 hover:text-zinc-200")}
+              >
+                Crypto
+              </button>
+            </div>
+
+            <div className="relative flex items-center gap-2">
+              <button 
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                className="w-11 h-11 bg-[#131316] border border-[#222226] rounded-xl flex items-center justify-center text-zinc-400 dark:text-zinc-400 hover:text-zinc-50 hover:bg-white/5 transition-colors relative flex-shrink-0"
+              >
+                {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+              </button>
+
+              <button 
+                onClick={() => setShowNotifications(!showNotifications)}
+                className="w-11 h-11 bg-[#131316] border border-[#222226] rounded-xl flex items-center justify-center text-zinc-400 dark:text-zinc-400 hover:text-zinc-50 hover:bg-white/5 transition-colors relative flex-shrink-0"
+              >
+                <Bell size={18} />
+                {unreadCount > 0 && (
+                  <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-[#D4FE44] rounded-full"></span>
+                )}
+              </button>
+              
+              {/* Notification Dropdown Overlay */}
+              {showNotifications && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowNotifications(false)}></div>
+                  <div className="absolute right-0 top-14 w-80 bg-[#131316]/95 backdrop-blur-xl border border-[#222226] rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.8)] z-50 overflow-hidden animate-in fade-in slide-in-from-top-4 duration-200">
+                    <div className="flex justify-between items-center p-4 border-b border-[#222226]">
+                      <h3 className="font-bold text-zinc-100 text-sm">Notifications</h3>
+                      <button 
+                        className="text-xs text-[#D4FE44] hover:underline cursor-pointer"
+                        onClick={() => setNotifications(notifications.map(n => ({...n, read: true})))}
+                      >
+                        Mark all as read
                       </button>
-                    ))}
+                    </div>
+                    <div className="max-h-80 overflow-y-auto custom-scrollbar">
+                      {notifications.length > 0 ? notifications.map(notif => (
+                        <div 
+                          key={notif.id} 
+                          onClick={() => {
+                            if (!notif.read) {
+                              setNotifications(notifications.map(n => n.id === notif.id ? {...n, read: true} : n));
+                            }
+                          }}
+                          className={cn("p-4 border-b border-[#222226]/50 transition-colors cursor-pointer", notif.read ? "opacity-60 hover:bg-white/5" : "bg-[#D4FE44]/5 hover:bg-[#D4FE44]/10")}
+                        >
+                          <div className="flex justify-between items-start mb-1">
+                             <p className={cn("text-sm", notif.read ? "text-zinc-300 font-medium" : "text-zinc-100 font-bold")}>{notif.title}</p>
+                             {!notif.read && <span className="w-2 h-2 rounded-full bg-[#D4FE44] mt-1.5 flex-shrink-0 shadow-[0_0_10px_rgba(212,254,68,0.5)]"></span>}
+                          </div>
+                          <p className="text-xs text-zinc-500">{notif.time}</p>
+                        </div>
+                      )) : (
+                        <div className="p-8 text-center text-zinc-500 text-sm">No notifications</div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </header>
+
+        
+        {activeTab === 'Dashboard' && (
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
+          
+          {loadingEntries ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-10 h-10 border-4 border-[#222226] border-t-[#D4FE44] rounded-full animate-spin"></div>
+                <p className="text-sm text-zinc-400 font-medium">Loading entries...</p>
+              </div>
+            </div>
+          ) : (<>
+          {/* TOP STATS */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
+            <div className="bg-[#131316] p-6 rounded-3xl border border-[#222226] shadow-sm flex flex-col justify-between group">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <p className="text-sm font-medium text-zinc-400 dark:text-zinc-400 mb-1">Total Income</p>
+                  <div className="h-9 flex items-center">
+                    <h3 className="text-3xl font-bold text-zinc-50 leading-none">${totalEarned.toLocaleString()}</h3>
                   </div>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {sorted.slice(0, 8).map(e => (
-                    <div key={e.id} className="tr-row" style={{ display: "flex", alignItems: "center", padding: "12px 16px", borderRadius: 20, transition: "all 0.2s" }}>
-                      <div style={{ width: 44, height: 44, borderRadius: 14, background: T.pill, display: "flex", alignItems: "center", justifyContent: "center", marginRight: 16, color: T.textSec }}>
-                        {e.mode === "web3" ? <Wallet size={18} /> : <Calendar size={18} />}
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 15, fontWeight: 700 }}>{e.project}</div>
-                        <div style={{ fontSize: 12, color: T.textMut }}>{e.date} • {e.givenTo || "General"}</div>
-                      </div>
-                      <div style={{ textAlign: "right", marginRight: 24 }}>
-                        <div style={{ fontSize: 15, fontWeight: 800, color: T.yellow }}>+{money(e.earned)}</div>
-                        <div style={{ fontSize: 11, color: T.textMut }}>Earned</div>
-                      </div>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button onClick={() => setEditEntry(e)} style={{ width: 36, height: 36, borderRadius: 10, background: T.pill, border: "none", cursor: "pointer", color: T.textSec, display: "flex", alignItems: "center", justifyContent: "center" }}><Edit2 size={14}/></button>
-                        <button onClick={() => setDelEntry(e)} style={{ width: 36, height: 36, borderRadius: 10, background: T.pill, border: "none", cursor: "pointer", color: T.red, display: "flex", alignItems: "center", justifyContent: "center" }}><Trash2 size={14}/></button>
-                      </div>
+                <div className="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+                  <ArrowUpRight size={20} />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-sm h-5">
+                <span className="text-emerald-400 font-semibold px-2 py-1 bg-emerald-500/10 rounded-md leading-none">+14.5%</span>
+                <span className="text-zinc-400 dark:text-zinc-500">vs last month</span>
+              </div>
+            </div>
+
+            <div className="bg-[#131316] p-6 rounded-3xl border border-[#222226] shadow-sm flex flex-col justify-between">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <p className="text-sm font-medium text-zinc-400 dark:text-zinc-400 mb-1">Total Expenses</p>
+                  <div className="h-9 flex items-center">
+                    <h3 className="text-3xl font-bold text-zinc-50 leading-none">${totalGiven.toLocaleString()}</h3>
+                  </div>
+                </div>
+                <div className="w-10 h-10 rounded-full bg-red-500/10 text-red-400 flex items-center justify-center">
+                  <ArrowDownRight size={20} />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-sm h-5">
+                <span className="text-red-400 font-semibold px-2 py-1 bg-red-500/10 rounded-md leading-none">+2.1%</span>
+                <span className="text-zinc-400 dark:text-zinc-500">vs last month</span>
+              </div>
+            </div>
+
+            <div className="bg-[#131316] p-6 rounded-3xl border border-[#222226] shadow-sm flex flex-col justify-between">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <p className="text-sm font-medium text-zinc-400 dark:text-zinc-400 mb-1">Net Savings</p>
+                  <div className="h-9 flex items-center">
+                    <h3 className="text-3xl font-bold text-zinc-50 leading-none">${totalSaved.toLocaleString()}</h3>
+                  </div>
+                </div>
+                <div className="w-10 h-10 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center">
+                  <Briefcase size={20} />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-sm h-5">
+                <span className="text-zinc-400 dark:text-zinc-400 font-semibold leading-none">{totalSaved > 0 ? 'On track' : 'Needs attention'}</span>
+              </div>
+            </div>
+
+            {/* GOAL CARD */}
+            <div className="bg-[#131316] p-6 rounded-3xl border border-[#222226] shadow-sm flex flex-col justify-between">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <p className="text-sm font-medium text-zinc-400 mb-1">{mode === 'web2' ? 'Financial Goal' : 'Crypto Goal'}</p>
+                    <div className="flex-1">
+                      {mode === 'web2' ? (
+                        <div className="flex items-center gap-1">
+                          <span className="text-3xl font-bold text-zinc-50 leading-none">
+                            {web2Goal.currency === 'USD' ? '$' : web2Goal.currency === 'EUR' ? '€' : web2Goal.currency === 'GBP' ? '£' : web2Goal.currency === 'INR' ? '₹' : '$'}
+                          </span>
+                          <input 
+                            type="number" 
+                            value={web2Goal.amount} 
+                            onChange={(e) => {
+                              const newGoal = {...web2Goal, amount: Number(e.target.value)};
+                              setWeb2Goal(newGoal);
+                              fetch("/api/goal", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ mode: "web2", amount: newGoal.amount, currency: newGoal.currency }),
+                              }).catch(err => console.error("[saveGoal web2] failed:", err));
+                            }}
+                            className="bg-transparent text-3xl font-bold text-zinc-50 w-28 outline-none border-b border-[#222226] focus:border-[#D4FE44] leading-none"
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <span className="text-3xl font-bold text-zinc-50 leading-none">
+                            {web3Goal.currency === 'ETH' ? 'Ξ' : web3Goal.currency === 'BTC' ? '₿' : '$'}
+                          </span>
+                          <input 
+                            type="number" 
+                            value={web3Goal.amount} 
+                            onChange={(e) => {
+                              const newGoal = {...web3Goal, amount: Number(e.target.value)};
+                              setWeb3Goal(newGoal);
+                              fetch("/api/goal", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ mode: "web3", amount: newGoal.amount, currency: newGoal.currency }),
+                              }).catch(err => console.error("[saveGoal web3] failed:", err));
+                            }}
+                            className="bg-transparent text-3xl font-bold text-zinc-50 w-20 outline-none border-b border-[#222226] focus:border-[#D4FE44] leading-none"
+                          />
+                        </div>
+                      )}
                     </div>
+                    <div className="mt-1">
+                      {mode === 'web2' ? (
+                        <select 
+                          value={web2Goal.currency}
+                          onChange={(e) => {
+                            const newGoal = {...web2Goal, currency: e.target.value};
+                            setWeb2Goal(newGoal);
+                            fetch("/api/goal", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ mode: "web2", amount: newGoal.amount, currency: newGoal.currency }),
+                            }).catch(err => console.error("[saveGoal web2 currency] failed:", err));
+                          }}
+                          className="bg-transparent text-xs text-zinc-500 font-semibold outline-none cursor-pointer w-auto"
+                        >
+                          <option value="USD">USD (US Dollar)</option>
+                          <option value="EUR">EUR (Euro)</option>
+                          <option value="GBP">GBP (British Pound)</option>
+                          <option value="INR">INR (Indian Rupee)</option>
+                        </select>
+                      ) : (
+                        <select 
+                          value={web3Goal.currency}
+                          onChange={(e) => {
+                            const newGoal = {...web3Goal, currency: e.target.value};
+                            setWeb3Goal(newGoal);
+                            fetch("/api/goal", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ mode: "web3", amount: newGoal.amount, currency: newGoal.currency }),
+                            }).catch(err => console.error("[saveGoal web3 currency] failed:", err));
+                          }}
+                          className="bg-transparent text-xs text-zinc-500 font-semibold outline-none cursor-pointer w-auto"
+                        >
+                          <option value="ETH">ETH (Ethereum)</option>
+                          <option value="BTC">BTC (Bitcoin)</option>
+                          <option value="USDC">USDC (USD Coin)</option>
+                          <option value="USDT">USDT (Tether)</option>
+                        </select>
+                      )}
+                    </div>
+                 </div>
+                <div className="w-10 h-10 rounded-full bg-purple-500/10 text-purple-400 flex items-center justify-center">
+                  <Shield size={20} />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-sm h-5">
+                <div className="w-full bg-[#222226] h-1.5 rounded-full overflow-hidden mt-1">
+                  <div className="bg-[#D4FE44] h-full" style={{width: `${Math.min((totalSaved / (mode === 'web2' ? web2Goal.amount : web3Goal.amount * 3000)) * 100, 100)}%`}}></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 md:gap-8">
+            
+            {/* CASH FLOW CHART */}
+            <div className="xl:col-span-2 flex flex-col relative h-[320px] md:h-[420px]">
+              <div className="flex justify-between items-end mb-6">
+                <div>
+                  <h2 className="text-lg font-bold text-zinc-100">Cash Flow Analytics</h2>
+                  <p className="text-sm text-zinc-400 dark:text-zinc-400">Click a bar to filter transactions by month</p>
+                </div>
+                <div className="relative">
+                  <select 
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(Number(e.target.value))}
+                    className="flex items-center gap-2 pl-9 pr-8 py-2 bg-[#131316] border border-[#222226] hover:bg-[#1C1C21] rounded-xl text-sm font-medium text-zinc-300 transition-colors appearance-none outline-none cursor-pointer"
+                  >
+                    <option value={2026}>2026 Year</option>
+                    <option value={2025}>2025 Year</option>
+                    <option value={2024}>2024 Year</option>
+                  </select>
+                  <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+                </div>
+              </div>
+
+              <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 flex-1 shadow-sm relative">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={monthlyData} barSize={24} onClick={(state: any) => {
+                    if (state && state.activePayload && state.activePayload.length > 0) {
+                      const clickedMonth = state.activePayload[0].payload.month;
+                      setSelectedMonth(prev => prev === clickedMonth ? null : clickedMonth);
+                    }
+                  }}>
+                    <XAxis 
+                      dataKey="month" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fontSize: 12, fill: '#71717A', fontWeight: 500 }}
+                      dy={15}
+                    />
+                    <Tooltip 
+                      cursor={{ fill: 'rgba(255,255,255,0.03)', rx: 8 }} 
+                      content={<CustomTooltip selectedYear={selectedYear} />}
+                    />
+                    <Bar dataKey="earned" stackId="a" radius={[0,0,6,6]} style={{ cursor: 'pointer' }}>
+                      {monthlyData.map((data, index) => <Cell key={`cell-${index}`} fill={BRAND} opacity={selectedMonth && selectedMonth !== data.month ? 0.15 : 1} stroke={selectedMonth === data.month ? "#fff" : "transparent"} strokeWidth={selectedMonth === data.month ? 2 : 0} />)}
+                    </Bar>
+                    <Bar dataKey="given" stackId="a" radius={[6,6,0,0]} style={{ cursor: 'pointer' }}>
+                      {monthlyData.map((data, index) => <Cell key={`given-${index}`} fill="#3F3F46" opacity={selectedMonth && selectedMonth !== data.month ? 0.15 : 1} stroke={selectedMonth === data.month ? "#fff" : "transparent"} strokeWidth={selectedMonth === data.month ? 2 : 0} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* TRANSACTIONS LIST */}
+            <div className="flex flex-col h-[400px] md:h-[420px] mt-8 xl:mt-0">
+              <div className="flex justify-between items-end mb-6 h-10">
+                <h2 className="text-lg font-bold text-zinc-100 flex items-center gap-2">
+                  Transactions
+                  {selectedMonth && (
+                    <span className="text-[#D4FE44] font-medium text-sm flex items-center bg-[#D4FE44]/10 px-2.5 py-0.5 rounded-md border border-[#D4FE44]/20">
+                      {selectedMonth}
+                      <button onClick={(e) => { e.stopPropagation(); setSelectedMonth(null); }} className="ml-1 hover:text-white"><X size={12}/></button>
+                    </span>
+                  )}
+                </h2>
+                <div className="flex gap-2 relative">
+                  <div className={cn("absolute right-full mr-2 top-1/2 -translate-y-1/2 transition-all duration-300 overflow-hidden", showSearch ? "w-48 opacity-100" : "w-0 opacity-0 pointer-events-none")}>
+                    <input 
+                      type="text" 
+                      placeholder="Search..." 
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full bg-[#1C1C21] border border-[#222226] rounded-xl px-3 py-1.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
+                    />
+                  </div>
+                  <button onClick={() => setShowSearch(!showSearch)} className={cn("p-2 border rounded-xl transition-colors min-w-[34px]", showSearch ? "bg-white/10 border-white/10 text-zinc-200" : "bg-[#131316] border-[#222226] hover:bg-[#1C1C21] text-zinc-400 hover:text-zinc-200")}>
+                     <Search size={16} />
+                  </button>
+                  <button onClick={handleExportCSV} title="Export CSV" className="p-2 border border-[#222226] bg-[#131316] hover:bg-[#1C1C21] text-zinc-400 hover:text-zinc-200 rounded-xl transition-colors min-w-[34px]">
+                     <Download size={16} />
+                  </button>
+                  {mode === 'web3' && (
+                    <button 
+                      onClick={() => setShowTransferToWeb2(true)} 
+                      title="Transfer to Web2"
+                      className="p-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 rounded-xl hover:scale-105 transition-all"
+                    >
+                       <ArrowRightLeft size={16} strokeWidth={2} />
+                    </button>
+                  )}
+                  <button onClick={() => setShowAdd(true)} className="p-2 bg-[#D4FE44] border border-[#D4FE44]/20 hover:bg-[#bceb29] rounded-xl text-black hover:scale-105 transition-all">
+                     <Plus size={16} strokeWidth={2.5} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-[#131316] border border-[#222226] rounded-3xl p-2 flex-1 shadow-sm overflow-hidden flex flex-col">
+                {/* Categories Row */}
+                <div className="flex gap-2 p-3 overflow-x-auto scrollbar-hide border-b border-[#222226]">
+                  {categories.map(cat => (
+                     <button 
+                       key={cat} 
+                       onClick={() => setFilter(cat)}
+                       className={cn(
+                         "px-4 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors",
+                         filter === cat ? "bg-white/10 text-zinc-50 border border-white/10" : "bg-transparent text-zinc-400 dark:text-zinc-400 hover:bg-white/5"
+                       )}
+                     >
+                       {cat}
+                     </button>
                   ))}
+                </div>
+
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1 mt-1">
+                  {filteredEntries.map(entry => {
+                    const isPositive = entry.earned > entry.given;
+                    const amount = isPositive ? entry.earned : entry.given;
+                    return (
+                      <div key={entry.id} className="flex items-center justify-between p-3 rounded-2xl hover:bg-white/5 transition-colors group cursor-pointer border border-transparent hover:border-white/5">
+                        <div className="flex items-center gap-4">
+                          <div className={cn(
+                            "w-11 h-11 rounded-xl flex items-center justify-center border",
+                            isPositive ? "bg-[#D4FE44]/10 text-[#D4FE44] border-[#D4FE44]/20" : "bg-zinc-800 text-zinc-400 dark:text-zinc-400 border-[#222226]"
+                          )}>
+                             {isPositive ? <ArrowDownRight size={18} /> : <ArrowUpRight size={18} />}
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-zinc-100">{entry.project}</h4>
+                            <p className="text-xs text-zinc-400 dark:text-zinc-500 font-medium">{entry.date} • {entry.givenTo}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className={cn("text-sm font-bold", isPositive ? "text-[#D4FE44]" : "text-zinc-100")}>
+                            {isPositive ? "+" : "-"}${amount.toLocaleString()}
+                          </p>
+                          <div className="flex justify-end gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button className="text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:text-zinc-300"><Edit2 size={12} /></button>
+                            <button onClick={() => setDeletingTransactionId(entry.id)} className="text-zinc-400 dark:text-zinc-500 hover:text-red-400"><Trash2 size={12} /></button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                  
+                  {filteredEntries.length === 0 && (
+                    <div className="h-full flex flex-col items-center justify-center text-zinc-400 dark:text-zinc-500">
+                       <HelpCircle size={32} className="mb-2 opacity-50" />
+                       <span className="text-sm font-medium">No transactions found</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+          </div>
+          </>)}
+        </div>
+        )}
+        
+        {activeTab === 'Analytics' && (
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
+             <div className="mb-8">
+                <h2 className="text-2xl font-bold text-zinc-100">{mode === 'web2' ? 'Financial Analytics' : 'Crypto Analytics'}</h2>
+                <p className="text-sm text-zinc-400">Detailed performance metrics and category breakdowns.</p>
+             </div>
+             
+             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                <div className="lg:col-span-2 bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm min-h-[400px] flex flex-col">
+                   <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-lg font-bold text-zinc-100">Income and Expense Analytics</h3>
+                      <button className="text-xs font-semibold px-3 py-1.5 bg-[#1C1C21] rounded-lg text-zinc-300">Last 6 Months</button>
+                   </div>
+                   <div className="flex-1 w-full relative">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={monthlyData} margin={{top: 10, right: 10, left: -20, bottom: 0}}>
+                          <defs>
+                            <linearGradient id="colorEarned" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#D4FE44" stopOpacity={0.3}/>
+                              <stop offset="95%" stopColor="#D4FE44" stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#222226" vertical={false} />
+                          <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#71717A' }} dy={10} />
+                          <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#71717A' }} tickFormatter={(val) => `$${val}`} />
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: '#131316', borderRadius: 16, border: '1px solid rgba(255,255,255,0.1)', color: '#FAFAFA' }}
+                            itemStyle={{ fontWeight: '500' }}
+                          />
+                          <Area type="monotone" dataKey="earned" stroke="#D4FE44" strokeWidth={3} fillOpacity={1} fill="url(#colorEarned)" />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                   </div>
+                </div>
+                
+                <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm flex flex-col min-h-[400px]">
+                   <h3 className="text-lg font-bold text-zinc-100 mb-6">Spending categories</h3>
+                   <div className="space-y-6 flex-1">
+                      {[
+                        { title: 'Housing & Rent', amount: 2400, color: 'bg-emerald-400', max: 3000 },
+                        { title: 'Food & Dining', amount: 850, color: 'bg-blue-400', max: 3000 },
+                        { title: 'Transportation', amount: 420, color: 'bg-purple-400', max: 3000 },
+                        { title: 'Subscriptions', amount: 140, color: 'bg-[#D4FE44]', max: 3000 },
+                        { title: 'Entertainment', amount: 320, color: 'bg-pink-400', max: 3000 }
+                      ].map((item, i) => (
+                         <div key={i}>
+                            <div className="flex justify-between items-end mb-2">
+                               <span className="text-sm font-semibold text-zinc-300">{item.title}</span>
+                               <span className="text-sm font-bold text-zinc-100">${item.amount}</span>
+                            </div>
+                            <div className="w-full bg-[#222226] h-2 rounded-full overflow-hidden">
+                               <div className={cn("h-full rounded-full", item.color)} style={{ width: `${(item.amount/item.max)*100}%` }}></div>
+                            </div>
+                         </div>
+                      ))}
+                   </div>
+                </div>
+             </div>
+          </div>
+        )}
+
+        {activeTab === 'Cards' && (
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
+            {mode === 'web2' ? (
+              <div className="max-w-5xl mx-auto space-y-6 pb-20 md:pb-0">
+                <div className="flex justify-between items-end mb-8">
+                  <div>
+                    <h2 className="text-2xl font-bold text-zinc-100">My Cards</h2>
+                    <p className="text-sm text-zinc-400">Manage your active physical and virtual cards.</p>
+                  </div>
+                  <button className="px-4 py-2 bg-[#D4FE44] text-[#0A0A0A] rounded-xl font-bold text-sm hover:bg-[#bceb29] transition-all flex items-center gap-2">
+                    <Plus size={16}/> New Card
+                  </button>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                   {/* Card 1 */}
+                   <div className="bg-gradient-to-tr from-[#D4FE44] to-[#A3D121] rounded-3xl p-6 shadow-lg relative overflow-hidden h-56 flex flex-col justify-between group">
+                      <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/20 rounded-full blur-2xl group-hover:bg-white/30 transition-colors"></div>
+                      <div className="flex justify-between items-start z-10 relative">
+                        <span className="text-[#0A0A0A] font-bold text-lg tracking-tight">finview Premium</span>
+                        <Monitor size={24} className="text-[#0A0A0A] opacity-80" />
+                      </div>
+                      <div className="z-10 relative">
+                        <div className="text-[#0A0A0A]/80 font-semibold tracking-widest text-xl font-mono mb-2">**** **** **** 4209</div>
+                        <div className="flex justify-between items-end">
+                          <div>
+                             <p className="text-[#0A0A0A]/60 text-[10px] font-bold uppercase tracking-wider">Cardholder</p>
+                             <p className="text-[#0A0A0A] font-bold text-sm">Annette Black</p>
+                          </div>
+                          <div>
+                             <p className="text-[#0A0A0A]/60 text-[10px] font-bold uppercase tracking-wider">Expires</p>
+                             <p className="text-[#0A0A0A] font-bold text-sm">12/28</p>
+                          </div>
+                        </div>
+                      </div>
+                   </div>
+
+                   {/* Card 2 */}
+                   <div className="bg-zinc-800 rounded-3xl p-6 shadow-lg relative overflow-hidden h-56 flex flex-col justify-between border border-[#222226] group">
+                      <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-white/5 rounded-full blur-2xl group-hover:bg-white/10 transition-colors"></div>
+                      <div className="flex justify-between items-start z-10 relative">
+                        <span className="text-zinc-100 font-bold text-lg tracking-tight">Virtual Card</span>
+                        <CreditCard size={24} className="text-zinc-400" />
+                      </div>
+                      <div className="z-10 relative">
+                        <div className="text-zinc-300 font-semibold tracking-widest text-xl font-mono mb-2">**** **** **** 8831</div>
+                        <div className="flex justify-between items-end">
+                          <div>
+                             <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-wider">Cardholder</p>
+                             <p className="text-zinc-100 font-bold text-sm">Annette Black</p>
+                          </div>
+                          <div>
+                             <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-wider">Expires</p>
+                             <p className="text-zinc-100 font-bold text-sm">05/25</p>
+                          </div>
+                        </div>
+                      </div>
+                   </div>
+                </div>
+
+                <h3 className="text-lg font-bold text-zinc-100 mt-10 mb-6">Card Settings</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                   <div className="bg-[#131316] border border-[#222226] rounded-2xl p-4 flex items-center gap-4 cursor-pointer hover:bg-[#1C1C21] transition-colors">
+                     <div className="w-10 h-10 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center"><Snowflake size={18}/></div>
+                     <div><p className="font-bold text-zinc-100 text-sm">Freeze Card</p><p className="text-xs text-zinc-500">Temporarily lock</p></div>
+                   </div>
+                   <div className="bg-[#131316] border border-[#222226] rounded-2xl p-4 flex items-center gap-4 cursor-pointer hover:bg-[#1C1C21] transition-colors">
+                     <div className="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center"><Activity size={18}/></div>
+                     <div><p className="font-bold text-zinc-100 text-sm">Spending Limits</p><p className="text-xs text-zinc-500">Set daily limits</p></div>
+                   </div>
+                   <div className="bg-[#131316] border border-[#222226] rounded-2xl p-4 flex items-center gap-4 cursor-pointer hover:bg-[#1C1C21] transition-colors">
+                     <div className="w-10 h-10 rounded-full bg-amber-500/10 text-amber-400 flex items-center justify-center"><EyeOff size={18}/></div>
+                     <div><p className="font-bold text-zinc-100 text-sm">Show Details</p><p className="text-xs text-zinc-500">View CVV and expiry</p></div>
+                   </div>
+                </div>
+              </div>
+            ) : (
+              <div className="max-w-5xl mx-auto space-y-6 pb-20 md:pb-0">
+                <div className="flex justify-between items-end mb-8">
+                  <div>
+                    <h2 className="text-2xl font-bold text-zinc-100">My Wallets</h2>
+                    <p className="text-sm text-zinc-400">Manage your connected hardware wallets and token balances.</p>
+                  </div>
+                  <button className="px-4 py-2 bg-[#D4FE44] text-[#0A0A0A] rounded-xl font-bold text-sm hover:bg-[#bceb29] transition-all flex items-center gap-2">
+                    <Plus size={16}/> Connect Wallet
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Wallet 1 */}
+                  <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm flex flex-col group hover:border-[#D4FE44]/30 transition-colors">
+                    <div className="flex justify-between items-start mb-6">
+                       <div className="flex items-center gap-3">
+                         <div className="w-10 h-10 rounded-full bg-[#1C1C21] flex items-center justify-center"><Wallet size={18} className="text-zinc-300"/></div>
+                         <div>
+                           <h3 className="font-bold text-zinc-100">MetaMask</h3>
+                           <p className="text-xs text-zinc-500 font-mono">0x1A4...bd92</p>
+                         </div>
+                       </div>
+                       <button className="w-8 h-8 rounded-full bg-[#1C1C21] flex items-center justify-center text-zinc-400 hover:text-white"><ExternalLink size={14}/></button>
+                    </div>
+                    <div className="mb-4">
+                      <p className="text-xs font-semibold text-zinc-400 mb-1 tracking-wider uppercase">Total Balance</p>
+                      <p className="text-2xl font-bold text-zinc-100">$12,450.00</p>
+                    </div>
+                    <div className="space-y-3 pt-4 border-t border-[#222226]">
+                       <div className="flex justify-between items-center">
+                         <div className="flex items-center gap-2"><span className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-[10px] font-bold">ETH</span> <span className="text-sm font-semibold text-zinc-300">Ethereum</span></div>
+                         <div className="text-sm font-bold text-zinc-100">3.24 ETH</div>
+                       </div>
+                       <div className="flex justify-between items-center">
+                         <div className="flex items-center gap-2"><span className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-[10px] font-bold">USDC</span> <span className="text-sm font-semibold text-zinc-300">USD Coin</span></div>
+                         <div className="text-sm font-bold text-zinc-100">4,500 USDC</div>
+                       </div>
+                    </div>
+                  </div>
+
+                  {/* Wallet 2 */}
+                  <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm flex flex-col group hover:border-[#D4FE44]/30 transition-colors">
+                    <div className="flex justify-between items-start mb-6">
+                       <div className="flex items-center gap-3">
+                         <div className="w-10 h-10 rounded-full bg-[#1C1C21] flex items-center justify-center"><Wallet size={18} className="text-zinc-300"/></div>
+                         <div>
+                           <h3 className="font-bold text-zinc-100">Phantom</h3>
+                           <p className="text-xs text-zinc-500 font-mono">7xQa...9yZ1</p>
+                         </div>
+                       </div>
+                       <button className="w-8 h-8 rounded-full bg-[#1C1C21] flex items-center justify-center text-zinc-400 hover:text-white"><ExternalLink size={14}/></button>
+                    </div>
+                    <div className="mb-4">
+                      <p className="text-xs font-semibold text-zinc-400 mb-1 tracking-wider uppercase">Total Balance</p>
+                      <p className="text-2xl font-bold text-zinc-100">$8,230.50</p>
+                    </div>
+                    <div className="space-y-3 pt-4 border-t border-[#222226]">
+                       <div className="flex justify-between items-center">
+                         <div className="flex items-center gap-2"><span className="w-6 h-6 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center text-[10px] font-bold">SOL</span> <span className="text-sm font-semibold text-zinc-300">Solana</span></div>
+                         <div className="text-sm font-bold text-zinc-100">145.2 SOL</div>
+                       </div>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'Security' && (
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
+            <div className="max-w-4xl mx-auto space-y-6 pb-20 md:pb-0">
+              <div className="mb-8">
+                <h2 className="text-2xl font-bold text-zinc-100">Security Center</h2>
+                <p className="text-sm text-zinc-400">Protect your account with multi-factor authentication and monitor active sessions.</p>
+              </div>
+
+              {/* 2FA Card */}
+              <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6 group hover:border-[#D4FE44]/30 transition-colors">
+                <div className="flex gap-4 items-center">
+                  <div className="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center flex-shrink-0">
+                    <Smartphone size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-zinc-100">Two-Factor Authentication (2FA)</h3>
+                    <p className="text-sm text-zinc-400">Extra layer of security via mobile Authenticator app.</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 w-full md:w-auto">
+                  <span className="text-sm font-semibold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20 flex items-center gap-1.5"><CheckCircle2 size={14}/> Enabled</span>
+                  <button className="px-4 py-2 border border-[#222226] text-zinc-300 rounded-xl font-medium text-sm hover:bg-[#1C1C21] hover:text-zinc-50 transition-colors ml-auto md:ml-0">Manage</button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Change Passcode */}
+                <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm flex flex-col">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 rounded-full bg-[#1C1C21] text-zinc-400 flex items-center justify-center">
+                       <Key size={18} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-zinc-100">Change Dashboard Passcode</h3>
+                      <p className="text-xs text-zinc-500">Update your 6-digit access code.</p>
+                    </div>
+                  </div>
+                  <div className="space-y-4 flex-1">
+                    {securityPassMessage.text && (
+                      <div className={cn("px-3 py-2 rounded-lg text-xs font-medium border", securityPassMessage.type === 'error' ? "bg-red-500/10 text-red-500 border-red-500/20" : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20")}>
+                        {securityPassMessage.text}
+                      </div>
+                    )}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-zinc-400">Current Passcode</label>
+                      <input 
+                        type="password" 
+                        maxLength={6}
+                        value={securityCurrentPass}
+                        onChange={(e) => setSecurityCurrentPass(e.target.value)}
+                        placeholder="••••••" 
+                        className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors font-mono tracking-widest placeholder:tracking-normal" 
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-zinc-400">New Passcode (6 digits)</label>
+                      <input 
+                        type="password" 
+                        maxLength={6}
+                        value={securityNewPass}
+                        onChange={(e) => setSecurityNewPass(e.target.value)}
+                        placeholder="••••••" 
+                        className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors font-mono tracking-widest placeholder:tracking-normal" 
+                      />
+                    </div>
+                  </div>
+                  <div className="pt-6">
+                    <button 
+                      onClick={() => {
+                        if (securityCurrentPass !== appPasscode) {
+                          setSecurityPassMessage({ text: "Current passcode is incorrect.", type: "error" });
+                          return;
+                        }
+                        if (securityNewPass.length !== 6 || !/^\d+$/.test(securityNewPass)) {
+                          setSecurityPassMessage({ text: "New passcode must be exactly 6 digits.", type: "error" });
+                          return;
+                        }
+                        setAppPasscode(securityNewPass);
+                        setSecurityCurrentPass("");
+                        setSecurityNewPass("");
+                        setSecurityPassMessage({ text: "Passcode updated successfully.", type: "success" });
+                        setTimeout(() => setSecurityPassMessage({ text: "", type: "" }), 3000);
+                      }}
+                      disabled={!securityCurrentPass || !securityNewPass}
+                      className="w-full py-3 bg-[#D4FE44] text-[#0A0A0A] hover:bg-[#bceb29] disabled:opacity-50 disabled:hover:bg-[#D4FE44] rounded-xl font-bold text-sm transition-colors"
+                    >
+                      Update Passcode
+                    </button>
+                  </div>
+                </div>
+
+                {/* Active Sessions */}
+                <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm flex flex-col">
+                   <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 rounded-full bg-[#1C1C21] text-zinc-400 flex items-center justify-center">
+                       <Globe size={18} />
+                    </div>
+                    <h3 className="text-lg font-bold text-zinc-100">Active Sessions</h3>
+                  </div>
+                  <div className="space-y-4 flex-1">
+                    <div className="flex items-center justify-between p-4 bg-[#09090B] border border-[#222226] rounded-2xl">
+                      <div className="flex items-center gap-3">
+                        <Monitor size={18} className="text-[#D4FE44]" />
+                        <div>
+                          <p className="text-sm font-bold text-zinc-100">MacBook Pro (Chrome)</p>
+                          <p className="text-xs text-zinc-500 flex items-center gap-1 mt-0.5"><MapPin size={10}/> San Francisco, USA</p>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-bold text-[#D4FE44] uppercase tracking-wider bg-[#D4FE44]/10 px-2 py-1 rounded-md">Active</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between p-4 bg-[#09090B] border border-[#222226] rounded-2xl opacity-60 hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-3">
+                        <Smartphone size={18} className="text-zinc-400" />
+                        <div>
+                          <p className="text-sm font-bold text-zinc-100">iPhone 14 Pro (App)</p>
+                          <p className="text-xs text-zinc-500 flex items-center gap-1 mt-0.5"><MapPin size={10}/> San Francisco, USA</p>
+                        </div>
+                      </div>
+                      <button className="text-xs font-semibold text-zinc-400 hover:text-red-400">Revoke</button>
+                    </div>
+                  </div>
+                  <div className="pt-4 text-center">
+                     <button className="text-xs font-semibold text-[#D4FE44] hover:underline">Log out all other devices</button>
+                  </div>
                 </div>
               </div>
 
             </div>
-          </main>
-        </div>
+          </div>
+        )}
 
-        {addModal && <EntryModal isWeb3={mode === "web3"} T={T} onSave={e => { save(e); setAddModal(false); }} onClose={() => setAddModal(false)} />}
-        {editEntry && <EntryModal isWeb3={mode === "web3"} T={T} initial={editEntry} onSave={e => { save(e); setEditEntry(null); }} onClose={() => setEditEntry(null)} />}
-        {delEntry && <DeleteModal entry={delEntry} T={T} onConfirm={() => { remove(delEntry.id); setDelEntry(null); }} onClose={() => setDelEntry(null)} />}
-        {syncModal && <CloudSyncModal T={T} onClose={() => setSyncModal(false)} />}
-      </PageTransition>
-    </MasterPasscodeGuard>
+        {activeTab === 'Settings' && (
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
+            <div className="max-w-4xl mx-auto space-y-6 pb-20 md:pb-0">
+              <div className="mb-8">
+                <h2 className="text-2xl font-bold text-zinc-100">Account Settings</h2>
+                <p className="text-sm text-zinc-400">Manage your personal profile, regional preferences, and subscription details.</p>
+              </div>
+              
+              {/* Profile Card */}
+              <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm">
+                <h3 className="text-lg font-bold text-zinc-100 mb-6">Profile Information</h3>
+                <div className="flex flex-col md:flex-row gap-8">
+                  <div className="flex flex-col items-center gap-3">
+                    <div 
+                      className="relative w-24 h-24 rounded-full border-2 border-white/10 overflow-hidden group cursor-pointer"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Image src={profilePic} alt="Avatar" fill className="object-cover transition-transform group-hover:scale-105" referrerPolicy="no-referrer" />
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Camera size={24} className="text-white" />
+                      </div>
+                    </div>
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      className="hidden" 
+                      accept="image/*" 
+                      onChange={handleProfileImageChange} 
+                    />
+                    <button 
+                      className="text-xs font-semibold text-[#D4FE44] hover:underline"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      Change Picture
+                    </button>
+                  </div>
+                  <div className="flex-1 space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-zinc-400">First Name</label>
+                        <input 
+                          type="text" 
+                          value={firstName} 
+                          onChange={(e) => setFirstName(e.target.value)}
+                          className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors" 
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-zinc-400">Last Name</label>
+                        <input 
+                          type="text" 
+                          value={lastName} 
+                          onChange={(e) => setLastName(e.target.value)}
+                          className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors" 
+                        />
+                      </div>
+                      <div className="space-y-1.5 md:col-span-2">
+                        <label className="text-xs font-medium text-zinc-400">Email Address</label>
+                        <div className="relative">
+                          <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" />
+                          <input 
+                            type="email" 
+                            value={email} 
+                            onChange={(e) => setEmail(e.target.value)}
+                            className="w-full bg-[#09090B] border border-[#222226] rounded-xl pl-10 pr-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors" 
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="pt-4">
+                      <button 
+                        onClick={handleSaveChanges}
+                        disabled={isSaving}
+                        className={cn("px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-[0_5px_20px_rgba(212,254,68,0.15)] focus:outline-none flex items-center justify-center gap-2", 
+                          isSaving ? "bg-[#D4FE44]/70 text-[#0A0A0A]/70 cursor-not-allowed" : "bg-[#D4FE44] text-[#0A0A0A] hover:bg-[#bceb29] hover:-translate-y-0.5"
+                        )}
+                      >
+                         {isSaving ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-[#0A0A0A]/50 border-t-[#0A0A0A] rounded-full animate-spin"></div>
+                              Saving...
+                            </>
+                         ) : "Save Changes"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Connected Accounts */}
+              <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-lg font-bold text-zinc-100">Connected Institutions</h3>
+                  <button className="text-xs font-semibold text-[#D4FE44] hover:underline flex items-center gap-1"><Plus size={14}/> Add New</button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-4 border border-[#222226] bg-[#09090B] rounded-2xl flex justify-between items-center group">
+                     <div className="flex items-center gap-3">
+                       <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500">
+                         <Briefcase size={18} />
+                       </div>
+                       <div>
+                         <p className="text-sm font-bold text-zinc-100">Chase Bank</p>
+                         <p className="text-xs text-zinc-500 mt-0.5">Checking •••• 4209</p>
+                       </div>
+                     </div>
+                     <button className="px-3 py-1.5 text-xs font-semibold text-zinc-400 border border-[#222226] rounded-lg group-hover:text-red-400 group-hover:border-red-400/30 transition-colors">Disconnect</button>
+                  </div>
+                  <div className="p-4 border border-[#222226] bg-[#09090B] rounded-2xl flex justify-between items-center group">
+                     <div className="flex items-center gap-3">
+                       <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-500">
+                         <Zap size={18} />
+                       </div>
+                       <div>
+                         <p className="text-sm font-bold text-zinc-100">Coinbase</p>
+                         <p className="text-xs text-zinc-500 mt-0.5">Crypto Exchange</p>
+                       </div>
+                     </div>
+                     <button className="px-3 py-1.5 text-xs font-semibold text-zinc-400 border border-[#222226] rounded-lg group-hover:text-red-400 group-hover:border-red-400/30 transition-colors">Disconnect</button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        )}
+      </main>
+        
+
+      {/* RIGHT SIDEBAR / QUICK ACTIONS PANEL */}
+      <aside className="w-[320px] bg-[#09090B] border-l border-[#222226] hidden xl:flex flex-col flex-shrink-0 relative">
+        <div className="p-8 flex flex-col h-full overflow-y-auto custom-scrollbar">
+          
+          {/* User Section */}
+          <div className="flex items-center justify-between mb-10">
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <div className="w-12 h-12 rounded-full border-2 border-white/10 overflow-hidden">
+                  <Image src={profilePic} alt="Avatar" width={48} height={48} className="object-cover" referrerPolicy="no-referrer" />
+                </div>
+                <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-[#131316] rounded-full"></span>
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-zinc-100">{firstName} {lastName ? `${lastName[0]}.` : ''}</h3>
+                <p className="text-xs text-zinc-400 dark:text-zinc-500 font-medium">Premium Member</p>
+              </div>
+            </div>
+            <button 
+              onClick={() => setActiveTab('Settings')}
+              className="w-10 h-10 rounded-full bg-[#131316] border border-[#222226] flex items-center justify-center text-zinc-400 dark:text-zinc-400 hover:text-zinc-50 transition-colors"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+
+          {/* VIRTUAL CARD */}
+          <div className="mb-8">
+            <div className="flex justify-between items-end mb-4">
+               <h3 className="text-sm font-bold text-zinc-100">{mode === 'web2' ? 'My Cards' : 'My Wallets'}</h3>
+               <button 
+                onClick={() => setActiveTab('Cards')}
+                className="text-xs font-semibold text-[#D4FE44] hover:underline cursor-pointer"
+               >
+                 View All
+               </button>
+            </div>
+            
+            <div className="bg-gradient-to-tr from-[#D4FE44] to-[#A3D121] rounded-3xl p-6 shadow-[0_20px_40px_rgba(212,254,68,0.15)] relative overflow-hidden group hover:scale-[1.02] transition-transform cursor-pointer">
+              {/* Glass Shapes */}
+              <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/20 rounded-full blur-2xl group-hover:bg-white/30 transition-colors"></div>
+              <div className="absolute -left-8 -bottom-8 w-24 h-24 bg-black/10 rounded-full blur-xl"></div>
+              
+              <div className="relative z-10 flex flex-col h-full justify-between gap-8">
+                <div className="flex justify-between items-start">
+                  <span className="text-[#0A0A0A] font-bold text-lg tracking-tight">finview</span>
+                  <Monitor size={24} className="text-[#0A0A0A] opacity-80" />
+                </div>
+                
+                <div>
+                  <p className="text-[#0A0A0A]/60 text-xs font-bold uppercase tracking-wider mb-1">Available Balance</p>
+                  <h3 className="text-[#0A0A0A] text-3xl font-extrabold tracking-tight">${netIncome.toLocaleString()}</h3>
+                </div>
+                
+                <div className="flex justify-between items-end">
+                  <div className="text-[#0A0A0A]/80 font-semibold tracking-widest text-sm font-mono">
+                    **** **** **** 4209
+                  </div>
+                  <div className="text-[#0A0A0A] font-bold text-sm">
+                    12/28
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex-1" />
+
+          {/* QUICK ACTIONS */}
+          <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 mt-8 force-dark-card shadow-2xl">
+            <h3 className="text-sm font-bold text-zinc-100 mb-6">Global Activity</h3>
+            
+            <div className="space-y-4">
+              <button 
+                onClick={() => setShowAdd(true)}
+                className="w-full flex justify-between items-center bg-[#D4FE44] text-[#0A0A0A] p-4 rounded-2xl font-bold text-sm shadow-[0_10px_30px_rgba(212,254,68,0.2)] hover:-translate-y-1 transition-all"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-1.5 bg-[#0A0A0A]/10 rounded-lg">
+                    <Plus size={16} strokeWidth={2.5} />
+                  </div>
+                  New Transaction
+                </div>
+                <ChevronRight size={18} className="opacity-50" />
+              </button>
+              
+              <button 
+                onClick={() => setShowTransfer(true)}
+                className="w-full flex justify-between items-center text-zinc-200 border border-white/5 bg-white/5 hover:bg-white/10 p-4 rounded-2xl font-semibold text-sm transition-all"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-1.5 bg-white/10 rounded-lg text-zinc-300">
+                    <ArrowUpRight size={16} />
+                  </div>
+                  Transfer Funds
+                </div>
+                <span className="text-xs font-mono text-[#D4FE44] bg-[#D4FE44]/10 px-2.5 py-1 rounded-md border border-[#D4FE44]/20 items-center justify-center">Bank</span>
+              </button>
+
+              <button 
+                onClick={() => setShowTransferToWeb2(true)}
+                className="w-full flex justify-between items-center text-zinc-200 border border-emerald-500/10 bg-emerald-500/5 hover:bg-emerald-500/10 p-4 rounded-2xl font-semibold text-sm transition-all"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-1.5 bg-emerald-500/20 rounded-lg text-emerald-400">
+                    <ArrowRightLeft size={16} />
+                  </div>
+                  Transfer Crypto
+                </div>
+                <span className="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/20 items-center justify-center">Web3</span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </aside>
+
+      {/* MOBILE BOTTOM NAV */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#131316] border-t border-[#222226] z-50 flex items-center justify-around px-4 pb-safe shadow-[0_-10px_40px_rgba(0,0,0,0.8)]">
+         <button onClick={() => setActiveTab('Dashboard')} className={cn("p-2 flex flex-col items-center gap-1 transition-colors", activeTab === 'Dashboard' ? "text-[#D4FE44]" : "text-zinc-500")}><Home size={20} /><span className="text-[10px] font-semibold">Home</span></button>
+         <button onClick={() => setActiveTab('Analytics')} className={cn("p-2 flex flex-col items-center gap-1 transition-colors", activeTab === 'Analytics' ? "text-[#D4FE44]" : "text-zinc-500")}><PieChart size={20} /><span className="text-[10px] font-semibold">Stats</span></button>
+         <button onClick={() => setShowAdd(true)} className="p-3 bg-[#D4FE44] rounded-full text-black -mt-6 border-4 border-[#09090B] shadow-[0_0_20px_rgba(212,254,68,0.2)] hover:scale-105 transition-transform"><Plus size={24} strokeWidth={2.5}/></button>
+         <button onClick={() => setActiveTab('Cards')} className={cn("p-2 flex flex-col items-center gap-1 transition-colors", activeTab === 'Cards' ? "text-[#D4FE44]" : "text-zinc-500")}><CreditCard size={20} /><span className="text-[10px] font-semibold">Cards</span></button>
+         <button onClick={() => setActiveTab('Settings')} className={cn("p-2 flex flex-col items-center gap-1 transition-colors", activeTab === 'Settings' ? "text-[#D4FE44]" : "text-zinc-500")}><Settings size={20} /><span className="text-[10px] font-semibold">Profile</span></button>
+      </div>
+
+      {/* MODALS */}
+      {showAdd && <EntryModal onClose={() => setShowAdd(false)} onSave={async (entryData) => {
+        const newEntry = { ...entryData, id: Math.random().toString(36).substr(2, 9), mode };
+        setEntries(prev => [newEntry, ...prev]);
+        setShowAdd(false);
+        try {
+          await fetch("/api/entries", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(newEntry),
+          });
+        } catch (err) {
+          console.error("[addEntry] failed:", err);
+        }
+      }} />}
+      
+      {showTransfer && <TransferModal onClose={() => setShowTransfer(false)} onTransfer={() => {
+        // Here you would optimally alter your transaction state logic directly
+        console.log("Transfer processed!")
+      }} />}
+      
+      {showTransferToWeb2 && <TransferToWeb2Modal onClose={() => setShowTransferToWeb2(false)} onTransfer={(amount) => {
+        setEntries(prev => [
+            {
+                id: Math.random().toString(36).substr(2, 9),
+                date: new Date().toISOString().split('T')[0],
+                project: "Off-Ramp to Bank",
+                earned: 0,
+                saved: 0,
+                given: amount,
+                givenTo: "Checking Account",
+                mode: "web3"
+            },
+            ...prev
+        ]);
+        console.log(`Transferred $${amount} to Web2!`);
+      }} />}
+      
+      {deletingTransactionId && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#131316] border border-[#222226] max-w-sm w-full rounded-3xl p-6 shadow-2xl relative text-center">
+            <Trash2 size={40} className="text-red-500 mx-auto mb-4 opacity-90" strokeWidth={1.5} />
+            <h3 className="text-xl font-bold text-zinc-100 mb-2">Delete Transaction?</h3>
+            <p className="text-zinc-400 text-sm mb-8">This action cannot be undone. Are you sure you want to permanently delete this transaction?</p>
+            <div className="flex gap-4">
+              <button 
+                onClick={() => setDeletingTransactionId(null)}
+                className="flex-1 py-3 bg-[#1C1C21] hover:bg-[#222226] text-zinc-300 rounded-xl font-semibold text-sm border border-[#2A2A30] transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={async () => {
+                  const id = deletingTransactionId;
+                  setEntries(prev => prev.filter(e => e.id !== id));
+                  setDeletingTransactionId(null);
+                  try {
+                    await fetch(`/api/entries/${id}`, { method: "DELETE" });
+                  } catch (err) {
+                    console.error("[delete] failed:", err);
+                  }
+                }}
+                className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold text-sm shadow-[0_5px_20px_rgba(239,68,68,0.3)] transition-all"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
