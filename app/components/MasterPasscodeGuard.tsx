@@ -193,7 +193,7 @@ export function MasterPasscodeGuard({ isDark, children }: { isDark: boolean; chi
             </div>
           )}
           {!error && filled === 0 && (
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.18)" }}>Default: 888888</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.18)" }}>Default: 123456</div>
           )}
         </div>
       </div>

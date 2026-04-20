@@ -44,7 +44,7 @@ const AppSettingsContext = createContext<AppSettingsContextType>({
   setIsDark: () => {},
 });
 
-const DEFAULT_PASSCODE = "888888";
+const DEFAULT_PASSCODE = "123456";
 const CURRENCY_SYMBOLS: Record<Currency, string> = {
   USD: "$",
   EUR: "€",

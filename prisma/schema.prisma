@@ -1,18 +1,416 @@
-// prisma/schema.prisma
-// ⚠️  Prisma 7 — connection URLs live in prisma.config.ts, NOT here.
-
 generator client {
-  provider        = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
-  // No url / directUrl — those moved to prisma.config.ts in Prisma 7
 }
 
-// ─────────────────────────────────────────────
-// ENUMS
-// ─────────────────────────────────────────────
+model User {
+  id          String       @id @default(cuid())
+  email       String       @unique
+  name        String?
+  avatarUrl   String?
+  timezone    String       @default("UTC")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  deletedAt   DateTime?
+  accounts    Account[]
+  auditLogs   AuditLog[]
+  categories  Category[]
+  invoices    Invoice[]
+  payees      Payee[]
+  spendGroups SpendGroup[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model Account {
+  id               String        @id @default(cuid())
+  userId           String
+  name             String
+  type             AccountType
+  currency         CurrencyCode  @default(USD)
+  currentBalance   Decimal       @default(0) @db.Decimal(20, 8)
+  availableBalance Decimal       @default(0) @db.Decimal(20, 8)
+  creditLimit      Decimal?      @db.Decimal(20, 8)
+  institutionName  String?
+  accountNumber    String?
+  color            String?
+  isActive         Boolean       @default(true)
+  isDefault        Boolean       @default(false)
+  network          String?
+  walletAddress    String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  deletedAt        DateTime?
+  walletMeta       Json?
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ledgerEntries    LedgerEntry[]
+  fromTransfers    Transfer[]    @relation("TransferFrom")
+  toTransfers      Transfer[]    @relation("TransferTo")
+
+  @@index([userId])
+  @@index([userId, isActive])
+  @@map("accounts")
+}
+
+model Category {
+  id           String        @id @default(cuid())
+  userId       String
+  name         String
+  icon         String?
+  color        String?
+  parentId     String?
+  isSystem     Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  parent       Category?     @relation("CategoryTree", fields: [parentId], references: [id])
+  children     Category[]    @relation("CategoryTree")
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("categories")
+}
+
+model Payee {
+  id           String        @id @default(cuid())
+  userId       String
+  name         String
+  email        String?
+  phone        String?
+  address      String?
+  notes        String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  invoices     Invoice[]
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("payees")
+}
+
+model Transaction {
+  id            String            @id @default(cuid())
+  userId        String
+  categoryId    String?
+  payeeId       String?
+  description   String
+  notes         String?
+  amount        Decimal           @db.Decimal(20, 8)
+  currency      CurrencyCode      @default(USD)
+  type          TransactionType
+  status        TransactionStatus @default(CLEARED)
+  transactedAt  DateTime
+  postedAt      DateTime?
+  reference     String?
+  tags          String[]
+  metadata      Json?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  deletedAt     DateTime?
+  attachments   Attachment[]
+  invoiceItems  InvoiceItem[]
+  ledgerEntries LedgerEntry[]
+  category      Category?         @relation(fields: [categoryId], references: [id])
+  payee         Payee?            @relation(fields: [payeeId], references: [id])
+
+  @@index([userId])
+  @@index([userId, transactedAt])
+  @@index([userId, status])
+  @@index([userId, categoryId])
+  @@map("transactions")
+}
+
+model LedgerEntry {
+  id             String       @id @default(cuid())
+  transactionId  String
+  accountId      String
+  entryType      EntryType
+  amount         Decimal      @db.Decimal(20, 8)
+  currency       CurrencyCode @default(USD)
+  runningBalance Decimal      @db.Decimal(20, 8)
+  createdAt      DateTime     @default(now())
+  account        Account      @relation(fields: [accountId], references: [id])
+  transaction    Transaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([transactionId])
+  @@index([accountId])
+  @@index([accountId, createdAt])
+  @@map("ledger_entries")
+}
+
+model Transfer {
+  id            String            @id @default(cuid())
+  fromAccountId String
+  toAccountId   String
+  amount        Decimal           @db.Decimal(20, 8)
+  fee           Decimal           @default(0) @db.Decimal(20, 8)
+  fromCurrency  CurrencyCode      @default(USD)
+  toCurrency    CurrencyCode      @default(USD)
+  exchangeRate  Decimal?          @db.Decimal(20, 8)
+  description   String?
+  status        TransactionStatus @default(CLEARED)
+  transferredAt DateTime
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  fromAccount   Account           @relation("TransferFrom", fields: [fromAccountId], references: [id])
+  toAccount     Account           @relation("TransferTo", fields: [toAccountId], references: [id])
+
+  @@index([fromAccountId])
+  @@index([toAccountId])
+  @@map("transfers")
+}
+
+model SpendGroup {
+  id           String       @id @default(cuid())
+  userId       String
+  name         String
+  description  String?
+  budgetAmount Decimal      @db.Decimal(20, 8)
+  currency     CurrencyCode @default(USD)
+  period       String       @default("monthly")
+  color        String?
+  icon         String?
+  startDate    DateTime     @default(now())
+  endDate      DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("spend_groups")
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  userId        String
+  payeeId       String?
+  invoiceNumber String
+  status        InvoiceStatus @default(DRAFT)
+  currency      CurrencyCode  @default(USD)
+  subtotal      Decimal       @db.Decimal(20, 8)
+  taxRate       Decimal       @default(0) @db.Decimal(5, 4)
+  taxAmount     Decimal       @default(0) @db.Decimal(20, 8)
+  total         Decimal       @db.Decimal(20, 8)
+  notes         String?
+  dueAt         DateTime
+  issuedAt      DateTime      @default(now())
+  paidAt        DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  items         InvoiceItem[]
+  payee         Payee?        @relation(fields: [payeeId], references: [id])
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, invoiceNumber])
+  @@index([userId])
+  @@index([userId, status])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id            String       @id @default(cuid())
+  invoiceId     String
+  transactionId String?
+  description   String
+  quantity      Decimal      @db.Decimal(10, 4)
+  unitPrice     Decimal      @db.Decimal(20, 8)
+  total         Decimal      @db.Decimal(20, 8)
+  sortOrder     Int          @default(0)
+  invoice       Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  transaction   Transaction? @relation(fields: [transactionId], references: [id])
+
+  @@index([invoiceId])
+  @@map("invoice_items")
+}
+
+model Attachment {
+  id            String      @id @default(cuid())
+  transactionId String
+  filename      String
+  contentType   String
+  url           String
+  sizeBytes     Int
+  createdAt     DateTime    @default(now())
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([transactionId])
+  @@map("attachments")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  tableName String
+  recordId  String
+  oldValues Json?
+  newValues Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([tableName, recordId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model Web2DashboardEntry {
+  id        String   @id @default(cuid())
+  date      String
+  project   String
+  earned    Decimal  @default(0) @db.Decimal(20, 8)
+  saved     Decimal  @default(0) @db.Decimal(20, 8)
+  given     Decimal  @default(0) @db.Decimal(20, 8)
+  givenTo   String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+  @@index([createdAt])
+  @@map("web2_dashboard_entries")
+}
+
+model Web2DashboardGoal {
+  id        String   @id @default(cuid())
+  amount    Decimal  @db.Decimal(20, 8)
+  currency  String   @default("USD")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("web2_dashboard_goal")
+}
+
+model Web2Card {
+  id        String   @id @default(cuid())
+  name      String
+  cardType  String
+  lastFour  String
+  balance   Decimal  @default(0) @db.Decimal(20, 8)
+  currency  String   @default("USD")
+  isActive  Boolean  @default(true)
+  color     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
+  @@map("web2_cards")
+}
+
+model Web2Performance {
+  id        String   @id @default(cuid())
+  month     String   @unique
+  earned    Decimal  @default(0) @db.Decimal(20, 8)
+  saved     Decimal  @default(0) @db.Decimal(20, 8)
+  given     Decimal  @default(0) @db.Decimal(20, 8)
+  roi       Decimal  @default(0) @db.Decimal(10, 4)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("web2_performance")
+}
+
+model Web3DashboardEntry {
+  id               String   @id @default(cuid())
+  date             String
+  project          String
+  walletAddress    String
+  walletName       String
+  network          String
+  investmentAmount Decimal  @db.Decimal(20, 8)
+  currentValue     Decimal  @db.Decimal(20, 8)
+  roi              Decimal  @default(0) @db.Decimal(10, 4)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([date])
+  @@index([walletAddress])
+  @@index([createdAt])
+  @@map("web3_dashboard_entries")
+}
+
+model Web3DashboardGoal {
+  id        String   @id @default(cuid())
+  amount    Decimal  @db.Decimal(20, 8)
+  currency  String   @default("USD")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("web3_dashboard_goal")
+}
+
+model Web3Wallet {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  address   String   @unique
+  network   String
+  balance   Decimal  @default(0) @db.Decimal(20, 8)
+  currency  String   @default("USD")
+  isActive  Boolean  @default(true)
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([address])
+  @@index([createdAt])
+  @@map("web3_wallets")
+}
+
+model Web3Performance {
+  id              String   @id @default(cuid())
+  month           String
+  walletAddress   String
+  investmentTotal Decimal  @default(0) @db.Decimal(20, 8)
+  currentTotal    Decimal  @default(0) @db.Decimal(20, 8)
+  roi             Decimal  @default(0) @db.Decimal(10, 4)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([month, walletAddress])
+  @@index([walletAddress])
+  @@index([month])
+  @@map("web3_performance")
+}
+
+model DashboardEntry {
+  id               String   @id @default(cuid())
+  mode             String   @default("web2")
+  date             String
+  project          String
+  earned           Decimal  @default(0) @db.Decimal(20, 8)
+  saved            Decimal  @default(0) @db.Decimal(20, 8)
+  given            Decimal  @default(0) @db.Decimal(20, 8)
+  givenTo          String   @default("")
+  walletAddress    String?
+  walletName       String?
+  investmentAmount Decimal? @db.Decimal(20, 8)
+  currentValue     Decimal? @db.Decimal(20, 8)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  walletMeta       Json?
+
+  @@index([mode])
+  @@index([date])
+  @@map("dashboard_entries")
+}
+
+model DashboardGoal {
+  id        String   @id @default(cuid())
+  mode      String   @unique
+  amount    Decimal  @db.Decimal(20, 8)
+  currency  String   @default("USD")
+  updatedAt DateTime @updatedAt
+
+  @@map("dashboard_goals")
+}
 
 enum AccountType {
   CHECKING
@@ -59,476 +457,4 @@ enum CurrencyCode {
   BTC
   ETH
   USDC
-}
-
-// ─────────────────────────────────────────────
-// USERS
-// ─────────────────────────────────────────────
-
-model User {
-  id          String    @id @default(cuid())
-  email       String    @unique
-  name        String?
-  avatarUrl   String?
-  timezone    String    @default("UTC")
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
-
-  accounts    Account[]
-  categories  Category[]
-  payees      Payee[]
-  invoices    Invoice[]
-  spendGroups SpendGroup[]
-  auditLogs   AuditLog[]
-
-  @@index([email])
-  @@map("users")
-}
-
-// ─────────────────────────────────────────────
-// ACCOUNTS
-// ─────────────────────────────────────────────
-
-model Account {
-  id               String       @id @default(cuid())
-  userId           String
-  name             String
-  type             AccountType
-  currency         CurrencyCode @default(USD)
-  currentBalance   Decimal      @default(0) @db.Decimal(20, 8)
-  availableBalance Decimal      @default(0) @db.Decimal(20, 8)
-  creditLimit      Decimal?     @db.Decimal(20, 8)
-  institutionName  String?
-  accountNumber    String?
-  color            String?
-  isActive         Boolean      @default(true)
-  isDefault        Boolean      @default(false)
-  network          String?
-  walletAddress    String?
-  walletMeta       Json?
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
-  deletedAt        DateTime?
-
-  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  ledgerEntries LedgerEntry[]
-  fromTransfers Transfer[]    @relation("TransferFrom")
-  toTransfers   Transfer[]    @relation("TransferTo")
-
-  @@index([userId])
-  @@index([userId, isActive])
-  @@map("accounts")
-}
-
-// ─────────────────────────────────────────────
-// CATEGORIES
-// ─────────────────────────────────────────────
-
-model Category {
-  id        String   @id @default(cuid())
-  userId    String
-  name      String
-  icon      String?
-  color     String?
-  parentId  String?
-  isSystem  Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  parent       Category?     @relation("CategoryTree", fields: [parentId], references: [id])
-  children     Category[]    @relation("CategoryTree")
-  transactions Transaction[]
-
-  @@unique([userId, name])
-  @@index([userId])
-  @@map("categories")
-}
-
-// ─────────────────────────────────────────────
-// PAYEES
-// ─────────────────────────────────────────────
-
-model Payee {
-  id        String   @id @default(cuid())
-  userId    String
-  name      String
-  email     String?
-  phone     String?
-  address   String?
-  notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactions Transaction[]
-  invoices     Invoice[]
-
-  @@unique([userId, name])
-  @@index([userId])
-  @@map("payees")
-}
-
-// ─────────────────────────────────────────────
-// TRANSACTIONS
-// ─────────────────────────────────────────────
-
-model Transaction {
-  id           String            @id @default(cuid())
-  userId       String
-  categoryId   String?
-  payeeId      String?
-  description  String
-  notes        String?
-  amount       Decimal           @db.Decimal(20, 8)
-  currency     CurrencyCode      @default(USD)
-  type         TransactionType
-  status       TransactionStatus @default(CLEARED)
-  transactedAt DateTime
-  postedAt     DateTime?
-  reference    String?
-  tags         String[]
-  metadata     Json?
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
-  deletedAt    DateTime?
-
-  category      Category?     @relation(fields: [categoryId], references: [id])
-  payee         Payee?        @relation(fields: [payeeId], references: [id])
-  ledgerEntries LedgerEntry[]
-  invoiceItems  InvoiceItem[]
-  attachments   Attachment[]
-
-  @@index([userId])
-  @@index([userId, transactedAt])
-  @@index([userId, status])
-  @@index([userId, categoryId])
-  @@map("transactions")
-}
-
-// ─────────────────────────────────────────────
-// LEDGER ENTRIES
-// ─────────────────────────────────────────────
-
-model LedgerEntry {
-  id             String       @id @default(cuid())
-  transactionId  String
-  accountId      String
-  entryType      EntryType
-  amount         Decimal      @db.Decimal(20, 8)
-  currency       CurrencyCode @default(USD)
-  runningBalance Decimal      @db.Decimal(20, 8)
-  createdAt      DateTime     @default(now())
-
-  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  account     Account     @relation(fields: [accountId], references: [id])
-
-  @@index([transactionId])
-  @@index([accountId])
-  @@index([accountId, createdAt])
-  @@map("ledger_entries")
-}
-
-// ─────────────────────────────────────────────
-// TRANSFERS
-// ─────────────────────────────────────────────
-
-model Transfer {
-  id            String            @id @default(cuid())
-  fromAccountId String
-  toAccountId   String
-  amount        Decimal           @db.Decimal(20, 8)
-  fee           Decimal           @default(0) @db.Decimal(20, 8)
-  fromCurrency  CurrencyCode      @default(USD)
-  toCurrency    CurrencyCode      @default(USD)
-  exchangeRate  Decimal?          @db.Decimal(20, 8)
-  description   String?
-  status        TransactionStatus @default(CLEARED)
-  transferredAt DateTime
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-
-  fromAccount Account @relation("TransferFrom", fields: [fromAccountId], references: [id])
-  toAccount   Account @relation("TransferTo", fields: [toAccountId], references: [id])
-
-  @@index([fromAccountId])
-  @@index([toAccountId])
-  @@map("transfers")
-}
-
-// ─────────────────────────────────────────────
-// SPEND GROUPS
-// ─────────────────────────────────────────────
-
-model SpendGroup {
-  id           String       @id @default(cuid())
-  userId       String
-  name         String
-  description  String?
-  budgetAmount Decimal      @db.Decimal(20, 8)
-  currency     CurrencyCode @default(USD)
-  period       String       @default("monthly")
-  color        String?
-  icon         String?
-  startDate    DateTime     @default(now())
-  endDate      DateTime?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@map("spend_groups")
-}
-
-// ─────────────────────────────────────────────
-// INVOICES
-// ─────────────────────────────────────────────
-
-model Invoice {
-  id            String        @id @default(cuid())
-  userId        String
-  payeeId       String?
-  invoiceNumber String
-  status        InvoiceStatus @default(DRAFT)
-  currency      CurrencyCode  @default(USD)
-  subtotal      Decimal       @db.Decimal(20, 8)
-  taxRate       Decimal       @default(0) @db.Decimal(5, 4)
-  taxAmount     Decimal       @default(0) @db.Decimal(20, 8)
-  total         Decimal       @db.Decimal(20, 8)
-  notes         String?
-  dueAt         DateTime
-  issuedAt      DateTime      @default(now())
-  paidAt        DateTime?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-
-  user  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  payee Payee?        @relation(fields: [payeeId], references: [id])
-  items InvoiceItem[]
-
-  @@unique([userId, invoiceNumber])
-  @@index([userId])
-  @@index([userId, status])
-  @@map("invoices")
-}
-
-model InvoiceItem {
-  id            String   @id @default(cuid())
-  invoiceId     String
-  transactionId String?
-  description   String
-  quantity      Decimal  @db.Decimal(10, 4)
-  unitPrice     Decimal  @db.Decimal(20, 8)
-  total         Decimal  @db.Decimal(20, 8)
-  sortOrder     Int      @default(0)
-
-  invoice     Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  transaction Transaction? @relation(fields: [transactionId], references: [id])
-
-  @@index([invoiceId])
-  @@map("invoice_items")
-}
-
-// ─────────────────────────────────────────────
-// ATTACHMENTS
-// ─────────────────────────────────────────────
-
-model Attachment {
-  id            String   @id @default(cuid())
-  transactionId String
-  filename      String
-  contentType   String
-  url           String
-  sizeBytes     Int
-  createdAt     DateTime @default(now())
-
-  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-
-  @@index([transactionId])
-  @@map("attachments")
-}
-
-// ─────────────────────────────────────────────
-// AUDIT LOG
-// ─────────────────────────────────────────────
-
-model AuditLog {
-  id        String   @id @default(cuid())
-  userId    String?
-  action    String
-  tableName String
-  recordId  String
-  oldValues Json?
-  newValues Json?
-  ipAddress String?
-  userAgent String?
-  createdAt DateTime @default(now())
-
-  user User? @relation(fields: [userId], references: [id])
-
-  @@index([userId])
-  @@index([tableName, recordId])
-  @@index([createdAt])
-  @@map("audit_logs")
-}
-
-// ─────────────────────────────────────────────
-// WEB2 DASHBOARD (Personal Finance)
-// ─────────────────────────────────────────────
-
-model Web2DashboardEntry {
-  id               String   @id @default(cuid())
-  date             String
-  project          String
-  earned           Decimal  @default(0) @db.Decimal(20, 8)
-  saved            Decimal  @default(0) @db.Decimal(20, 8)
-  given            Decimal  @default(0) @db.Decimal(20, 8)
-  givenTo          String   @default("")
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  @@index([date])
-  @@index([createdAt])
-  @@map("web2_dashboard_entries")
-}
-
-model Web2DashboardGoal {
-  id        String   @id @default(cuid())
-  amount    Decimal  @db.Decimal(20, 8)
-  currency  String   @default("USD")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("web2_dashboard_goal")
-}
-
-model Web2Card {
-  id          String   @id @default(cuid())
-  name        String
-  cardType    String
-  lastFour    String
-  balance     Decimal  @default(0) @db.Decimal(20, 8)
-  currency    String   @default("USD")
-  isActive    Boolean  @default(true)
-  color       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([createdAt])
-  @@map("web2_cards")
-}
-
-model Web2Performance {
-  id        String   @id @default(cuid())
-  month     String
-  earned    Decimal  @default(0) @db.Decimal(20, 8)
-  saved     Decimal  @default(0) @db.Decimal(20, 8)
-  given     Decimal  @default(0) @db.Decimal(20, 8)
-  roi       Decimal  @default(0) @db.Decimal(10, 4)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([month])
-  @@map("web2_performance")
-}
-
-// ─────────────────────────────────────────────
-// WEB3 DASHBOARD (Crypto Portfolio)
-// ─────────────────────────────────────────────
-
-model Web3DashboardEntry {
-  id                String   @id @default(cuid())
-  date              String
-  project           String
-  walletAddress     String
-  walletName        String
-  network           String
-  investmentAmount  Decimal  @db.Decimal(20, 8)
-  currentValue      Decimal  @db.Decimal(20, 8)
-  roi               Decimal  @default(0) @db.Decimal(10, 4)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  @@index([date])
-  @@index([walletAddress])
-  @@index([createdAt])
-  @@map("web3_dashboard_entries")
-}
-
-model Web3DashboardGoal {
-  id        String   @id @default(cuid())
-  amount    Decimal  @db.Decimal(20, 8)
-  currency  String   @default("USD")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("web3_dashboard_goal")
-}
-
-model Web3Wallet {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  address     String   @unique
-  network     String
-  balance     Decimal  @default(0) @db.Decimal(20, 8)
-  currency    String   @default("USD")
-  isActive    Boolean  @default(true)
-  metadata    Json?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([address])
-  @@index([createdAt])
-  @@map("web3_wallets")
-}
-
-model Web3Performance {
-  id               String   @id @default(cuid())
-  month            String
-  walletAddress    String
-  investmentTotal  Decimal  @default(0) @db.Decimal(20, 8)
-  currentTotal     Decimal  @default(0) @db.Decimal(20, 8)
-  roi              Decimal  @default(0) @db.Decimal(10, 4)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  @@unique([month, walletAddress])
-  @@index([walletAddress])
-  @@index([month])
-  @@map("web3_performance")
-}
-
-// Legacy models (kept for backward compatibility)
-model DashboardEntry {
-  id               String   @id @default(cuid())
-  mode             String   @default("web2")
-  date             String
-  project          String
-  earned           Decimal  @default(0) @db.Decimal(20, 8)
-  saved            Decimal  @default(0) @db.Decimal(20, 8)
-  given            Decimal  @default(0) @db.Decimal(20, 8)
-  givenTo          String   @default("")
-  walletAddress    String?
-  walletMeta       Json?
-  walletName       String?
-  investmentAmount Decimal? @db.Decimal(20, 8)
-  currentValue     Decimal? @db.Decimal(20, 8)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  @@index([mode])
-  @@index([date])
-  @@map("dashboard_entries")
-}
-
-model DashboardGoal {
-  id        String   @id @default(cuid())
-  mode      String   @unique
-  amount    Decimal  @db.Decimal(20, 8)
-  currency  String   @default("USD")
-  updatedAt DateTime @updatedAt
-
-  @@map("dashboard_goals")
 }

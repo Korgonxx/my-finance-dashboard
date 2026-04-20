@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Finview — Finance Dashboard",
+  title: "Korgon — Finance Dashboard",
   description: "Track your earnings, savings, and giving",
   icons: { icon: "/favicon.svg" },
 };

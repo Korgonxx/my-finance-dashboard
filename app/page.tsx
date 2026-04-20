@@ -32,7 +32,8 @@ type Entry = {
   mode: Mode;
 };
 
-// Finview Brand Colors
+import { useAppSettings } from './context/AppSettingsContext';
+// Korgon Brand Colors
 const BRAND = "#D4FE44";
 const SURFACE = "#131316";
 const BORDER = "#222226";
@@ -320,6 +321,7 @@ const CustomTooltip = ({ active, payload, label, selectedYear }: any) => {
 
 // --- Main Dashboard component ---
 export default function FinanceDashboard() {
+  const { changeAppPasscode: changeContextPasscode } = useAppSettings();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loadingEntries, setLoadingEntries] = useState(true);
   const [mode, setMode] = useState<Mode>("web2");
@@ -450,7 +452,7 @@ export default function FinanceDashboard() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.setAttribute("href", url);
-    a.setAttribute("download", `finview_export_${mode}_${new Date().toISOString().split('T')[0]}.csv`);
+    a.setAttribute("download", `korgon_export_${mode}_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -589,26 +591,17 @@ export default function FinanceDashboard() {
            <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-emerald-500/10 rounded-full blur-[80px] pointer-events-none"></div>
            
            <div className="relative z-10 w-full max-w-lg mx-auto mt-12">
-             <div className="flex items-center gap-3 mb-16">
-               <div className="w-10 h-10 rounded-xl flex items-center justify-center relative shadow-[0_0_15px_rgba(212,254,68,0.2)] bg-[#131316]">
-                 <Image src="/favicon.svg" alt="finview logo" fill className="object-contain p-2" />
-               </div>
-               <span className="text-2xl font-bold tracking-tight text-white">finview</span>
-             </div>
+             <div className="h-16"></div>
              
              <h1 className="text-5xl font-extrabold leading-[1.1] tracking-tight text-white mb-6">
-               The next generation <br/>
-               <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#D4FE44] to-[#A3D121]">
-                 financial operating system.
-               </span>
+               Welcome back
              </h1>
              <p className="text-lg text-zinc-400 max-w-md">
-               Manage your web2 banking alongside your web3 portfolio in one seamless, unified dashboard.
+               Sign in to access your dashboard.
              </p>
            </div>
            
            <div className="relative z-10 text-zinc-500 text-sm font-medium max-w-lg mx-auto w-full">
-             &copy; {new Date().getFullYear()} finview Inc. All rights reserved.
            </div>
         </div>
 
@@ -626,13 +619,7 @@ export default function FinanceDashboard() {
 
           <div className="flex-1 flex flex-col items-center justify-center w-full max-w-md mx-auto p-6 md:p-8 animate-in fade-in zoom-in-95 duration-500">
               
-              {/* Mobile Only Logo */}
-              <div className="lg:hidden flex items-center gap-3 mb-12 sm:mb-16">
-                 <div className="w-10 h-10 rounded-xl relative shadow-[0_0_15px_rgba(212,254,68,0.2)] bg-[#131316]">
-                   <Image src="/favicon.svg" alt="finview logo" fill className="object-contain p-2" />
-                 </div>
-                 <span className="text-2xl font-bold tracking-tight">finview</span>
-              </div>
+              {/* Mobile header - no branding */}
 
               <div className="w-16 h-16 mb-8 rounded-[1.2rem] bg-[#131316] border border-[#222226] flex items-center justify-center text-zinc-300 shadow-sm relative overflow-hidden group">
                  <Lock size={26} strokeWidth={2.5} />
@@ -710,9 +697,9 @@ export default function FinanceDashboard() {
       <aside className="w-[260px] border-r border-[#222226] bg-[#09090B] hidden md:flex flex-col flex-shrink-0 z-10 transition-all duration-300">
         <div className="p-8 flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center relative shadow-[0_0_15px_rgba(212,254,68,0.2)]">
-            <Image src="/favicon.svg" alt="finview logo" fill className="object-contain" />
+            <Image src="/favicon.svg" alt="korgon logo" fill className="object-contain" />
           </div>
-          <span className="text-xl font-bold tracking-tight">finview</span>
+          <span className="text-xl font-bold tracking-tight">korgon</span>
         </div>
 
         <nav className="flex-1 px-4 space-y-1 overflow-y-auto custom-scrollbar pt-2">
@@ -1238,7 +1225,7 @@ export default function FinanceDashboard() {
                    <div className="bg-gradient-to-tr from-[#D4FE44] to-[#A3D121] rounded-3xl p-6 shadow-lg relative overflow-hidden h-56 flex flex-col justify-between group">
                       <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/20 rounded-full blur-2xl group-hover:bg-white/30 transition-colors"></div>
                       <div className="flex justify-between items-start z-10 relative">
-                        <span className="text-[#0A0A0A] font-bold text-lg tracking-tight">finview Premium</span>
+                        <span className="text-[#0A0A0A] font-bold text-lg tracking-tight">korgon Premium</span>
                         <Monitor size={24} className="text-[#0A0A0A] opacity-80" />
                       </div>
                       <div className="z-10 relative">
@@ -1443,7 +1430,9 @@ export default function FinanceDashboard() {
                           setSecurityPassMessage({ text: "New passcode must be exactly 6 digits.", type: "error" });
                           return;
                         }
+                        // Update BOTH passcode systems (page.tsx fv_passcode + context app_master_passcode)
                         setAppPasscode(securityNewPass);
+                        changeContextPasscode(securityCurrentPass, securityNewPass);
                         setSecurityCurrentPass("");
                         setSecurityNewPass("");
                         setSecurityPassMessage({ text: "Passcode updated successfully.", type: "success" });
@@ -1672,7 +1661,7 @@ export default function FinanceDashboard() {
               
               <div className="relative z-10 flex flex-col h-full justify-between gap-8">
                 <div className="flex justify-between items-start">
-                  <span className="text-[#0A0A0A] font-bold text-lg tracking-tight">finview</span>
+                  <span className="text-[#0A0A0A] font-bold text-lg tracking-tight">korgon</span>
                   <Monitor size={24} className="text-[#0A0A0A] opacity-80" />
                 </div>
                 
