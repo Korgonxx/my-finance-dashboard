@@ -170,16 +170,22 @@ function EntryModal({ onClose, onSave }: { onClose: () => void; onSave: (entry: 
   );
 }
 
-function TransferModal({ onClose, onTransfer }: { onClose: () => void, onTransfer: () => void }) {
+function TransferModal({ onClose, onTransfer }: { onClose: () => void, onTransfer: (amount: number, fromCard: string, toCard: string) => void }) {
   const [amount, setAmount] = useState("");
-  const [recipient, setRecipient] = useState("");
+  const [fromCard, setFromCard] = useState("card1");
+  const [toCard, setToCard] = useState("card2");
   const [isTransferring, setIsTransferring] = useState(false);
+
+  const cards = [
+    { id: "card1", name: "korgon Premium", last4: "4209" },
+    { id: "card2", name: "Virtual Card", last4: "8831" },
+  ];
 
   const handleTransfer = () => {
     setIsTransferring(true);
     setTimeout(() => {
       setIsTransferring(false);
-      onTransfer();
+      onTransfer(Number(amount), fromCard, toCard);
       onClose();
     }, 1000);
   };
@@ -191,18 +197,20 @@ function TransferModal({ onClose, onTransfer }: { onClose: () => void, onTransfe
           <X size={18} />
         </button>
         <h2 className="text-2xl font-bold mb-2 text-zinc-50 border-b-2 border-[#D4FE44] inline-block pb-1">Transfer Funds</h2>
-        <p className="text-sm text-zinc-400 dark:text-zinc-400 mb-8 mt-2">Send money securely to friends or external wallets.</p>
+        <p className="text-sm text-zinc-400 dark:text-zinc-400 mb-8 mt-2">Transfer between your bank cards.</p>
         
         <div className="space-y-5">
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-400">Recipient Address / Email</label>
-            <input 
-              type="text" 
-              value={recipient}
-              onChange={(e) => setRecipient(e.target.value)}
-              placeholder="e.g. 0x1A4... or user@email.com" 
-              className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors" 
-            />
+            <label className="text-xs font-medium text-zinc-400">From Card</label>
+            <select value={fromCard} onChange={e => setFromCard(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors">
+              {cards.map(c => <option key={c.id} value={c.id}>{c.name} (**** {c.last4})</option>)}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-zinc-400">To Card</label>
+            <select value={toCard} onChange={e => setToCard(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors">
+              {cards.filter(c => c.id !== fromCard).map(c => <option key={c.id} value={c.id}>{c.name} (**** {c.last4})</option>)}
+            </select>
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-zinc-400">Amount</label>
@@ -221,9 +229,9 @@ function TransferModal({ onClose, onTransfer }: { onClose: () => void, onTransfe
             <button onClick={onClose} className="flex-1 py-3.5 bg-white/5 hover:bg-white/10 transition-colors text-zinc-300 rounded-2xl font-semibold">Cancel</button>
             <button 
               onClick={handleTransfer} 
-              disabled={isTransferring || !amount || !recipient}
+              disabled={isTransferring || !amount || fromCard === toCard}
               className={cn("flex-[2] py-3.5 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-[0_5px_20px_rgba(212,254,68,0.15)]", 
-                isTransferring || !amount || !recipient ? "bg-[#D4FE44]/70 text-[#0A0A0A]/70 cursor-not-allowed" : "bg-[#D4FE44] text-[#0A0A0A] hover:bg-[#bceb29] hover:-translate-y-0.5"
+                isTransferring || !amount || fromCard === toCard ? "bg-[#D4FE44]/70 text-[#0A0A0A]/70 cursor-not-allowed" : "bg-[#D4FE44] text-[#0A0A0A] hover:bg-[#bceb29] hover:-translate-y-0.5"
               )}
             >
               {isTransferring ? (
@@ -231,7 +239,7 @@ function TransferModal({ onClose, onTransfer }: { onClose: () => void, onTransfe
                    <div className="w-4 h-4 border-2 border-[#0A0A0A]/50 border-t-[#0A0A0A] rounded-full animate-spin"></div>
                    Processing...
                  </>
-              ) : "Send Transfer"}
+              ) : "Transfer"}
             </button>
           </div>
         </div>
@@ -259,7 +267,7 @@ function TransferToWeb2Modal({ onClose, onTransfer }: { onClose: () => void, onT
         <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-zinc-400 dark:text-zinc-400 hover:text-zinc-50 hover:bg-white/10 transition-colors">
           <X size={18} />
         </button>
-        <h2 className="text-2xl font-bold mb-2 text-zinc-50 border-b-2 border-emerald-400 inline-block pb-1">Transfer to Web2</h2>
+        <h2 className="text-2xl font-bold mb-2 text-zinc-50 border-b-2 border-emerald-400 inline-block pb-1">Transfer to Bank</h2>
         <p className="text-sm text-zinc-400 dark:text-zinc-400 mb-8 mt-2">Off-ramp crypto to your connected bank account.</p>
         
         <div className="space-y-5">
@@ -427,6 +435,17 @@ export default function FinanceDashboard() {
     setLoadingWallets(false);
   }
   useEffect(() => { fetchWallets(); }, []);
+  
+  // Bank cards state
+  type BankCard = { id: string; name: string; last4: string; holder: string; expiry: string; type: 'physical' | 'virtual' };
+  const [bankCards, setBankCards] = useState<BankCard[]>([
+    { id: 'card1', name: 'korgon Premium', last4: '4209', holder: `${firstName} ${lastName}`, expiry: '12/28', type: 'physical' },
+    { id: 'card2', name: 'Virtual Card', last4: '8831', holder: `${firstName} ${lastName}`, expiry: '05/25', type: 'virtual' },
+  ]);
+  const [showAddCard, setShowAddCard] = useState(false);
+  const [cardForm, setCardForm] = useState({ name: '', last4: '', expiry: '', type: 'virtual' as 'physical' | 'virtual' });
+  const [cardError, setCardError] = useState('');
+  const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
   
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -1111,7 +1130,7 @@ export default function FinanceDashboard() {
                   {mode === 'web3' && (
                     <button 
                       onClick={() => setShowTransferToWeb2(true)} 
-                      title="Transfer to Web2"
+                      title="Transfer to Bank"
                       className="p-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 rounded-xl hover:scale-105 transition-all"
                     >
                        <ArrowRightLeft size={16} strokeWidth={2} />
@@ -1256,55 +1275,34 @@ export default function FinanceDashboard() {
                     <h2 className="text-2xl font-bold text-zinc-100">My Cards</h2>
                     <p className="text-sm text-zinc-400">Manage your active physical and virtual cards.</p>
                   </div>
-                  <button className="px-4 py-2 bg-[#D4FE44] text-[#0A0A0A] rounded-xl font-bold text-sm hover:bg-[#bceb29] transition-all flex items-center gap-2">
+                  <button onClick={() => { setShowAddCard(true); setCardError(''); }} className="px-4 py-2 bg-[#D4FE44] text-[#0A0A0A] rounded-xl font-bold text-sm hover:bg-[#bceb29] transition-all flex items-center gap-2">
                     <Plus size={16}/> New Card
                   </button>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                   {/* Card 1 */}
-                   <div className="bg-gradient-to-tr from-[#D4FE44] to-[#A3D121] rounded-3xl p-6 shadow-lg relative overflow-hidden h-56 flex flex-col justify-between group">
-                      <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/20 rounded-full blur-2xl group-hover:bg-white/30 transition-colors"></div>
+                  {bankCards.map((card, i) => (
+                    <div key={card.id} className={`${i === 0 ? 'bg-gradient-to-tr from-[#D4FE44] to-[#A3D121]' : 'bg-zinc-800 border border-[#222226]'} rounded-3xl p-6 shadow-lg relative overflow-hidden h-56 flex flex-col justify-between group`}>
+                      <div className={`absolute ${i === 0 ? '-right-8 -top-8 w-32 h-32 bg-white/20' : '-right-8 -bottom-8 w-32 h-32 bg-white/5'} rounded-full blur-2xl group-hover:bg-white/30 transition-colors`}></div>
                       <div className="flex justify-between items-start z-10 relative">
-                        <span className="text-[#0A0A0A] font-bold text-lg tracking-tight">korgon Premium</span>
-                        <Monitor size={24} className="text-[#0A0A0A] opacity-80" />
+                        <span className={`${i === 0 ? 'text-[#0A0A0A]' : 'text-zinc-100'} font-bold text-lg tracking-tight`}>{card.name}</span>
+                        <button onClick={() => setDeletingCardId(card.id)} className="opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16} className={i === 0 ? 'text-[#0A0A0A]/50 hover:text-red-600' : 'text-zinc-500 hover:text-red-400'} /></button>
                       </div>
                       <div className="z-10 relative">
-                        <div className="text-[#0A0A0A]/80 font-semibold tracking-widest text-xl font-mono mb-2">**** **** **** 4209</div>
+                        <div className={`${i === 0 ? 'text-[#0A0A0A]/80' : 'text-zinc-300'} font-semibold tracking-widest text-xl font-mono mb-2`}>**** **** **** {card.last4}</div>
                         <div className="flex justify-between items-end">
                           <div>
-                             <p className="text-[#0A0A0A]/60 text-[10px] font-bold uppercase tracking-wider">Cardholder</p>
-                             <p className="text-[#0A0A0A] font-bold text-sm">Annette Black</p>
+                             <p className={`${i === 0 ? 'text-[#0A0A0A]/60' : 'text-zinc-500'} text-[10px] font-bold uppercase tracking-wider`}>Cardholder</p>
+                             <p className={`${i === 0 ? 'text-[#0A0A0A]' : 'text-zinc-100'} font-bold text-sm`}>{card.holder}</p>
                           </div>
                           <div>
-                             <p className="text-[#0A0A0A]/60 text-[10px] font-bold uppercase tracking-wider">Expires</p>
-                             <p className="text-[#0A0A0A] font-bold text-sm">12/28</p>
+                             <p className={`${i === 0 ? 'text-[#0A0A0A]/60' : 'text-zinc-500'} text-[10px] font-bold uppercase tracking-wider`}>Expires</p>
+                             <p className={`${i === 0 ? 'text-[#0A0A0A]' : 'text-zinc-100'} font-bold text-sm`}>{card.expiry}</p>
                           </div>
                         </div>
                       </div>
-                   </div>
-
-                   {/* Card 2 */}
-                   <div className="bg-zinc-800 rounded-3xl p-6 shadow-lg relative overflow-hidden h-56 flex flex-col justify-between border border-[#222226] group">
-                      <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-white/5 rounded-full blur-2xl group-hover:bg-white/10 transition-colors"></div>
-                      <div className="flex justify-between items-start z-10 relative">
-                        <span className="text-zinc-100 font-bold text-lg tracking-tight">Virtual Card</span>
-                        <CreditCard size={24} className="text-zinc-400" />
-                      </div>
-                      <div className="z-10 relative">
-                        <div className="text-zinc-300 font-semibold tracking-widest text-xl font-mono mb-2">**** **** **** 8831</div>
-                        <div className="flex justify-between items-end">
-                          <div>
-                             <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-wider">Cardholder</p>
-                             <p className="text-zinc-100 font-bold text-sm">Annette Black</p>
-                          </div>
-                          <div>
-                             <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-wider">Expires</p>
-                             <p className="text-zinc-100 font-bold text-sm">05/25</p>
-                          </div>
-                        </div>
-                      </div>
-                   </div>
+                    </div>
+                  ))}
                 </div>
 
                 <h3 className="text-lg font-bold text-zinc-100 mt-10 mb-6">Card Settings</h3>
@@ -1341,7 +1339,7 @@ export default function FinanceDashboard() {
                   <div className="bg-[#131316] border border-[#222226] rounded-3xl p-12 text-center">
                     <Wallet size={40} className="text-zinc-600 mx-auto mb-4" />
                     <h3 className="text-lg font-bold text-zinc-300 mb-2">No wallets yet</h3>
-                    <p className="text-sm text-zinc-500 mb-6">Add your first wallet to start tracking your web3 portfolio.</p>
+                    <p className="text-sm text-zinc-500 mb-6">Add your first wallet to start tracking your crypto portfolio.</p>
                     <button onClick={() => { setShowAddWallet(true); setWalletError(''); }} className="px-6 py-3 bg-[#D4FE44] text-[#0A0A0A] rounded-xl font-bold text-sm hover:bg-[#bceb29] transition-all"><Plus size={16} className="inline mr-2"/>Add Wallet</button>
                   </div>
                 ) : (
@@ -1386,36 +1384,18 @@ export default function FinanceDashboard() {
           <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
             <div className="max-w-4xl mx-auto space-y-6 pb-20 md:pb-0">
               <div className="mb-8">
-                <h2 className="text-2xl font-bold text-zinc-100">Security Center</h2>
-                <p className="text-sm text-zinc-400">Protect your account with multi-factor authentication and monitor active sessions.</p>
+                <h2 className="text-2xl font-bold text-zinc-100">Security</h2>
+                <p className="text-sm text-zinc-400">Manage your dashboard passcode.</p>
               </div>
 
-              {/* 2FA Card */}
-              <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6 group hover:border-[#D4FE44]/30 transition-colors">
-                <div className="flex gap-4 items-center">
-                  <div className="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center flex-shrink-0">
-                    <Smartphone size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-zinc-100">Two-Factor Authentication (2FA)</h3>
-                    <p className="text-sm text-zinc-400">Extra layer of security via mobile Authenticator app.</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4 w-full md:w-auto">
-                  <span className="text-sm font-semibold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20 flex items-center gap-1.5"><CheckCircle2 size={14}/> Enabled</span>
-                  <button className="px-4 py-2 border border-[#222226] text-zinc-300 rounded-xl font-medium text-sm hover:bg-[#1C1C21] hover:text-zinc-50 transition-colors ml-auto md:ml-0">Manage</button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Change Passcode */}
-                <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm flex flex-col">
+              {/* Change Passcode */}
+              <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm flex flex-col max-w-lg">
                   <div className="flex items-center gap-3 mb-6">
                     <div className="w-10 h-10 rounded-full bg-[#1C1C21] text-zinc-400 flex items-center justify-center">
                        <Key size={18} />
                     </div>
                     <div>
-                      <h3 className="text-lg font-bold text-zinc-100">Change Dashboard Passcode</h3>
+                      <h3 className="text-lg font-bold text-zinc-100">Change Passcode</h3>
                       <p className="text-xs text-zinc-500">Update your 6-digit access code.</p>
                     </div>
                   </div>
@@ -1474,43 +1454,6 @@ export default function FinanceDashboard() {
                     </button>
                   </div>
                 </div>
-
-                {/* Active Sessions */}
-                <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm flex flex-col">
-                   <div className="flex items-center gap-3 mb-6">
-                    <div className="w-10 h-10 rounded-full bg-[#1C1C21] text-zinc-400 flex items-center justify-center">
-                       <Globe size={18} />
-                    </div>
-                    <h3 className="text-lg font-bold text-zinc-100">Active Sessions</h3>
-                  </div>
-                  <div className="space-y-4 flex-1">
-                    <div className="flex items-center justify-between p-4 bg-[#09090B] border border-[#222226] rounded-2xl">
-                      <div className="flex items-center gap-3">
-                        <Monitor size={18} className="text-[#D4FE44]" />
-                        <div>
-                          <p className="text-sm font-bold text-zinc-100">MacBook Pro (Chrome)</p>
-                          <p className="text-xs text-zinc-500 flex items-center gap-1 mt-0.5"><MapPin size={10}/> San Francisco, USA</p>
-                        </div>
-                      </div>
-                      <span className="text-[10px] font-bold text-[#D4FE44] uppercase tracking-wider bg-[#D4FE44]/10 px-2 py-1 rounded-md">Active</span>
-                    </div>
-                    
-                    <div className="flex items-center justify-between p-4 bg-[#09090B] border border-[#222226] rounded-2xl opacity-60 hover:opacity-100 transition-opacity">
-                      <div className="flex items-center gap-3">
-                        <Smartphone size={18} className="text-zinc-400" />
-                        <div>
-                          <p className="text-sm font-bold text-zinc-100">iPhone 14 Pro (App)</p>
-                          <p className="text-xs text-zinc-500 flex items-center gap-1 mt-0.5"><MapPin size={10}/> San Francisco, USA</p>
-                        </div>
-                      </div>
-                      <button className="text-xs font-semibold text-zinc-400 hover:text-red-400">Revoke</button>
-                    </div>
-                  </div>
-                  <div className="pt-4 text-center">
-                     <button className="text-xs font-semibold text-[#D4FE44] hover:underline">Log out all other devices</button>
-                  </div>
-                </div>
-              </div>
 
             </div>
           </div>
@@ -1787,9 +1730,22 @@ export default function FinanceDashboard() {
         }
       }} />}
       
-      {showTransfer && <TransferModal onClose={() => setShowTransfer(false)} onTransfer={() => {
-        // Here you would optimally alter your transaction state logic directly
-        console.log("Transfer processed!")
+      {showTransfer && <TransferModal onClose={() => setShowTransfer(false)} onTransfer={(amount, fromCardId, toCardId) => {
+        const from = bankCards.find(c => c.id === fromCardId)?.name || "Card";
+        const to = bankCards.find(c => c.id === toCardId)?.name || "Card";
+        setEntries(prev => [
+            {
+                id: Math.random().toString(36).substr(2, 9),
+                date: new Date().toISOString().split('T')[0],
+                project: `Transfer: ${from} → ${to}`,
+                earned: 0,
+                saved: 0,
+                given: amount,
+                givenTo: "Transfer",
+                mode: "web2" as const
+            },
+            ...prev
+        ]);
       }} />}
       
       {showTransferToWeb2 && <TransferToWeb2Modal onClose={() => setShowTransferToWeb2(false)} onTransfer={(amount) => {
@@ -1802,11 +1758,10 @@ export default function FinanceDashboard() {
                 saved: 0,
                 given: amount,
                 givenTo: "Checking Account",
-                mode: "web3"
+                mode: "web3" as const
             },
             ...prev
         ]);
-        console.log(`Transferred $${amount} to Web2!`);
       }} />}
       
       {deletingTransactionId && (
@@ -1947,6 +1902,76 @@ export default function FinanceDashboard() {
                 try { await fetch(`/api/wallets/${id}`, { method: 'DELETE' }); } catch {}
                 fetchWallets();
               }} className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold text-sm shadow-[0_5px_20px_rgba(239,68,68,0.3)] transition-all">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Card Modal */}
+      {showAddCard && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#131316] border border-[#222226] max-w-md w-full rounded-3xl p-6 shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-zinc-100">Add Card</h3>
+              <button onClick={() => setShowAddCard(false)} className="w-8 h-8 rounded-full bg-[#1C1C21] flex items-center justify-center text-zinc-400 hover:text-white"><X size={16}/></button>
+            </div>
+            {cardError && <div className="px-3 py-2 rounded-lg text-xs font-medium border bg-red-500/10 text-red-500 border-red-500/20 mb-4">{cardError}</div>}
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-medium text-zinc-400 mb-1.5 block">Card Name</label>
+                <input value={cardForm.name} onChange={e => setCardForm({...cardForm, name: e.target.value})} placeholder="e.g. Chase Debit, Savings" className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-medium text-zinc-400 mb-1.5 block">Last 4 Digits</label>
+                  <input maxLength={4} value={cardForm.last4} onChange={e => setCardForm({...cardForm, last4: e.target.value.replace(/\D/g, '')})} placeholder="4209" className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors font-mono" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-zinc-400 mb-1.5 block">Expiry</label>
+                  <input maxLength={5} value={cardForm.expiry} onChange={e => setCardForm({...cardForm, expiry: e.target.value})} placeholder="MM/YY" className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors font-mono" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-zinc-400 mb-1.5 block">Card Type</label>
+                <select value={cardForm.type} onChange={e => setCardForm({...cardForm, type: e.target.value as 'physical' | 'virtual'})} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors">
+                  <option value="physical">Physical</option>
+                  <option value="virtual">Virtual</option>
+                </select>
+              </div>
+            </div>
+            <button onClick={() => {
+              setCardError('');
+              if (!cardForm.name.trim()) { setCardError('Card name is required.'); return; }
+              if (cardForm.last4.length !== 4) { setCardError('Last 4 digits must be exactly 4 numbers.'); return; }
+              if (!cardForm.expiry.match(/^\d{2}\/\d{2}$/)) { setCardError('Expiry must be MM/YY format.'); return; }
+              const newCard: BankCard = {
+                id: 'card_' + Math.random().toString(36).substr(2, 9),
+                name: cardForm.name.trim(),
+                last4: cardForm.last4,
+                holder: `${firstName} ${lastName}`,
+                expiry: cardForm.expiry,
+                type: cardForm.type,
+              };
+              setBankCards(prev => [...prev, newCard]);
+              setShowAddCard(false);
+              setCardForm({ name: '', last4: '', expiry: '', type: 'virtual' });
+            }} className="w-full py-3 mt-6 bg-[#D4FE44] text-[#0A0A0A] rounded-xl font-bold text-sm hover:bg-[#bceb29] transition-colors">
+              Add Card
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Card Modal */}
+      {deletingCardId && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#131316] border border-[#222226] max-w-sm w-full rounded-3xl p-6 shadow-2xl relative text-center">
+            <Trash2 size={40} className="text-red-500 mx-auto mb-4 opacity-90" strokeWidth={1.5} />
+            <h3 className="text-xl font-bold text-zinc-100 mb-2">Delete Card?</h3>
+            <p className="text-zinc-400 text-sm mb-8">This will permanently remove this card.</p>
+            <div className="flex gap-4">
+              <button onClick={() => setDeletingCardId(null)} className="flex-1 py-3 bg-[#1C1C21] hover:bg-[#222226] text-zinc-300 rounded-xl font-semibold text-sm border border-[#2A2A30] transition-colors">Cancel</button>
+              <button onClick={() => { setBankCards(prev => prev.filter(c => c.id !== deletingCardId)); setDeletingCardId(null); }} className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold text-sm shadow-[0_5px_20px_rgba(239,68,68,0.3)] transition-all">Delete</button>
             </div>
           </div>
         </div>
