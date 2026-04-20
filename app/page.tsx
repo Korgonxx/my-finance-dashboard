@@ -972,9 +972,7 @@ export default function FinanceDashboard() {
                         </div>
                       ) : (
                         <div className="flex items-center gap-1">
-                          <span className="text-3xl font-bold text-zinc-50 leading-none">
-                            {web3Goal.currency === 'ETH' ? 'Ξ' : web3Goal.currency === 'BTC' ? '₿' : '$'}
-                          </span>
+                          <span className="text-3xl font-bold text-zinc-50 leading-none">$</span>
                           <input 
                             type="number" 
                             value={web3Goal.amount} 
@@ -984,10 +982,10 @@ export default function FinanceDashboard() {
                               fetch("/api/goal", {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ mode: "web3", amount: newGoal.amount, currency: newGoal.currency }),
+                                body: JSON.stringify({ mode: "web3", amount: newGoal.amount, currency: "USD" }),
                               }).catch(err => console.error("[saveGoal web3] failed:", err));
                             }}
-                            className="bg-transparent text-3xl font-bold text-zinc-50 w-20 outline-none border-b border-[#222226] focus:border-[#D4FE44] leading-none"
+                            className="bg-transparent text-3xl font-bold text-zinc-50 w-28 outline-none border-b border-[#222226] focus:border-[#D4FE44] leading-none"
                           />
                         </div>
                       )}
@@ -1012,26 +1010,7 @@ export default function FinanceDashboard() {
                           <option value="GBP">GBP (British Pound)</option>
                           <option value="INR">INR (Indian Rupee)</option>
                         </select>
-                      ) : (
-                        <select 
-                          value={web3Goal.currency}
-                          onChange={(e) => {
-                            const newGoal = {...web3Goal, currency: e.target.value};
-                            setWeb3Goal(newGoal);
-                            fetch("/api/goal", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ mode: "web3", amount: newGoal.amount, currency: newGoal.currency }),
-                            }).catch(err => console.error("[saveGoal web3 currency] failed:", err));
-                          }}
-                          className="bg-transparent text-xs text-zinc-500 font-semibold outline-none cursor-pointer w-auto"
-                        >
-                          <option value="ETH">ETH (Ethereum)</option>
-                          <option value="BTC">BTC (Bitcoin)</option>
-                          <option value="USDC">USDC (USD Coin)</option>
-                          <option value="USDT">USDT (Tether)</option>
-                        </select>
-                      )}
+                      ) : null}
                     </div>
                  </div>
                 <div className="w-10 h-10 rounded-full bg-purple-500/10 text-purple-400 flex items-center justify-center">
