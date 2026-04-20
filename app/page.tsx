@@ -270,15 +270,21 @@ function TransferModal({ onClose, onTransfer }: { onClose: () => void, onTransfe
   );
 }
 
-function TransferToWeb2Modal({ onClose, onTransfer }: { onClose: () => void, onTransfer: (amount: number) => void }) {
+function TransferToWeb2Modal({ onClose, onTransfer, bankCards }: { 
+  onClose: () => void; 
+  onTransfer: (amount: number, cardId: string) => void;
+  bankCards: Array<{ id: string; name: string; last4: string; balance: number }>;
+}) {
   const [amount, setAmount] = useState("");
+  const [cardId, setCardId] = useState(bankCards[0]?.id || "");
   const [isTransferring, setIsTransferring] = useState(false);
+  const USD_TO_INR = 83.5;
 
   const handleTransfer = () => {
     setIsTransferring(true);
     setTimeout(() => {
       setIsTransferring(false);
-      onTransfer(Number(amount));
+      onTransfer(Number(amount), cardId);
       onClose();
     }, 1000);
   };
@@ -293,6 +299,14 @@ function TransferToWeb2Modal({ onClose, onTransfer }: { onClose: () => void, onT
         <p className="text-sm text-zinc-400 dark:text-zinc-400 mb-8 mt-2">Off-ramp crypto to your connected bank account.</p>
         
         <div className="space-y-5">
+          {bankCards.length > 0 && (
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-zinc-400">To Card</label>
+            <select value={cardId} onChange={e => setCardId(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none focus:border-emerald-400 transition-colors">
+              {bankCards.map(c => <option key={c.id} value={c.id}>{c.name} (**** {c.last4}) — ₹{(c.balance * USD_TO_INR).toLocaleString('en-IN', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</option>)}
+            </select>
+          </div>
+          )}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-zinc-400">Amount to Transfer (USD)</label>
             <div className="relative">
@@ -305,14 +319,17 @@ function TransferToWeb2Modal({ onClose, onTransfer }: { onClose: () => void, onT
                  className="w-full bg-[#09090B] border border-[#222226] rounded-xl pl-8 pr-4 py-3 text-lg font-bold text-zinc-100 outline-none focus:border-emerald-400 transition-colors" 
                />
             </div>
+            {amount && Number(amount) > 0 && (
+              <p className="text-xs text-zinc-500 mt-1">≈ ₹{(Number(amount) * USD_TO_INR).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})} INR</p>
+            )}
           </div>
           <div className="flex gap-3 pt-4">
             <button onClick={onClose} className="flex-1 py-3.5 bg-white/5 hover:bg-white/10 transition-colors text-zinc-300 rounded-2xl font-semibold">Cancel</button>
             <button 
               onClick={handleTransfer} 
-              disabled={isTransferring || !amount || Number(amount) <= 0}
+              disabled={isTransferring || !amount || Number(amount) <= 0 || !cardId}
               className={cn("flex-[2] py-3.5 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-[0_5px_20px_rgba(52,211,153,0.15)]", 
-                isTransferring || !amount || Number(amount) <= 0 ? "bg-emerald-400/70 text-[#0A0A0A]/70 cursor-not-allowed" : "bg-emerald-400 text-[#0A0A0A] hover:bg-emerald-300 hover:-translate-y-0.5"
+                isTransferring || !amount || Number(amount) <= 0 || !cardId ? "bg-emerald-400/70 text-[#0A0A0A]/70 cursor-not-allowed" : "bg-emerald-400 text-[#0A0A0A] hover:bg-emerald-300 hover:-translate-y-0.5"
               )}
             >
               {isTransferring ? (
@@ -461,10 +478,10 @@ export default function FinanceDashboard() {
   useEffect(() => { fetchWallets(); }, []);
   
   // Bank cards state
-  type BankCard = { id: string; name: string; last4: string; holder: string; expiry: string; type: 'physical' | 'virtual' };
+  type BankCard = { id: string; name: string; last4: string; holder: string; expiry: string; type: 'physical' | 'virtual'; balance: number };
   const [bankCards, setBankCards] = useState<BankCard[]>([
-    { id: 'card1', name: 'korgon Premium', last4: '4209', holder: `${firstName} ${lastName}`, expiry: '12/28', type: 'physical' },
-    { id: 'card2', name: 'Virtual Card', last4: '8831', holder: `${firstName} ${lastName}`, expiry: '05/25', type: 'virtual' },
+    { id: 'card1', name: 'korgon Premium', last4: '4209', holder: `${firstName} ${lastName}`, expiry: '12/28', type: 'physical', balance: 0 },
+    { id: 'card2', name: 'Virtual Card', last4: '8831', holder: `${firstName} ${lastName}`, expiry: '05/25', type: 'virtual', balance: 0 },
   ]);
   const [showAddCard, setShowAddCard] = useState(false);
   const [cardForm, setCardForm] = useState({ name: '', last4: '', expiry: '', type: 'virtual' as 'physical' | 'virtual' });
@@ -1298,7 +1315,7 @@ export default function FinanceDashboard() {
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                   {bankCards.map((card, i) => (
-                    <div key={card.id} className={`${i === 0 ? 'bg-gradient-to-tr from-[#D4FE44] to-[#A3D121]' : 'bg-zinc-800 border border-[#222226]'} rounded-3xl p-6 shadow-lg relative overflow-hidden h-56 flex flex-col justify-between group`}>
+                    <div key={card.id} className={`${i === 0 ? 'bg-gradient-to-tr from-[#D4FE44] to-[#A3D121]' : 'bg-zinc-800 border border-[#222226]'} rounded-3xl p-6 shadow-lg relative overflow-hidden h-64 flex flex-col justify-between group`}>
                       <div className={`absolute ${i === 0 ? '-right-8 -top-8 w-32 h-32 bg-white/20' : '-right-8 -bottom-8 w-32 h-32 bg-white/5'} rounded-full blur-2xl group-hover:bg-white/30 transition-colors`}></div>
                       <div className="flex justify-between items-start z-10 relative">
                         <span className={`${i === 0 ? 'text-[#0A0A0A]' : 'text-zinc-100'} font-bold text-lg tracking-tight`}>{card.name}</span>
@@ -1306,6 +1323,7 @@ export default function FinanceDashboard() {
                       </div>
                       <div className="z-10 relative">
                         <div className={`${i === 0 ? 'text-[#0A0A0A]/80' : 'text-zinc-300'} font-semibold tracking-widest text-xl font-mono mb-2`}>**** **** **** {card.last4}</div>
+                        <div className={`${i === 0 ? 'text-[#0A0A0A]' : 'text-zinc-100'} font-bold text-xl mb-2`}>₹{(card.balance * 83.5).toLocaleString('en-IN', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</div>
                         <div className="flex justify-between items-end">
                           <div>
                              <p className={`${i === 0 ? 'text-[#0A0A0A]/60' : 'text-zinc-500'} text-[10px] font-bold uppercase tracking-wider`}>Cardholder</p>
@@ -1769,17 +1787,40 @@ export default function FinanceDashboard() {
         ]);
       }} />}
       
-      {showTransferToWeb2 && <TransferToWeb2Modal onClose={() => setShowTransferToWeb2(false)} onTransfer={(amount) => {
+      {showTransferToWeb2 && <TransferToWeb2Modal 
+        onClose={() => setShowTransferToWeb2(false)} 
+        bankCards={bankCards.map(c => ({ id: c.id, name: c.name, last4: c.last4, balance: c.balance }))}
+        onTransfer={(amount, cardId) => {
+        // Add to bank card balance
+        setBankCards(prev => prev.map(c => c.id === cardId ? { ...c, balance: c.balance + amount } : c));
+        // Create crypto entry
+        const cardName = bankCards.find(c => c.id === cardId)?.name || 'Bank Card';
         setEntries(prev => [
             {
                 id: Math.random().toString(36).substr(2, 9),
                 date: new Date().toISOString().split('T')[0],
-                project: "Off-Ramp to Bank",
+                project: `Off-Ramp → ${cardName}`,
                 earned: 0,
                 saved: 0,
                 given: amount,
-                givenTo: "Checking Account",
-                mode: "web3" as const
+                givenTo: cardName,
+                mode: "web3" as const,
+                walletId: cardId,
+            },
+            ...prev
+        ]);
+        // Create receiving entry on banks side
+        setEntries(prev => [
+            {
+                id: Math.random().toString(36).substr(2, 9),
+                date: new Date().toISOString().split('T')[0],
+                project: `Received from Crypto`,
+                earned: amount,
+                saved: 0,
+                given: 0,
+                givenTo: "Crypto Off-Ramp",
+                mode: "web2" as const,
+                walletId: cardId,
             },
             ...prev
         ]);
