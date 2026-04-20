@@ -24,9 +24,8 @@ export async function GET() {
       network:       r.network       ?? "Ethereum",
       balance:       Number(r.currentBalance),
       createdAt:     r.createdAt.toISOString().slice(0,10),
-      isEncrypted:   ( r.walletMeta as any)?.isEncrypted   ?? false,
-      encryptedData: ( r.walletMeta as any)?.encryptedData ?? null,
-      passcode:      ( r.walletMeta as any)?.passcode       ?? null,
+      isEncrypted:   (r.walletMeta as any)?.isEncrypted   ?? false,
+      encryptedData: (r.walletMeta as any)?.encryptedData ?? null,
     })));
   } catch (err) {
     console.error("[GET /api/wallets]", err);
@@ -43,15 +42,14 @@ export async function POST(req: NextRequest) {
         userId,
         name:             body.name,
         type:             "CRYPTO_WALLET",
-        network:          body.network  ?? "Ethereum",
-        walletAddress:    body.address  ?? null,
-        currentBalance:   body.balance  ?? 0,
-        availableBalance: body.balance  ?? 0,
+        network:          body.network       ?? "Ethereum",
+        walletAddress:    body.address       ?? body.walletAddress ?? null,
+        currentBalance:   body.balance       ?? body.currentBalance ?? 0,
+        availableBalance: body.balance       ?? body.availableBalance ?? 0,
         color:            "#8b5cf6",
         walletMeta: body.isEncrypted ? {
           isEncrypted:   true,
           encryptedData: body.encryptedData ?? null,
-          passcode:      body.passcode      ?? null,
         } : undefined,
       },
     });
@@ -64,7 +62,6 @@ export async function POST(req: NextRequest) {
       createdAt:     row.createdAt.toISOString().slice(0,10),
       isEncrypted:   (row.walletMeta as any)?.isEncrypted   ?? false,
       encryptedData: (row.walletMeta as any)?.encryptedData ?? null,
-      passcode:      (row.walletMeta as any)?.passcode       ?? null,
     }, { status: 201 });
   } catch (err) {
     console.error("[POST /api/wallets]", err);

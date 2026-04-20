@@ -407,6 +407,27 @@ export default function FinanceDashboard() {
   const [securityNewPass, setSecurityNewPass] = useState("");
   const [securityPassMessage, setSecurityPassMessage] = useState({ text: "", type: "" });
   
+  // Wallet state
+  type Wallet = { id: string; name: string; address: string; network: string; balance: number; createdAt: string; isEncrypted?: boolean; encryptedData?: any; };
+  const [wallets, setWallets] = useState<Wallet[]>([]);
+  const [loadingWallets, setLoadingWallets] = useState(true);
+  const [showAddWallet, setShowAddWallet] = useState(false);
+  const [walletForm, setWalletForm] = useState({ name: '', address: '', network: 'Ethereum', balance: '', encrypt: false });
+  const [walletError, setWalletError] = useState('');
+  const [deletingWalletId, setDeletingWalletId] = useState<string | null>(null);
+  const [decryptingWalletId, setDecryptingWalletId] = useState<string | null>(null);
+  const [decryptPasscode, setDecryptPasscode] = useState('');
+  
+  // Fetch wallets from API
+  async function fetchWallets() {
+    try {
+      const res = await fetch('/api/wallets');
+      if (res.ok) { const data = await res.json(); setWallets(data); }
+    } catch {}
+    setLoadingWallets(false);
+  }
+  useEffect(() => { fetchWallets(); }, []);
+  
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleProfileImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -500,6 +521,26 @@ export default function FinanceDashboard() {
   useEffect(() => { localStorage.setItem('fv_profilePic', profilePic); }, [profilePic]);
   useEffect(() => { localStorage.setItem('fv_web2Goal', JSON.stringify(web2Goal)); }, [web2Goal]);
   useEffect(() => { localStorage.setItem('fv_web3Goal', JSON.stringify(web3Goal)); }, [web3Goal]);
+
+  // Hydrate profile from localStorage (fixes Next.js SSR override)
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('fv_theme');
+    if (savedTheme === 'dark' || savedTheme === 'light') setTheme(savedTheme);
+    const savedPasscode = localStorage.getItem('fv_passcode');
+    if (savedPasscode) setAppPasscode(savedPasscode);
+    const savedFirst = localStorage.getItem('fv_firstName');
+    if (savedFirst) setFirstName(savedFirst);
+    const savedLast = localStorage.getItem('fv_lastName');
+    if (savedLast) setLastName(savedLast);
+    const savedEmail = localStorage.getItem('fv_email');
+    if (savedEmail) setEmail(savedEmail);
+    const savedPic = localStorage.getItem('fv_profilePic');
+    if (savedPic) setProfilePic(savedPic);
+    const savedWeb2 = localStorage.getItem('fv_web2Goal');
+    if (savedWeb2) try { setWeb2Goal(JSON.parse(savedWeb2)); } catch {}
+    const savedWeb3 = localStorage.getItem('fv_web3Goal');
+    if (savedWeb3) try { setWeb3Goal(JSON.parse(savedWeb3)); } catch {}
+  }, []);
 
   // Fetch entries from API on mount and mode change
   useEffect(() => {
@@ -1287,67 +1328,55 @@ export default function FinanceDashboard() {
                 <div className="flex justify-between items-end mb-8">
                   <div>
                     <h2 className="text-2xl font-bold text-zinc-100">My Wallets</h2>
-                    <p className="text-sm text-zinc-400">Manage your connected hardware wallets and token balances.</p>
+                    <p className="text-sm text-zinc-400">{wallets.length} wallet{wallets.length !== 1 ? 's' : ''} connected</p>
                   </div>
-                  <button className="px-4 py-2 bg-[#D4FE44] text-[#0A0A0A] rounded-xl font-bold text-sm hover:bg-[#bceb29] transition-all flex items-center gap-2">
-                    <Plus size={16}/> Connect Wallet
+                  <button onClick={() => { setShowAddWallet(true); setWalletError(''); }} className="px-4 py-2 bg-[#D4FE44] text-[#0A0A0A] rounded-xl font-bold text-sm hover:bg-[#bceb29] transition-all flex items-center gap-2">
+                    <Plus size={16}/> Add Wallet
                   </button>
                 </div>
 
+                {loadingWallets ? (
+                  <div className="flex items-center justify-center py-20"><div className="w-6 h-6 border-2 border-[#D4FE44] border-t-transparent rounded-full animate-spin"></div></div>
+                ) : wallets.length === 0 ? (
+                  <div className="bg-[#131316] border border-[#222226] rounded-3xl p-12 text-center">
+                    <Wallet size={40} className="text-zinc-600 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-zinc-300 mb-2">No wallets yet</h3>
+                    <p className="text-sm text-zinc-500 mb-6">Add your first wallet to start tracking your web3 portfolio.</p>
+                    <button onClick={() => { setShowAddWallet(true); setWalletError(''); }} className="px-6 py-3 bg-[#D4FE44] text-[#0A0A0A] rounded-xl font-bold text-sm hover:bg-[#bceb29] transition-all"><Plus size={16} className="inline mr-2"/>Add Wallet</button>
+                  </div>
+                ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Wallet 1 */}
-                  <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm flex flex-col group hover:border-[#D4FE44]/30 transition-colors">
+                  {wallets.map((w) => (
+                  <div key={w.id} className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm flex flex-col group hover:border-[#D4FE44]/30 transition-colors">
                     <div className="flex justify-between items-start mb-6">
                        <div className="flex items-center gap-3">
                          <div className="w-10 h-10 rounded-full bg-[#1C1C21] flex items-center justify-center"><Wallet size={18} className="text-zinc-300"/></div>
                          <div>
-                           <h3 className="font-bold text-zinc-100">MetaMask</h3>
-                           <p className="text-xs text-zinc-500 font-mono">0x1A4...bd92</p>
+                           <h3 className="font-bold text-zinc-100">{w.name}</h3>
+                           <p className="text-xs text-zinc-500 font-mono">{w.address.length > 12 ? `${w.address.slice(0,6)}...${w.address.slice(-4)}` : w.address}</p>
                          </div>
                        </div>
-                       <button className="w-8 h-8 rounded-full bg-[#1C1C21] flex items-center justify-center text-zinc-400 hover:text-white"><ExternalLink size={14}/></button>
+                       <div className="flex gap-1">
+                         {w.isEncrypted && (
+                           <button onClick={() => { setDecryptingWalletId(w.id); setDecryptPasscode(''); }} className="w-8 h-8 rounded-full bg-[#1C1C21] flex items-center justify-center text-zinc-400 hover:text-amber-400 transition-colors" title="Decrypt"><Lock size={14}/></button>
+                         )}
+                         <button onClick={() => setDeletingWalletId(w.id)} className="w-8 h-8 rounded-full bg-[#1C1C21] flex items-center justify-center text-zinc-400 hover:text-red-400 transition-colors" title="Delete"><Trash2 size={14}/></button>
+                       </div>
                     </div>
                     <div className="mb-4">
                       <p className="text-xs font-semibold text-zinc-400 mb-1 tracking-wider uppercase">Total Balance</p>
-                      <p className="text-2xl font-bold text-zinc-100">$12,450.00</p>
+                      <p className="text-2xl font-bold text-zinc-100">${w.balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
                     </div>
                     <div className="space-y-3 pt-4 border-t border-[#222226]">
                        <div className="flex justify-between items-center">
-                         <div className="flex items-center gap-2"><span className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-[10px] font-bold">ETH</span> <span className="text-sm font-semibold text-zinc-300">Ethereum</span></div>
-                         <div className="text-sm font-bold text-zinc-100">3.24 ETH</div>
-                       </div>
-                       <div className="flex justify-between items-center">
-                         <div className="flex items-center gap-2"><span className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-[10px] font-bold">USDC</span> <span className="text-sm font-semibold text-zinc-300">USD Coin</span></div>
-                         <div className="text-sm font-bold text-zinc-100">4,500 USDC</div>
+                         <div className="flex items-center gap-2"><span className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-[10px] font-bold">{w.network === 'Solana' ? 'SOL' : w.network === 'Bitcoin' ? 'BTC' : 'ETH'}</span> <span className="text-sm font-semibold text-zinc-300">{w.network}</span></div>
+                         <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${w.isEncrypted ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'}`}>{w.isEncrypted ? '🔒 Encrypted' : 'Unencrypted'}</span>
                        </div>
                     </div>
                   </div>
-
-                  {/* Wallet 2 */}
-                  <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm flex flex-col group hover:border-[#D4FE44]/30 transition-colors">
-                    <div className="flex justify-between items-start mb-6">
-                       <div className="flex items-center gap-3">
-                         <div className="w-10 h-10 rounded-full bg-[#1C1C21] flex items-center justify-center"><Wallet size={18} className="text-zinc-300"/></div>
-                         <div>
-                           <h3 className="font-bold text-zinc-100">Phantom</h3>
-                           <p className="text-xs text-zinc-500 font-mono">7xQa...9yZ1</p>
-                         </div>
-                       </div>
-                       <button className="w-8 h-8 rounded-full bg-[#1C1C21] flex items-center justify-center text-zinc-400 hover:text-white"><ExternalLink size={14}/></button>
-                    </div>
-                    <div className="mb-4">
-                      <p className="text-xs font-semibold text-zinc-400 mb-1 tracking-wider uppercase">Total Balance</p>
-                      <p className="text-2xl font-bold text-zinc-100">$8,230.50</p>
-                    </div>
-                    <div className="space-y-3 pt-4 border-t border-[#222226]">
-                       <div className="flex justify-between items-center">
-                         <div className="flex items-center gap-2"><span className="w-6 h-6 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center text-[10px] font-bold">SOL</span> <span className="text-sm font-semibold text-zinc-300">Solana</span></div>
-                         <div className="text-sm font-bold text-zinc-100">145.2 SOL</div>
-                       </div>
-                    </div>
-                  </div>
-
+                  ))}
                 </div>
+                )}
               </div>
             )}
           </div>
@@ -1667,15 +1696,15 @@ export default function FinanceDashboard() {
                 
                 <div>
                   <p className="text-[#0A0A0A]/60 text-xs font-bold uppercase tracking-wider mb-1">Available Balance</p>
-                  <h3 className="text-[#0A0A0A] text-3xl font-extrabold tracking-tight">${netIncome.toLocaleString()}</h3>
+                  <h3 className="text-[#0A0A0A] text-3xl font-extrabold tracking-tight">${wallets.length > 0 ? wallets.reduce((sum, w) => sum + w.balance, 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : netIncome.toLocaleString()}</h3>
                 </div>
                 
                 <div className="flex justify-between items-end">
                   <div className="text-[#0A0A0A]/80 font-semibold tracking-widest text-sm font-mono">
-                    **** **** **** 4209
+                    {wallets.length > 0 ? (wallets[0].address.length > 12 ? `${wallets[0].address.slice(0,6)}...${wallets[0].address.slice(-4)}` : wallets[0].address) : '**** **** **** ****'}
                   </div>
                   <div className="text-[#0A0A0A] font-bold text-sm">
-                    12/28
+                    {wallets.length > 0 ? `${wallets.length} wallet${wallets.length > 1 ? 's' : ''}` : 'No wallets'}
                   </div>
                 </div>
               </div>
@@ -1808,6 +1837,171 @@ export default function FinanceDashboard() {
               >
                 Delete
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Add Wallet Modal */}
+      {showAddWallet && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#131316] border border-[#222226] max-w-md w-full rounded-3xl p-6 shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-zinc-100">Add Wallet</h3>
+              <button onClick={() => setShowAddWallet(false)} className="w-8 h-8 rounded-full bg-[#1C1C21] flex items-center justify-center text-zinc-400 hover:text-white"><X size={16}/></button>
+            </div>
+            {walletError && <div className="px-3 py-2 rounded-lg text-xs font-medium border bg-red-500/10 text-red-500 border-red-500/20 mb-4">{walletError}</div>}
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-medium text-zinc-400 mb-1.5 block">Wallet Name</label>
+                <input value={walletForm.name} onChange={e => setWalletForm({...walletForm, name: e.target.value})} placeholder="e.g. MetaMask, Ledger" className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-zinc-400 mb-1.5 block">Wallet Address</label>
+                <input value={walletForm.address} onChange={e => setWalletForm({...walletForm, address: e.target.value})} placeholder="0x... or Solana address" className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors font-mono text-xs" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-medium text-zinc-400 mb-1.5 block">Network</label>
+                  <select value={walletForm.network} onChange={e => setWalletForm({...walletForm, network: e.target.value})} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors">
+                    <option value="Ethereum">Ethereum</option>
+                    <option value="Solana">Solana</option>
+                    <option value="Bitcoin">Bitcoin</option>
+                    <option value="Polygon">Polygon</option>
+                    <option value="Arbitrum">Arbitrum</option>
+                    <option value="Base">Base</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-zinc-400 mb-1.5 block">Balance (USD)</label>
+                  <input type="number" step="0.01" value={walletForm.balance} onChange={e => setWalletForm({...walletForm, balance: e.target.value})} placeholder="0.00" className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors" />
+                </div>
+              </div>
+              <div className="bg-[#09090B] border border-[#222226] rounded-xl p-4 flex items-center gap-3">
+                <Shield size={18} className="text-amber-400" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-zinc-200">Encrypt Address</p>
+                  <p className="text-xs text-zinc-500">Hide wallet address behind your passcode</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" checked={walletForm.encrypt || false} onChange={e => setWalletForm({...walletForm, encrypt: e.target.checked})} className="sr-only peer" />
+                  <div className="w-9 h-5 bg-[#222226] rounded-full peer peer-checked:bg-[#D4FE44] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                </label>
+              </div>
+            </div>
+            <button onClick={async () => {
+              setWalletError('');
+              if (!walletForm.name.trim()) { setWalletError('Wallet name is required.'); return; }
+              if (!walletForm.address.trim()) { setWalletError('Wallet address is required.'); return; }
+              const bal = parseFloat(walletForm.balance) || 0;
+              const doEncrypt = walletForm.encrypt || false;
+              try {
+                let payload: any = {
+                  name: walletForm.name.trim(),
+                  address: walletForm.address.trim(),
+                  network: walletForm.network,
+                  balance: bal,
+                };
+                if (doEncrypt) {
+                  const { encryptData } = await import('./utils/encryption');
+                  const appPasscode = localStorage.getItem('fv_passcode') || '123456';
+                  const encrypted = await encryptData(walletForm.address.trim(), appPasscode);
+                  payload = {
+                    ...payload,
+                    address: walletForm.address.trim().slice(0, 4) + '••••••••' + walletForm.address.trim().slice(-4),
+                    isEncrypted: true,
+                    encryptedData: encrypted,
+                  };
+                }
+                const res = await fetch('/api/wallets', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(payload),
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                setShowAddWallet(false);
+                setWalletForm({ name: '', address: '', network: 'Ethereum', balance: '', encrypt: false });
+                fetchWallets();
+              } catch (err: any) { setWalletError('Failed to add wallet: ' + err.message); }
+            }} className="w-full py-3 mt-6 bg-[#D4FE44] text-[#0A0A0A] rounded-xl font-bold text-sm hover:bg-[#bceb29] transition-colors">
+              Add Wallet
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Wallet Modal */}
+      {deletingWalletId && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#131316] border border-[#222226] max-w-sm w-full rounded-3xl p-6 shadow-2xl relative text-center">
+            <Trash2 size={40} className="text-red-500 mx-auto mb-4 opacity-90" strokeWidth={1.5} />
+            <h3 className="text-xl font-bold text-zinc-100 mb-2">Delete Wallet?</h3>
+            <p className="text-zinc-400 text-sm mb-8">This will permanently remove this wallet from your dashboard.</p>
+            <div className="flex gap-4">
+              <button onClick={() => setDeletingWalletId(null)} className="flex-1 py-3 bg-[#1C1C21] hover:bg-[#222226] text-zinc-300 rounded-xl font-semibold text-sm border border-[#2A2A30] transition-colors">Cancel</button>
+              <button onClick={async () => {
+                const id = deletingWalletId;
+                setDeletingWalletId(null);
+                setWallets(prev => prev.filter(w => w.id !== id));
+                try { await fetch(`/api/wallets/${id}`, { method: 'DELETE' }); } catch {}
+                fetchWallets();
+              }} className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold text-sm shadow-[0_5px_20px_rgba(239,68,68,0.3)] transition-all">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Decrypt Wallet Modal */}
+      {decryptingWalletId && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#131316] border border-[#222226] max-w-sm w-full rounded-3xl p-6 shadow-2xl">
+            <div className="text-center mb-6">
+              <Lock size={40} className="text-amber-400 mx-auto mb-4" />
+              <h3 className="text-xl font-bold text-zinc-100 mb-2">Decrypt Wallet</h3>
+              <p className="text-zinc-400 text-sm">Enter your 6-digit passcode to reveal the wallet address.</p>
+            </div>
+            <input type="password" maxLength={6} value={decryptPasscode} onChange={e => setDecryptPasscode(e.target.value)} placeholder="••••••" className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors font-mono tracking-widest text-center mb-4" />
+            <div className="flex gap-4">
+              <button onClick={() => { setDecryptingWalletId(null); setDecryptPasscode(''); }} className="flex-1 py-3 bg-[#1C1C21] hover:bg-[#222226] text-zinc-300 rounded-xl font-semibold text-sm border border-[#2A2A30] transition-colors">Cancel</button>
+              <button onClick={async () => {
+                try {
+                  // Fetch wallet to get encrypted data
+                  const walletRes = await fetch(`/api/wallets/${decryptingWalletId}`);
+                  if (!walletRes.ok) throw new Error('Wallet not found');
+                  const wallet = await walletRes.json();
+                  if (!wallet.encryptedData) throw new Error('No encrypted data');
+                  
+                  // Decrypt client-side
+                  const { decryptData } = await import('./utils/encryption');
+                  const decryptedAddress = await decryptData(
+                    wallet.encryptedData.encryptedData,
+                    decryptPasscode,
+                    wallet.encryptedData.salt,
+                    wallet.encryptedData.iv
+                  );
+                  
+                  // Update wallet to remove encryption and restore real address
+                  const updateRes = await fetch(`/api/wallets/${decryptingWalletId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      address: decryptedAddress,
+                      isEncrypted: false,
+                    }),
+                  });
+                  
+                  if (updateRes.ok) {
+                    setDecryptingWalletId(null);
+                    setDecryptPasscode('');
+                    fetchWallets();
+                  } else {
+                    alert('Failed to save decrypted wallet.');
+                  }
+                } catch (err: any) {
+                  alert('Decryption failed: wrong passcode or corrupted data.');
+                }
+              }} className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-sm transition-all">Decrypt</button>
             </div>
           </div>
         </div>
