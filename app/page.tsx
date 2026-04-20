@@ -1757,6 +1757,15 @@ export default function FinanceDashboard() {
         onSave={async (entryData) => {
         const newEntry = { ...entryData, id: Math.random().toString(36).substr(2, 9), mode };
         setEntries(prev => [newEntry, ...prev]);
+        // Update card/wallet balance
+        if (newEntry.walletId) {
+          const delta = (newEntry.earned || 0) - (newEntry.given || 0);
+          if (mode === 'web2') {
+            setBankCards(prev => prev.map(c => c.id === newEntry.walletId ? { ...c, balance: Math.max(0, c.balance + delta) } : c));
+          } else {
+            setWallets(prev => prev.map(w => w.id === newEntry.walletId ? { ...w, balance: Math.max(0, w.balance + delta) } : w));
+          }
+        }
         setShowAdd(false);
         try {
           await fetch("/api/entries", {
@@ -1772,6 +1781,13 @@ export default function FinanceDashboard() {
       {showTransfer && <TransferModal onClose={() => setShowTransfer(false)} onTransfer={(amount, fromCardId, toCardId) => {
         const from = bankCards.find(c => c.id === fromCardId)?.name || "Card";
         const to = bankCards.find(c => c.id === toCardId)?.name || "Card";
+        // Update card balances
+        setBankCards(prev => prev.map(c => {
+          if (c.id === fromCardId) return { ...c, balance: Math.max(0, c.balance - amount) };
+          if (c.id === toCardId) return { ...c, balance: c.balance + amount };
+          return c;
+        }));
+        // Create transfer entries
         setEntries(prev => [
             {
                 id: Math.random().toString(36).substr(2, 9),
@@ -1842,6 +1858,16 @@ export default function FinanceDashboard() {
               <button 
                 onClick={async () => {
                   const id = deletingTransactionId;
+                  // Reverse balance change
+                  const entry = entries.find(e => e.id === id);
+                  if (entry?.walletId) {
+                    const delta = -((entry.earned || 0) - (entry.given || 0));
+                    if (entry.mode === 'web2') {
+                      setBankCards(prev => prev.map(c => c.id === entry.walletId ? { ...c, balance: Math.max(0, c.balance + delta) } : c));
+                    } else {
+                      setWallets(prev => prev.map(w => w.id === entry.walletId ? { ...w, balance: Math.max(0, w.balance + delta) } : w));
+                    }
+                  }
                   setEntries(prev => prev.filter(e => e.id !== id));
                   setDeletingTransactionId(null);
                   try {
