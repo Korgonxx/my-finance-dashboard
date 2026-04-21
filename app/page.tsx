@@ -1,4 +1,5 @@
 "use client";
+import { useExchangeRates } from "./lib/useExchangeRates";
 
 import React, { useState, useMemo, useEffect } from 'react';
 import {
@@ -54,6 +55,7 @@ function EntryModal({ onClose, onSave, mode, bankCards, wallets }: {
   wallets: Array<{ id: string; name: string; address: string }>;
 }) {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const { rates, convert, formatCurrency } = useExchangeRates();
   const [project, setProject] = useState("");
   const [earned, setEarned] = useState("");
   const [saved, setSaved] = useState("");
@@ -281,7 +283,7 @@ function TransferToWeb2Modal({ onClose, onTransfer, bankCards, wallets }: {
   const [cardId, setCardId] = useState(bankCards[0]?.id || "");
   const [walletId, setWalletId] = useState(wallets[0]?.id || "");
   const [isTransferring, setIsTransferring] = useState(false);
-  const USD_TO_INR = 83.5;
+  const { convert } = useExchangeRates();
 
   const handleTransfer = async () => {
     setIsTransferring(true);
@@ -315,7 +317,7 @@ function TransferToWeb2Modal({ onClose, onTransfer, bankCards, wallets }: {
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-zinc-400">To Card</label>
             <select value={cardId} onChange={e => setCardId(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none focus:border-emerald-400 transition-colors">
-              {bankCards.map(c => <option key={c.id} value={c.id}>{c.name} (**** {c.last4}) — ₹{(c.balance * USD_TO_INR).toLocaleString('en-IN', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</option>)}
+              {bankCards.map(c => <option key={c.id} value={c.id}>{c.name} (**** {c.last4}) — ₹{convert(c.balance, 'INR').toLocaleString('en-IN', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</option>)}
             </select>
           </div>
           )}
@@ -332,7 +334,7 @@ function TransferToWeb2Modal({ onClose, onTransfer, bankCards, wallets }: {
                />
             </div>
             {amount && Number(amount) > 0 && (
-              <p className="text-xs text-zinc-500 mt-1">≈ ₹{(Number(amount) * USD_TO_INR).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})} INR</p>
+              <p className="text-xs text-zinc-500 mt-1">≈ ₹{convert(Number(amount), 'INR').toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})} INR</p>
             )}
           </div>
           <div className="flex gap-3 pt-4">
@@ -399,11 +401,11 @@ export default function FinanceDashboard() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [web2Goal, setWeb2Goal] = useState({ amount: 10000, currency: "USD" });
   const [web3Goal, setWeb3Goal] = useState({ amount: 5, currency: "ETH" });
-  const USD_TO_INR = 83.5;
+  const { convert } = useExchangeRates();
   const bankCurrency = web2Goal.currency || 'USD';
   const bankSymbol = bankCurrency === 'INR' ? '₹' : bankCurrency === 'EUR' ? '€' : bankCurrency === 'GBP' ? '£' : '$';
   const toBankDisplay = (usdAmount: number) => {
-    if (bankCurrency === 'INR') return (usdAmount * USD_TO_INR).toLocaleString('en-IN', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+    if (bankCurrency === 'INR') return convert(usdAmount, 'INR').toLocaleString('en-IN', {minimumFractionDigits: 0, maximumFractionDigits: 0});
     return usdAmount.toLocaleString();
   };
   
