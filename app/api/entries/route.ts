@@ -51,10 +51,10 @@ export async function GET(req: NextRequest) {
   
   try {
     if (mode === "web3") {
-      const rows = await db.web3DashboardEntry.findMany({ orderBy: { date: "desc" } });
+      const rows = await db.cryptoDashboardEntry.findMany({ orderBy: { date: "desc" } });
       return NextResponse.json(rows.map(toCryptoEntry));
     } else {
-      const rows = await db.web2DashboardEntry.findMany({ orderBy: { date: "desc" } });
+      const rows = await db.banksDashboardEntry.findMany({ orderBy: { date: "desc" } });
       return NextResponse.json(rows.map(toBanksEntry));
     }
   } catch (err) {
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
         currentValue:     body.currentValue    ?? body.earned ?? 0,
         roi:              body.roi             ?? 0,
       };
-      const row = await db.web3DashboardEntry.upsert({
+      const row = await db.cryptoDashboardEntry.upsert({
         where: { id: body.id },
         update: data,
         create: { ...data, id: body.id },
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
         given:   body.given  ?? 0,
         givenTo: body.givenTo ?? "",
       };
-      const row = await db.web2DashboardEntry.upsert({
+      const row = await db.banksDashboardEntry.upsert({
         where: { id: body.id },
         update: data,
         create: { ...data, id: body.id },

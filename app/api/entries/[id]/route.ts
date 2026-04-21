@@ -39,9 +39,9 @@ function toEntry(row: any, dbMode: string) {
 }
 
 async function findEntry(id: string) {
-  const web2 = await db.web2DashboardEntry.findUnique({ where: { id } });
+  const web2 = await db.banksDashboardEntry.findUnique({ where: { id } });
   if (web2) return { row: web2, mode: "web2" };
-  const web3 = await db.web3DashboardEntry.findUnique({ where: { id } });
+  const web3 = await db.cryptoDashboardEntry.findUnique({ where: { id } });
   if (web3) return { row: web3, mode: "web3" };
   return null;
 }
@@ -54,7 +54,7 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
 
     let row;
     if (dbMode === "web3") {
-      row = await db.web3DashboardEntry.update({
+      row = await db.cryptoDashboardEntry.update({
         where: { id },
         data: {
           date:             body.date,
@@ -68,7 +68,7 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
         },
       });
     } else {
-      row = await db.web2DashboardEntry.update({
+      row = await db.banksDashboardEntry.update({
         where: { id },
         data: {
           date:    body.date,
@@ -95,9 +95,9 @@ export async function DELETE(_req: NextRequest, context: { params: Promise<{ id:
       return NextResponse.json({ error: "Entry not found" }, { status: 404 });
     }
     if (found.mode === "web3") {
-      await db.web3DashboardEntry.delete({ where: { id } });
+      await db.cryptoDashboardEntry.delete({ where: { id } });
     } else {
-      await db.web2DashboardEntry.delete({ where: { id } });
+      await db.banksDashboardEntry.delete({ where: { id } });
     }
     return NextResponse.json({ ok: true });
   } catch (err) {

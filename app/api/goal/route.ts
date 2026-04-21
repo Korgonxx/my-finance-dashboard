@@ -12,11 +12,11 @@ export async function GET(req: NextRequest) {
   
   try {
     if (mode === "web3") {
-      const row = await db.web3DashboardGoal.findFirst();
+      const row = await db.cryptoDashboardGoal.findFirst();
       if (!row) return NextResponse.json({ amount: 100000, currency: "USD" });
       return NextResponse.json({ amount: Number(row.amount), currency: row.currency });
     } else {
-      const row = await db.web2DashboardGoal.findFirst();
+      const row = await db.banksDashboardGoal.findFirst();
       if (!row) return NextResponse.json({ amount: 5000, currency: "USD" });
       return NextResponse.json({ amount: Number(row.amount), currency: row.currency });
     }
@@ -32,29 +32,29 @@ export async function POST(req: NextRequest) {
   
   try {
     if (mode === "web3") {
-      const existing = await db.web3DashboardGoal.findFirst();
+      const existing = await db.cryptoDashboardGoal.findFirst();
       let row;
       if (existing) {
-        row = await db.web3DashboardGoal.update({
+        row = await db.cryptoDashboardGoal.update({
           where: { id: existing.id },
           data: { amount, currency },
         });
       } else {
-        row = await db.web3DashboardGoal.create({
+        row = await db.cryptoDashboardGoal.create({
           data: { amount, currency },
         });
       }
       return NextResponse.json({ amount: Number(row.amount), currency: row.currency });
     } else {
-      const existing = await db.web2DashboardGoal.findFirst();
+      const existing = await db.banksDashboardGoal.findFirst();
       let row;
       if (existing) {
-        row = await db.web2DashboardGoal.update({
+        row = await db.banksDashboardGoal.update({
           where: { id: existing.id },
           data: { amount, currency },
         });
       } else {
-        row = await db.web2DashboardGoal.create({
+        row = await db.banksDashboardGoal.create({
           data: { amount, currency },
         });
       }

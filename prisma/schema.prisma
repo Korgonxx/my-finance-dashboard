@@ -263,7 +263,7 @@ model AuditLog {
   @@map("audit_logs")
 }
 
-model Web2DashboardEntry {
+model BanksDashboardEntry {
   id        String   @id @default(cuid())
   date      String
   project   String
@@ -276,20 +276,20 @@ model Web2DashboardEntry {
 
   @@index([date])
   @@index([createdAt])
-  @@map("web2_dashboard_entries")
+  @@map("banks_dashboard_entries")
 }
 
-model Web2DashboardGoal {
+model BanksDashboardGoal {
   id        String   @id @default(cuid())
   amount    Decimal  @db.Decimal(20, 8)
   currency  String   @default("USD")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@map("web2_dashboard_goal")
+  @@map("banks_dashboard_goals")
 }
 
-model Web2Card {
+model BanksCard {
   id        String   @id @default(cuid())
   name      String
   cardType  String
@@ -302,10 +302,10 @@ model Web2Card {
   updatedAt DateTime @updatedAt
 
   @@index([createdAt])
-  @@map("web2_cards")
+  @@map("banks_cards")
 }
 
-model Web2Performance {
+model BanksPerformance {
   id        String   @id @default(cuid())
   month     String   @unique
   earned    Decimal  @default(0) @db.Decimal(20, 8)
@@ -315,10 +315,10 @@ model Web2Performance {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@map("web2_performance")
+  @@map("banks_performance")
 }
 
-model Web3DashboardEntry {
+model CryptoDashboardEntry {
   id               String   @id @default(cuid())
   date             String
   project          String
@@ -334,20 +334,20 @@ model Web3DashboardEntry {
   @@index([date])
   @@index([walletAddress])
   @@index([createdAt])
-  @@map("web3_dashboard_entries")
+  @@map("crypto_dashboard_entries")
 }
 
-model Web3DashboardGoal {
+model CryptoDashboardGoal {
   id        String   @id @default(cuid())
   amount    Decimal  @db.Decimal(20, 8)
   currency  String   @default("USD")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@map("web3_dashboard_goal")
+  @@map("crypto_dashboard_goals")
 }
 
-model Web3Wallet {
+model CryptoWalletLegacy {
   id        String   @id @default(cuid())
   name      String   @unique
   address   String   @unique
@@ -361,10 +361,10 @@ model Web3Wallet {
 
   @@index([address])
   @@index([createdAt])
-  @@map("web3_wallets")
+  @@map("crypto_wallets")
 }
 
-model Web3Performance {
+model CryptoPerformance {
   id              String   @id @default(cuid())
   month           String
   walletAddress   String
@@ -377,7 +377,7 @@ model Web3Performance {
   @@unique([month, walletAddress])
   @@index([walletAddress])
   @@index([month])
-  @@map("web3_performance")
+  @@map("crypto_performance")
 }
 
 model DashboardEntry {
