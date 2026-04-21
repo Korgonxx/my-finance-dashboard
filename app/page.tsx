@@ -497,11 +497,16 @@ export default function FinanceDashboard() {
   const [showAddCard, setShowAddCard] = useState(false);
   const [cardForm, setCardForm] = useState({ name: '', last4: '', expiry: '', type: 'virtual' as 'physical' | 'virtual' });
   const [cardError, setCardError] = useState('');
-  // Load bankCards from localStorage on mount
+  // Load bankCards from localStorage on mount (merge with defaults if localStorage has fewer cards)
   useEffect(() => {
     const saved = localStorage.getItem('fv_bankCards');
     if (saved) {
-      try { setBankCards(JSON.parse(saved)); } catch {}
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setBankCards(parsed);
+        }
+      } catch {}
     }
   }, []);
   // Persist bankCards to localStorage on change
