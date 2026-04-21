@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/db";
+import { cardUpdateSchema } from "../../../_lib/validation";
 
 export async function DELETE(
   _req: NextRequest,
@@ -25,12 +26,17 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await req.json();
-    const updateData: any = {};
-    if (body.balance !== undefined) {
-      updateData.currentBalance = body.balance;
-      updateData.availableBalance = body.balance;
+    const parsed = cardUpdateSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
     }
-    if (body.name !== undefined) updateData.name = body.name;
+    const data = parsed.data;
+    const updateData: any = {};
+    if (data.balance !== undefined) {
+      updateData.currentBalance = data.balance;
+      updateData.availableBalance = data.balance;
+    }
+    if (data.name !== undefined) updateData.name = data.name;
     const row = await db.account.update({
       where: { id },
       data: updateData,

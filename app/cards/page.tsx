@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useWeb3 } from "../context/Web3Context";
 import { useAppSettings } from "../context/AppSettingsContext";
-import { encryptData, decryptData, maskData, hashPasscode, verifyPasscode } from "../utils/encryption";
+import { encryptData, decryptData, maskData } from "../utils/encryption";
 import { MasterPasscodeGuard } from "../components/MasterPasscodeGuard";
 import { Sidebar, THEME, type ThemeType } from "../components/Sidebar";
 import { PageTransition } from "../components/PageTransition";

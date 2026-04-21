@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/db";
+import { entryUpdateSchema } from "../../../_lib/validation";
 
 function toDbMode(mode: string): string {
   if (mode === "banks") return "web2";
@@ -50,33 +51,38 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
   try {
     const { id } = await context.params;
     const body = await req.json();
-    const dbMode = toDbMode(body.mode ?? "banks");
+    const parsed = entryUpdateSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    }
+    const data = parsed.data;
+    const dbMode = toDbMode(data.mode ?? "banks");
 
     let row;
     if (dbMode === "web3") {
       row = await db.cryptoDashboardEntry.update({
         where: { id },
         data: {
-          date:             body.date,
-          project:          body.project,
-          walletAddress:    body.walletAddress  ?? "",
-          walletName:       body.walletName     ?? "",
-          network:          body.network        ?? "Ethereum",
-          investmentAmount: body.investmentAmount || body.saved || body.given || 0,
-          currentValue:     body.currentValue    || body.earned || body.given || 0,
-          roi:              body.roi             ?? 0,
+          date:             data.date,
+          project:          data.project,
+          walletAddress:    data.walletAddress  ?? "",
+          walletName:       data.walletName     ?? "",
+          network:          data.network        ?? "Ethereum",
+          investmentAmount: data.investmentAmount || data.saved || data.given || 0,
+          currentValue:     data.currentValue    || data.earned || data.given || 0,
+          roi:              data.roi             ?? 0,
         },
       });
     } else {
       row = await db.banksDashboardEntry.update({
         where: { id },
         data: {
-          date:    body.date,
-          project: body.project,
-          earned:  body.earned  ?? 0,
-          saved:   body.saved   ?? 0,
-          given:   body.given   ?? 0,
-          givenTo: (body.givenTo ?? "").toLowerCase(),
+          date:    data.date,
+          project: data.project,
+          earned:  data.earned  ?? 0,
+          saved:   data.saved   ?? 0,
+          given:   data.given   ?? 0,
+          givenTo: (data.givenTo ?? "").toLowerCase(),
         },
       });
     }

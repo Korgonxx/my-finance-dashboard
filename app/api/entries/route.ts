@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/db";
+import { entrySchema } from "../../_lib/validation";
 
 // Map frontend modes to DB table modes
 function toDbMode(mode: string): string {
@@ -61,45 +62,66 @@ export async function GET(req: NextRequest) {
     }
   } catch (err) {
     console.error("[GET /api/entries]", err);
-    return NextResponse.json([], { status: 200 });
+    return NextResponse.json({ error: "Failed to load entries" }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const dbMode = toDbMode(body.mode ?? "banks");
+    const parsed = entrySchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    }
+    const data = parsed.data;
+    const dbMode = toDbMode(data.mode ?? "banks");
 
     if (dbMode === "web3") {
-      const data = {
-        date:             body.date,
-        project:          body.project,
-        walletAddress:    body.walletAddress ?? "",
-        walletName:       body.walletName    ?? "",
-        network:          body.network       ?? "Ethereum",
-        investmentAmount: body.investmentAmount || body.saved || body.given || 0,
-        currentValue:     body.currentValue    || body.earned || body.given || 0,
-        roi:              body.roi             ?? 0,
-      };
       const row = await db.cryptoDashboardEntry.upsert({
-        where: { id: body.id },
-        update: data,
-        create: { ...data, id: body.id },
+        where: { id: data.id ?? "" },
+        update: {
+          date:             data.date,
+          project:          data.project,
+          walletAddress:    data.walletAddress ?? "",
+          walletName:       data.walletName    ?? "",
+          network:          data.network       ?? "Ethereum",
+          investmentAmount: data.investmentAmount || data.saved || data.given || 0,
+          currentValue:     data.currentValue    || data.earned || data.given || 0,
+          roi:              data.roi             ?? 0,
+        },
+        create: {
+          id: data.id ?? undefined,
+          date:             data.date,
+          project:          data.project,
+          walletAddress:    data.walletAddress ?? "",
+          walletName:       data.walletName    ?? "",
+          network:          data.network       ?? "Ethereum",
+          investmentAmount: data.investmentAmount || data.saved || data.given || 0,
+          currentValue:     data.currentValue    || data.earned || data.given || 0,
+          roi:              data.roi             ?? 0,
+        },
       });
       return NextResponse.json(toCryptoEntry(row), { status: 201 });
     } else {
-      const data = {
-        date:    body.date,
-        project: body.project,
-        earned:  body.earned ?? 0,
-        saved:   body.saved  ?? 0,
-        given:   body.given  ?? 0,
-        givenTo: (body.givenTo ?? "").toLowerCase(),
-      };
       const row = await db.banksDashboardEntry.upsert({
-        where: { id: body.id },
-        update: data,
-        create: { ...data, id: body.id },
+        where: { id: data.id ?? "" },
+        update: {
+          date:    data.date,
+          project: data.project,
+          earned:  data.earned ?? 0,
+          saved:   data.saved  ?? 0,
+          given:   data.given  ?? 0,
+          givenTo: (data.givenTo ?? "").toLowerCase(),
+        },
+        create: {
+          id: data.id ?? undefined,
+          date:    data.date,
+          project: data.project,
+          earned:  data.earned ?? 0,
+          saved:   data.saved  ?? 0,
+          given:   data.given  ?? 0,
+          givenTo: (data.givenTo ?? "").toLowerCase(),
+        },
       });
       return NextResponse.json(toBanksEntry(row), { status: 201 });
     }

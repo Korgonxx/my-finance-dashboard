@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/db";
+import { cardSchema } from "../../_lib/validation";
 
 // Get or create a default user ID
 async function getDefaultUserId(): Promise<string> {
@@ -70,24 +71,29 @@ export async function GET() {
     })));
   } catch (err) {
     console.error("[GET /api/cards]", err);
-    return NextResponse.json([]);
+    return NextResponse.json({ error: "Failed to load cards" }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    const parsed = cardSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    }
+    const data = parsed.data;
     const userId = await getDefaultUserId();
     const row = await db.account.create({
       data: {
         userId,
-        name:             body.name,
-        type:             body.type === "physical" ? "CREDIT_CARD" : "CHECKING",
-        accountNumber:    body.last4 ?? null,
-        institutionName:  body.holder ?? null,
-        color:            body.expiry ?? null,
-        currentBalance:   body.balance ?? 0,
-        availableBalance: body.balance ?? 0,
+        name:             data.name,
+        type:             data.type === "physical" ? "CREDIT_CARD" : "CHECKING",
+        accountNumber:    data.last4 ?? null,
+        institutionName:  data.holder ?? null,
+        color:            data.expiry ?? null,
+        currentBalance:   data.balance ?? 0,
+        availableBalance: data.balance ?? 0,
         currency:         "USD",
       },
     });

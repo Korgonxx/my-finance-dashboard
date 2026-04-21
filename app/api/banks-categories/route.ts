@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/db";
+import { categorySchema } from "../../_lib/validation";
 
 export async function GET() {
   try {
@@ -9,18 +10,23 @@ export async function GET() {
     return NextResponse.json(categories);
   } catch (err) {
     console.error("[GET /api/banks-categories]", err);
-    return NextResponse.json([], { status: 200 });
+    return NextResponse.json({ error: "Failed to load categories" }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    const parsed = categorySchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    }
+    const data = parsed.data;
     const category = await db.banksEntryCategory.create({
       data: {
-        name: body.name,
-        icon: body.icon || "📁",
-        color: body.color || "#22c55e",
+        name: data.name,
+        icon: data.icon ?? "📁",
+        color: data.color ?? "#22c55e",
       },
     });
     return NextResponse.json(category, { status: 201 });
@@ -49,12 +55,20 @@ export async function DELETE(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const body = await req.json();
+    const parsed = categorySchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    }
+    const data = parsed.data;
+    if (!data.id) {
+      return NextResponse.json({ error: "Category ID is required" }, { status: 400 });
+    }
     const category = await db.banksEntryCategory.update({
-      where: { id: body.id },
+      where: { id: data.id },
       data: {
-        name: body.name,
-        icon: body.icon,
-        color: body.color,
+        name: data.name,
+        icon: data.icon,
+        color: data.color,
       },
     });
     return NextResponse.json(category);

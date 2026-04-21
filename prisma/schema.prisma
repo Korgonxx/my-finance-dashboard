@@ -14,8 +14,8 @@ model User {
   lastName    String?
   avatarUrl   String?
   theme       String?      @default("dark")
-  banksGoal   Float?       @default(0)
-  cryptoGoal  Float?       @default(0)
+  banksGoal   Decimal?     @default(0) @db.Decimal(20, 8)
+  cryptoGoal  Decimal?     @default(0) @db.Decimal(20, 8)
   timezone    String       @default("UTC")
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
@@ -123,8 +123,8 @@ model Transaction {
   attachments   Attachment[]
   invoiceItems  InvoiceItem[]
   ledgerEntries LedgerEntry[]
-  category      Category?         @relation(fields: [categoryId], references: [id])
-  payee         Payee?            @relation(fields: [payeeId], references: [id])
+  category      Category?         @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  payee         Payee?            @relation(fields: [payeeId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([userId, transactedAt])
@@ -351,6 +351,7 @@ model CryptoDashboardEntry {
   @@index([createdAt], map: "web3_dashboard_entries_createdAt_idx")
   @@index([date], map: "web3_dashboard_entries_date_idx")
   @@index([walletAddress], map: "web3_dashboard_entries_walletAddress_idx")
+  @@index([walletAddress, date])
   @@map("crypto_dashboard_entries")
 }
 
@@ -416,6 +417,7 @@ model DashboardEntry {
 
   @@index([mode])
   @@index([date])
+  @@index([mode, date])
   @@map("dashboard_entries")
 }
 

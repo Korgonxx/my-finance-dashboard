@@ -111,28 +111,8 @@ export async function decryptData(
   }
 }
 
-/**
- * Hash a passcode for verification (using SHA-256)
- * Used to verify master passcode without storing it in plaintext
- */
-export async function hashPasscode(passcode: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(passcode);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-/**
- * Verify a passcode against a hash
- */
-export async function verifyPasscode(
-  passcode: string,
-  hash: string
-): Promise<boolean> {
-  const computed = await hashPasscode(passcode);
-  return computed === hash;
-}
+// Passcode verification is now handled server-side via POST /api/settings
+// with bcrypt.compare — no client-side hashing needed for authentication.
 
 /**
  * Generate a masked version of data

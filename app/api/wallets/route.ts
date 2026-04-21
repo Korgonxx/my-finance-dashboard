@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/db";
+import { walletSchema } from "../../_lib/validation";
 
 // Get or create a default user ID for wallets
 async function getDefaultUserId(): Promise<string> {
@@ -33,7 +34,6 @@ export async function GET() {
       balance:       Number(r.currentBalance),
       createdAt:     r.createdAt.toISOString().slice(0,10),
       isEncrypted:   (r.walletMeta as any)?.isEncrypted   ?? false,
-      encryptedData: (r.walletMeta as any)?.encryptedData ?? null,
     })));
   } catch (err) {
     console.error("[GET /api/wallets]", err);
@@ -44,20 +44,25 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    const parsed = walletSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    }
+    const data = parsed.data;
     const userId = await getDefaultUserId();
     const row = await db.account.create({
       data: {
         userId,
-        name:             body.name,
+        name:             data.name,
         type:             "CRYPTO_WALLET",
-        network:          body.network       ?? "Ethereum",
-        walletAddress:    body.address       ?? body.walletAddress ?? null,
-        currentBalance:   body.balance       ?? body.currentBalance ?? 0,
-        availableBalance: body.balance       ?? body.availableBalance ?? 0,
+        network:          data.network       ?? "Ethereum",
+        walletAddress:    data.address       ?? null,
+        currentBalance:   data.balance       ?? 0,
+        availableBalance: data.balance       ?? 0,
         color:            "#8b5cf6",
-        walletMeta: body.isEncrypted ? {
+        walletMeta: data.isEncrypted ? {
           isEncrypted:   true,
-          encryptedData: body.encryptedData ?? null,
+          encryptedData: data.encryptedData ?? null,
         } : undefined,
       },
     });
@@ -69,7 +74,6 @@ export async function POST(req: NextRequest) {
       balance:       Number(row.currentBalance),
       createdAt:     row.createdAt.toISOString().slice(0,10),
       isEncrypted:   (row.walletMeta as any)?.isEncrypted   ?? false,
-      encryptedData: (row.walletMeta as any)?.encryptedData ?? null,
     }, { status: 201 });
   } catch (err) {
     console.error("[POST /api/wallets]", err);

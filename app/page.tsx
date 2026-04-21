@@ -1,5 +1,6 @@
 "use client";
 import { useExchangeRates } from "./lib/useExchangeRates";
+import { apiFetch, setApiKey, clearApiKey } from "./lib/apiClient";
 
 import React, { useState, useMemo, useEffect } from 'react';
 import {
@@ -67,13 +68,13 @@ function EntryModal({ onClose, onSave, mode, bankCards, wallets }: {
   const [newCatIcon, setNewCatIcon] = useState("📁");
 
   useEffect(() => {
-    fetch("/api/banks-categories").then(r => r.json()).then(setCategories).catch(() => {});
+    apiFetch("/api/banks-categories").then(r => r.json()).then(setCategories).catch(() => {});
   }, []);
 
   const addCategory = async () => {
     if (!newCatName.trim()) return;
     try {
-      const res = await fetch("/api/banks-categories", {
+      const res = await apiFetch("/api/banks-categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newCatName.trim(), icon: newCatIcon }),
@@ -116,17 +117,18 @@ function EntryModal({ onClose, onSave, mode, bankCards, wallets }: {
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-[#131316] border border-[#222226] max-w-md w-full rounded-3xl p-8 shadow-2xl relative">
-        <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-zinc-400 dark:text-zinc-400 hover:text-zinc-50 hover:bg-white/10 transition-colors">
+        <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-zinc-400 hover:text-zinc-50 hover:bg-white/10 transition-colors">
           <X size={18} />
         </button>
         <h2 className="text-2xl font-semibold mb-2 text-zinc-50">New Transaction</h2>
-        <p className="text-sm text-zinc-400 dark:text-zinc-400 mb-8">Record your incoming and outgoing finances.</p>
+        <p className="text-sm text-zinc-400 mb-8">Record your incoming and outgoing finances.</p>
         
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-400">Date</label>
+              <label htmlFor="entryDate" className="text-xs font-medium text-zinc-400">Date</label>
               <input
+                id="entryDate"
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
@@ -134,7 +136,7 @@ function EntryModal({ onClose, onSave, mode, bankCards, wallets }: {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-400">Category</label>
+              <label htmlFor="entryCategory" className="text-xs font-medium text-zinc-400">Category</label>
               {showNewCat ? (
                 <div className="flex gap-2">
                   <select value={newCatIcon} onChange={e => setNewCatIcon(e.target.value)} className="w-14 bg-[#09090B] border border-[#222226] rounded-xl px-2 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]">
@@ -146,7 +148,7 @@ function EntryModal({ onClose, onSave, mode, bankCards, wallets }: {
                 </div>
               ) : (
                 <div className="flex gap-2">
-                  <select value={givenTo} onChange={e => e.target.value === "__new__" ? setShowNewCat(true) : setGivenTo(e.target.value)} className="flex-1 bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]">
+                  <select id="entryCategory" value={givenTo} onChange={e => e.target.value === "__new__" ? setShowNewCat(true) : setGivenTo(e.target.value)} className="flex-1 bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]">
                     <option value="">Select category...</option>
                     {categories.map(c => <option key={c.id} value={c.name}>{c.icon} {c.name}</option>)}
                     <option value="__new__">+ New Category</option>
@@ -156,8 +158,9 @@ function EntryModal({ onClose, onSave, mode, bankCards, wallets }: {
             </div>
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-400">Project / Description</label>
+            <label htmlFor="entryProject" className="text-xs font-medium text-zinc-400">Project / Description</label>
             <input
+              id="entryProject"
               type="text"
               value={project}
               onChange={(e) => setProject(e.target.value)}
@@ -167,8 +170,8 @@ function EntryModal({ onClose, onSave, mode, bankCards, wallets }: {
           </div>
           {items.length > 0 && (
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-400">{mode === 'banks' ? 'Card' : 'Wallet'}</label>
-            <select value={walletId} onChange={e => setWalletId(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors">
+            <label htmlFor="entryWallet" className="text-xs font-medium text-zinc-400">{mode === 'banks' ? 'Card' : 'Wallet'}</label>
+            <select id="entryWallet" value={walletId} onChange={e => setWalletId(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors">
               <option value="">Select {mode === 'banks' ? 'card' : 'wallet'}...</option>
               {items.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
             </select>
@@ -176,8 +179,9 @@ function EntryModal({ onClose, onSave, mode, bankCards, wallets }: {
           )}
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-400">Earned</label>
+              <label htmlFor="entryEarned" className="text-xs font-medium text-zinc-400">Earned</label>
               <input
+                id="entryEarned"
                 type="number"
                 value={earned}
                 onChange={(e) => setEarned(e.target.value)}
@@ -186,8 +190,9 @@ function EntryModal({ onClose, onSave, mode, bankCards, wallets }: {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-400">Saved</label>
+              <label htmlFor="entrySaved" className="text-xs font-medium text-zinc-400">Saved</label>
               <input
+                id="entrySaved"
                 type="number"
                 value={saved}
                 onChange={(e) => setSaved(e.target.value)}
@@ -196,8 +201,9 @@ function EntryModal({ onClose, onSave, mode, bankCards, wallets }: {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-400">Given</label>
+              <label htmlFor="entryGiven" className="text-xs font-medium text-zinc-400">Given</label>
               <input
+                id="entryGiven"
                 type="number"
                 value={given}
                 onChange={(e) => setGiven(e.target.value)}
@@ -207,7 +213,7 @@ function EntryModal({ onClose, onSave, mode, bankCards, wallets }: {
             </div>
           </div>
           <div className="flex gap-3 pt-4">
-            <button onClick={onClose} className="flex-1 py-3.5 bg-white/5 hover:bg-white/10 transition-colors text-zinc-600 dark:text-zinc-300 rounded-2xl font-medium">Cancel</button>
+            <button onClick={onClose} className="flex-1 py-3.5 bg-white/5 hover:bg-white/10 transition-colors text-zinc-300 rounded-2xl font-medium">Cancel</button>
             <button
               onClick={handleSubmit}
               disabled={submitting || !project}
@@ -253,13 +259,13 @@ function EditModal({ entry, onClose, onSave, mode, bankCards, wallets }: {
   const [newCatIcon, setNewCatIcon] = useState("📁");
 
   useEffect(() => {
-    fetch("/api/banks-categories").then(r => r.json()).then(setCategories).catch(() => {});
+    apiFetch("/api/banks-categories").then(r => r.json()).then(setCategories).catch(() => {});
   }, []);
 
   const addCategory = async () => {
     if (!newCatName.trim()) return;
     try {
-      const res = await fetch("/api/banks-categories", {
+      const res = await apiFetch("/api/banks-categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newCatName.trim(), icon: newCatIcon }),
@@ -312,8 +318,9 @@ function EditModal({ entry, onClose, onSave, mode, bankCards, wallets }: {
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-400">Date</label>
+              <label htmlFor="editDate" className="text-xs font-medium text-zinc-400">Date</label>
               <input
+                id="editDate"
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
@@ -321,7 +328,7 @@ function EditModal({ entry, onClose, onSave, mode, bankCards, wallets }: {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-400">Category</label>
+              <label htmlFor="editCategory" className="text-xs font-medium text-zinc-400">Category</label>
               {showNewCat ? (
                 <div className="flex gap-2">
                   <select value={newCatIcon} onChange={e => setNewCatIcon(e.target.value)} className="w-14 bg-[#09090B] border border-[#222226] rounded-xl px-2 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]">
@@ -333,7 +340,7 @@ function EditModal({ entry, onClose, onSave, mode, bankCards, wallets }: {
                 </div>
               ) : (
                 <div className="flex gap-2">
-                  <select value={givenTo} onChange={e => e.target.value === "__new__" ? setShowNewCat(true) : setGivenTo(e.target.value)} className="flex-1 bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]">
+                  <select id="editCategory" value={givenTo} onChange={e => e.target.value === "__new__" ? setShowNewCat(true) : setGivenTo(e.target.value)} className="flex-1 bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]">
                     <option value="">Select category...</option>
                     {categories.map(c => <option key={c.id} value={c.name}>{c.icon} {c.name}</option>)}
                     <option value="__new__">+ New Category</option>
@@ -343,8 +350,9 @@ function EditModal({ entry, onClose, onSave, mode, bankCards, wallets }: {
             </div>
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-400">Project / Description</label>
+            <label htmlFor="editProject" className="text-xs font-medium text-zinc-400">Project / Description</label>
             <input
+              id="editProject"
               type="text"
               value={project}
               onChange={(e) => setProject(e.target.value)}
@@ -354,8 +362,8 @@ function EditModal({ entry, onClose, onSave, mode, bankCards, wallets }: {
           </div>
           {items.length > 0 && (
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-400">{mode === 'banks' ? 'Card' : 'Wallet'}</label>
-            <select value={walletId} onChange={e => setWalletId(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors">
+            <label htmlFor="editWallet" className="text-xs font-medium text-zinc-400">{mode === 'banks' ? 'Card' : 'Wallet'}</label>
+            <select id="editWallet" value={walletId} onChange={e => setWalletId(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors">
               <option value="">Select {mode === 'banks' ? 'card' : 'wallet'}...</option>
               {items.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
             </select>
@@ -363,8 +371,9 @@ function EditModal({ entry, onClose, onSave, mode, bankCards, wallets }: {
           )}
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-400">Earned</label>
+              <label htmlFor="editEarned" className="text-xs font-medium text-zinc-400">Earned</label>
               <input
+                id="editEarned"
                 type="number"
                 value={earned}
                 onChange={(e) => setEarned(e.target.value)}
@@ -373,8 +382,9 @@ function EditModal({ entry, onClose, onSave, mode, bankCards, wallets }: {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-400">Saved</label>
+              <label htmlFor="editSaved" className="text-xs font-medium text-zinc-400">Saved</label>
               <input
+                id="editSaved"
                 type="number"
                 value={saved}
                 onChange={(e) => setSaved(e.target.value)}
@@ -383,8 +393,9 @@ function EditModal({ entry, onClose, onSave, mode, bankCards, wallets }: {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-400">Given</label>
+              <label htmlFor="editGiven" className="text-xs font-medium text-zinc-400">Given</label>
               <input
+                id="editGiven"
                 type="number"
                 value={given}
                 onChange={(e) => setGiven(e.target.value)}
@@ -443,30 +454,31 @@ function TransferModal({ onClose, onTransfer }: { onClose: () => void, onTransfe
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-[#131316] border border-[#222226] max-w-md w-full rounded-3xl p-8 shadow-2xl relative">
-        <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-zinc-400 dark:text-zinc-400 hover:text-zinc-50 hover:bg-white/10 transition-colors">
+        <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-zinc-400 hover:text-zinc-50 hover:bg-white/10 transition-colors">
           <X size={18} />
         </button>
         <h2 className="text-2xl font-bold mb-2 text-zinc-50 border-b-2 border-[#D4FE44] inline-block pb-1">Transfer Funds</h2>
-        <p className="text-sm text-zinc-400 dark:text-zinc-400 mb-8 mt-2">Transfer between your bank cards.</p>
+        <p className="text-sm text-zinc-400 mb-8 mt-2">Transfer between your bank cards.</p>
         
         <div className="space-y-5">
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-400">From Card</label>
-            <select value={fromCard} onChange={e => setFromCard(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors">
+            <label htmlFor="transferFrom" className="text-xs font-medium text-zinc-400">From Card</label>
+            <select id="transferFrom" value={fromCard} onChange={e => setFromCard(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors">
               {cards.map(c => <option key={c.id} value={c.id}>{c.name} (**** {c.last4})</option>)}
             </select>
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-400">To Card</label>
-            <select value={toCard} onChange={e => setToCard(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors">
+            <label htmlFor="transferTo" className="text-xs font-medium text-zinc-400">To Card</label>
+            <select id="transferTo" value={toCard} onChange={e => setToCard(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors">
               {cards.filter(c => c.id !== fromCard).map(c => <option key={c.id} value={c.id}>{c.name} (**** {c.last4})</option>)}
             </select>
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-400">Amount</label>
+            <label htmlFor="transferAmount" className="text-xs font-medium text-zinc-400">Amount</label>
             <div className="relative">
                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 font-bold">$</span>
                <input 
+                 id="transferAmount"
                  type="number" 
                  value={amount}
                  onChange={(e) => setAmount(e.target.value)}
@@ -523,34 +535,35 @@ function TransferToWeb2Modal({ onClose, onTransfer, bankCards, wallets }: {
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-[#131316] border border-[#222226] max-w-md w-full rounded-3xl p-8 shadow-2xl relative">
-        <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-zinc-400 dark:text-zinc-400 hover:text-zinc-50 hover:bg-white/10 transition-colors">
+        <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-zinc-400 hover:text-zinc-50 hover:bg-white/10 transition-colors">
           <X size={18} />
         </button>
         <h2 className="text-2xl font-bold mb-2 text-zinc-50 border-b-2 border-emerald-400 inline-block pb-1">Transfer to Bank</h2>
-        <p className="text-sm text-zinc-400 dark:text-zinc-400 mb-8 mt-2">Off-ramp crypto to your connected bank account.</p>
+        <p className="text-sm text-zinc-400 mb-8 mt-2">Off-ramp crypto to your connected bank account.</p>
         
         <div className="space-y-5">
           {wallets.length > 0 && (
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-400">From Wallet</label>
-            <select value={walletId} onChange={e => setWalletId(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none focus:border-emerald-400 transition-colors">
-              {wallets.map(w => <option key={w.id} value={w.id}>{w.name} ({w.address.slice(0,6)}...${w.address.slice(-4)}) — ${w.balance.toFixed(2)}</option>)}
+            <label htmlFor="tweb2Wallet" className="text-xs font-medium text-zinc-400">From Wallet</label>
+            <select id="tweb2Wallet" value={walletId} onChange={e => setWalletId(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none focus:border-emerald-400 transition-colors">
+              {wallets.map(w => <option key={w.id} value={w.id}>{w.name} ({w.address.slice(0,6)}...{w.address.slice(-4)}) — ${w.balance.toFixed(2)}</option>)}
             </select>
           </div>
           )}
           {bankCards.length > 0 && (
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-400">To Card</label>
-            <select value={cardId} onChange={e => setCardId(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none focus:border-emerald-400 transition-colors">
+            <label htmlFor="tweb2Card" className="text-xs font-medium text-zinc-400">To Card</label>
+            <select id="tweb2Card" value={cardId} onChange={e => setCardId(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none focus:border-emerald-400 transition-colors">
               {bankCards.map(c => <option key={c.id} value={c.id}>{c.name} (**** {c.last4}) — ₹{convert(c.balance, 'INR').toLocaleString('en-IN', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</option>)}
             </select>
           </div>
           )}
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-400">Amount to Transfer (USD)</label>
+            <label htmlFor="tweb2Amount" className="text-xs font-medium text-zinc-400">Amount to Transfer (USD)</label>
             <div className="relative">
                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 font-bold">$</span>
                <input 
+                 id="tweb2Amount"
                  type="number" 
                  value={amount}
                  onChange={(e) => setAmount(e.target.value)}
@@ -629,8 +642,9 @@ export default function FinanceDashboard() {
   const [web3Goal, setWeb3Goal] = useState({ amount: 5, currency: "ETH" });
   const { convert } = useExchangeRates();
   const [dbCategories, setDbCategories] = useState<Array<{id: string; name: string; icon: string; color: string}>>([]);
+  const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
   useEffect(() => {
-    fetch("/api/banks-categories").then(r => r.json()).then(setDbCategories).catch(() => {});
+    apiFetch("/api/banks-categories").then(r => r.json()).then(setDbCategories).catch(() => {});
   }, []);
   const bankCurrency = web2Goal.currency || 'USD';
   const bankSymbol = bankCurrency === 'INR' ? '₹' : bankCurrency === 'EUR' ? '€' : bankCurrency === 'GBP' ? '£' : '$';
@@ -641,8 +655,16 @@ export default function FinanceDashboard() {
   
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [appPasscode, setAppPasscode] = useState("123456"); // kept in memory for encryption
-  const [passcodeHash, setPasscodeHash] = useState(""); // server hash for verification
+  
+  // Restore API key from session storage on mount
+  useEffect(() => {
+    const savedKey = typeof window !== "undefined" ? sessionStorage.getItem("fv_api_key") : null;
+    if (savedKey) {
+      setApiKey(savedKey);
+      setIsAuthenticated(true);
+    }
+  }, []);
+  const [appPasscode, setAppPasscode] = useState(""); // kept in memory for encryption
   const [passcode, setPasscode] = useState("");
   const [wrongPasscode, setWrongPasscode] = useState(false);
   const [profilePic, setProfilePic] = useState<string>("https://picsum.photos/seed/avatar5/150/150");
@@ -677,7 +699,7 @@ export default function FinanceDashboard() {
   // Fetch wallets from API
   async function fetchWallets() {
     try {
-      const res = await fetch('/api/wallets');
+      const res = await apiFetch('/api/wallets');
       if (res.ok) { const data = await res.json(); setWallets(data); }
     } catch {}
     setLoadingWallets(false);
@@ -693,7 +715,7 @@ export default function FinanceDashboard() {
   // Fetch cards from API on mount
   async function fetchCards() {
     try {
-      const res = await fetch('/api/cards');
+      const res = await apiFetch('/api/cards');
       if (res.ok) {
         const data = await res.json();
         setBankCards(data);
@@ -710,7 +732,7 @@ export default function FinanceDashboard() {
   const [activities, setActivities] = useState<Activity[]>([]);
   async function fetchActivity() {
     try {
-      const res = await fetch('/api/activity');
+      const res = await apiFetch('/api/activity');
       if (res.ok) setActivities(await res.json());
     } catch {}
   }
@@ -718,7 +740,7 @@ export default function FinanceDashboard() {
 
   async function deleteActivity(id: string, type: string) {
     try {
-      await fetch(`/api/activity?id=${id}&type=${type}`, { method: 'DELETE' });
+      await apiFetch(`/api/activity?id=${id}&type=${type}`, { method: 'DELETE' });
       setActivities(prev => prev.filter(a => a.id !== id));
     } catch {}
   }
@@ -739,7 +761,7 @@ export default function FinanceDashboard() {
   const handleSaveChanges = async () => {
     setIsSaving(true);
     try {
-      await fetch('/api/settings', {
+      await apiFetch('/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -821,32 +843,54 @@ export default function FinanceDashboard() {
         given: me.reduce((s, e) => s + e.given, 0),
       };
     });
-  }, [entries, mode]);
+  }, [entries, mode, selectedYear]);
 
-  // Verify passcode against server hash
+  // Compute month-over-month percentage changes for stat cards
+  const { incomeChange, expenseChange } = useMemo(() => {
+    const currentMonth = new Date().getMonth();
+    const lastMonth = currentMonth > 0 ? currentMonth - 1 : 0;
+    const thisMonthData = monthlyData[currentMonth];
+    const lastMonthData = monthlyData[lastMonth];
+    if (!thisMonthData || !lastMonthData) return { incomeChange: null, expenseChange: null };
+    const ic = lastMonthData.earned > 0
+      ? ((thisMonthData.earned - lastMonthData.earned) / lastMonthData.earned) * 100
+      : thisMonthData.earned > 0 ? 100 : null;
+    const ec = lastMonthData.given > 0
+      ? ((thisMonthData.given - lastMonthData.given) / lastMonthData.given) * 100
+      : thisMonthData.given > 0 ? 100 : null;
+    return { incomeChange: ic, expenseChange: ec };
+  }, [monthlyData]);
+
+  // Verify passcode via server API (bcrypt comparison)
   useEffect(() => {
-    if (!isAuthenticated && passcode.length === 6 && passcodeHash) {
+    if (!isAuthenticated && passcode.length === 6) {
       setWrongPasscode(false);
-      import('./utils/encryption').then(({ hashPasscode }) => {
-        hashPasscode(passcode).then(hash => {
-          if (hash === passcodeHash) {
+      fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'verify-passcode', passcode }),
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
             setIsAuthenticated(true);
-            setAppPasscode(passcode); // keep entered passcode for encryption
+            setAppPasscode(passcode);
+            setApiKey("korgon-finance-2026");
             setPasscode("");
           } else {
             setWrongPasscode(true);
           }
-        });
-      });
+        })
+        .catch(() => setWrongPasscode(true));
     }
     if (passcode.length < 6) setWrongPasscode(false);
-  }, [passcode, passcodeHash, isAuthenticated]);
+  }, [passcode, isAuthenticated]);
 
   // Load all settings from API (cross-device sync)
   useEffect(() => {
     async function loadSettings() {
       try {
-        const res = await fetch('/api/settings');
+        const res = await apiFetch('/api/settings');
         if (res.ok) {
           const data = await res.json();
           if (data.firstName) setFirstName(data.firstName);
@@ -856,7 +900,6 @@ export default function FinanceDashboard() {
           if (data.theme === 'dark' || data.theme === 'light') setTheme(data.theme);
           if (data.banksGoal !== undefined) setWeb2Goal({ amount: data.banksGoal, currency: 'USD' });
           if (data.cryptoGoal !== undefined) setWeb3Goal({ amount: data.cryptoGoal, currency: 'ETH' });
-          if (data.passcodeHash) setPasscodeHash(data.passcodeHash);
         }
       } catch (err) {
         console.error('[settings] load failed:', err);
@@ -880,7 +923,7 @@ export default function FinanceDashboard() {
     async function fetchEntries() {
       setLoadingEntries(true);
       try {
-        const res = await fetch(`/api/entries?mode=${mode}`);
+        const res = await apiFetch(`/api/entries?mode=${mode}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (!cancelled) setEntries(data);
@@ -900,7 +943,7 @@ export default function FinanceDashboard() {
     let cancelled = false;
     async function fetchGoal() {
       try {
-        const res = await fetch(`/api/goal?mode=${mode}`);
+        const res = await apiFetch(`/api/goal?mode=${mode}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (!cancelled && data.amount) {
@@ -1118,7 +1161,7 @@ export default function FinanceDashboard() {
         <header className="h-auto md:h-24 py-4 md:py-0 flex flex-col-reverse md:flex-row items-start md:items-center justify-between px-4 md:px-8 bg-zinc-950/80 backdrop-blur-xl border-b border-[#222226] sticky top-0 z-20 gap-4 md:gap-0">
           <div>
             <h1 className="text-xl md:text-2xl font-bold text-zinc-50">Hello, {firstName}</h1>
-            <p className="text-sm text-zinc-400 dark:text-zinc-400">Welcome to your financial dashboard</p>
+            <p className="text-sm text-zinc-400">Welcome to your financial dashboard</p>
           </div>
 
           <div className="flex items-center justify-between w-full md:w-auto gap-4">
@@ -1126,13 +1169,13 @@ export default function FinanceDashboard() {
             <div className="bg-[#131316] p-1 rounded-xl flex border border-[#222226] flex-1 md:flex-initial">
               <button 
                 onClick={() => setMode('banks')} 
-                className={cn("flex-1 md:flex-none px-4 md:px-5 py-2 rounded-lg text-sm font-semibold transition-all", mode === 'banks' ? "bg-white/10 text-zinc-50 shadow-md" : "text-zinc-400 dark:text-zinc-400 hover:text-zinc-200")}
+                className={cn("flex-1 md:flex-none px-4 md:px-5 py-2 rounded-lg text-sm font-semibold transition-all", mode === 'banks' ? "bg-white/10 text-zinc-50 shadow-md" : "text-zinc-400 hover:text-zinc-200")}
               >
                 Banking
               </button>
               <button 
                 onClick={() => setMode('crypto')} 
-                className={cn("flex-1 md:flex-none px-4 md:px-5 py-2 rounded-lg text-sm font-semibold transition-all", mode === 'crypto' ? "bg-white/10 text-zinc-50 shadow-md" : "text-zinc-400 dark:text-zinc-400 hover:text-zinc-200")}
+                className={cn("flex-1 md:flex-none px-4 md:px-5 py-2 rounded-lg text-sm font-semibold transition-all", mode === 'crypto' ? "bg-white/10 text-zinc-50 shadow-md" : "text-zinc-400 hover:text-zinc-200")}
               >
                 Crypto
               </button>
@@ -1141,14 +1184,14 @@ export default function FinanceDashboard() {
             <div className="relative flex items-center gap-2">
               <button 
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                className="w-11 h-11 bg-[#131316] border border-[#222226] rounded-xl flex items-center justify-center text-zinc-400 dark:text-zinc-400 hover:text-zinc-50 hover:bg-white/5 transition-colors relative flex-shrink-0"
+                className="w-11 h-11 bg-[#131316] border border-[#222226] rounded-xl flex items-center justify-center text-zinc-400 hover:text-zinc-50 hover:bg-white/5 transition-colors relative flex-shrink-0"
               >
                 {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
               </button>
 
               <button 
                 onClick={() => setShowNotifications(!showNotifications)}
-                className="w-11 h-11 bg-[#131316] border border-[#222226] rounded-xl flex items-center justify-center text-zinc-400 dark:text-zinc-400 hover:text-zinc-50 hover:bg-white/5 transition-colors relative flex-shrink-0"
+                className="w-11 h-11 bg-[#131316] border border-[#222226] rounded-xl flex items-center justify-center text-zinc-400 hover:text-zinc-50 hover:bg-white/5 transition-colors relative flex-shrink-0"
               >
                 <Bell size={18} />
                 {unreadCount > 0 && (
@@ -1215,7 +1258,7 @@ export default function FinanceDashboard() {
             <div className="bg-[#131316] p-6 rounded-3xl border border-[#222226] shadow-sm flex flex-col justify-between group">
               <div className="flex justify-between items-start mb-6">
                 <div>
-                  <p className="text-sm font-medium text-zinc-400 dark:text-zinc-400 mb-1">Total Income</p>
+                  <p className="text-sm font-medium text-zinc-400 mb-1">Total Income</p>
                   <div className="h-9 flex items-center">
                     <h3 className="text-3xl font-bold text-zinc-50 leading-none">{bankSymbol}{toBankDisplay(totalEarned)}</h3>
                   </div>
@@ -1225,15 +1268,17 @@ export default function FinanceDashboard() {
                 </div>
               </div>
               <div className="flex items-center gap-2 text-sm h-5">
-                <span className="text-emerald-400 font-semibold px-2 py-1 bg-emerald-500/10 rounded-md leading-none">+14.5%</span>
-                <span className="text-zinc-400 dark:text-zinc-500">vs last month</span>
+                {incomeChange !== null && (
+                  <span className={cn("font-semibold px-2 py-1 rounded-md leading-none", incomeChange >= 0 ? "text-emerald-400 bg-emerald-500/10" : "text-red-400 bg-red-500/10")}>{incomeChange >= 0 ? '+' : ''}{incomeChange.toFixed(1)}%</span>
+                )}
+                <span className="text-zinc-400">vs last month</span>
               </div>
             </div>
 
             <div className="bg-[#131316] p-6 rounded-3xl border border-[#222226] shadow-sm flex flex-col justify-between">
               <div className="flex justify-between items-start mb-6">
                 <div>
-                  <p className="text-sm font-medium text-zinc-400 dark:text-zinc-400 mb-1">Total Expenses</p>
+                  <p className="text-sm font-medium text-zinc-400 mb-1">Total Expenses</p>
                   <div className="h-9 flex items-center">
                     <h3 className="text-3xl font-bold text-zinc-50 leading-none">{bankSymbol}{toBankDisplay(totalGiven)}</h3>
                   </div>
@@ -1243,15 +1288,17 @@ export default function FinanceDashboard() {
                 </div>
               </div>
               <div className="flex items-center gap-2 text-sm h-5">
-                <span className="text-red-400 font-semibold px-2 py-1 bg-red-500/10 rounded-md leading-none">+2.1%</span>
-                <span className="text-zinc-400 dark:text-zinc-500">vs last month</span>
+                {expenseChange !== null && (
+                  <span className={cn("font-semibold px-2 py-1 rounded-md leading-none", expenseChange >= 0 ? "text-red-400 bg-red-500/10" : "text-emerald-400 bg-emerald-500/10")}>{expenseChange >= 0 ? '+' : ''}{expenseChange.toFixed(1)}%</span>
+                )}
+                <span className="text-zinc-400">vs last month</span>
               </div>
             </div>
 
             <div className="bg-[#131316] p-6 rounded-3xl border border-[#222226] shadow-sm flex flex-col justify-between">
               <div className="flex justify-between items-start mb-6">
                 <div>
-                  <p className="text-sm font-medium text-zinc-400 dark:text-zinc-400 mb-1">Net Savings</p>
+                  <p className="text-sm font-medium text-zinc-400 mb-1">Net Savings</p>
                   <div className="h-9 flex items-center">
                     <h3 className="text-3xl font-bold text-zinc-50 leading-none">{bankSymbol}{toBankDisplay(totalSaved)}</h3>
                   </div>
@@ -1261,7 +1308,7 @@ export default function FinanceDashboard() {
                 </div>
               </div>
               <div className="flex items-center gap-2 text-sm h-5">
-                <span className="text-zinc-400 dark:text-zinc-400 font-semibold leading-none">{totalSaved > 0 ? 'On track' : 'Needs attention'}</span>
+                <span className="text-zinc-400 font-semibold leading-none">{totalSaved > 0 ? 'On track' : 'Needs attention'}</span>
               </div>
             </div>
 
@@ -1282,7 +1329,7 @@ export default function FinanceDashboard() {
                             onChange={(e) => {
                               const newGoal = {...web2Goal, amount: Number(e.target.value)};
                               setWeb2Goal(newGoal);
-                              fetch("/api/goal", {
+                              apiFetch("/api/goal", {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({ mode: "banks", amount: newGoal.amount, currency: newGoal.currency }),
@@ -1300,7 +1347,7 @@ export default function FinanceDashboard() {
                             onChange={(e) => {
                               const newGoal = {...web3Goal, amount: Number(e.target.value)};
                               setWeb3Goal(newGoal);
-                              fetch("/api/goal", {
+                              apiFetch("/api/goal", {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({ mode: "crypto", amount: newGoal.amount, currency: "USD" }),
@@ -1318,7 +1365,7 @@ export default function FinanceDashboard() {
                           onChange={(e) => {
                             const newGoal = {...web2Goal, currency: e.target.value};
                             setWeb2Goal(newGoal);
-                            fetch("/api/goal", {
+                            apiFetch("/api/goal", {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
                               body: JSON.stringify({ mode: "banks", amount: newGoal.amount, currency: newGoal.currency }),
@@ -1353,7 +1400,7 @@ export default function FinanceDashboard() {
               <div className="flex justify-between items-end mb-6">
                 <div>
                   <h2 className="text-lg font-bold text-zinc-100">Cash Flow Analytics</h2>
-                  <p className="text-sm text-zinc-400 dark:text-zinc-400">Click a bar to filter transactions by month</p>
+                  <p className="text-sm text-zinc-400">Click a bar to filter transactions by month</p>
                 </div>
                 <div className="relative">
                   <select 
@@ -1361,9 +1408,12 @@ export default function FinanceDashboard() {
                     onChange={(e) => setSelectedYear(Number(e.target.value))}
                     className="flex items-center gap-2 pl-9 pr-8 py-2 bg-[#131316] border border-[#222226] hover:bg-[#1C1C21] rounded-xl text-sm font-medium text-zinc-300 transition-colors appearance-none outline-none cursor-pointer"
                   >
-                    <option value={2026}>2026 Year</option>
-                    <option value={2025}>2025 Year</option>
-                    <option value={2024}>2024 Year</option>
+                    {Array.from(new Set(entries.map(e => new Date(e.date).getFullYear()))).sort((a, b) => b - a).map(year => (
+                      <option key={year} value={year}>{year} Year</option>
+                    ))}
+                    {!entries.some(e => new Date(e.date).getFullYear() === selectedYear) && (
+                      <option value={selectedYear}>{selectedYear} Year</option>
+                    )}
                   </select>
                   <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
                 </div>
@@ -1451,7 +1501,7 @@ export default function FinanceDashboard() {
                        onClick={() => setFilter(cat)}
                        className={cn(
                          "px-4 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors",
-                         filter === cat ? "bg-white/10 text-zinc-50 border border-white/10" : "bg-transparent text-zinc-400 dark:text-zinc-400 hover:bg-white/5"
+                         filter === cat ? "bg-white/10 text-zinc-50 border border-white/10" : "bg-transparent text-zinc-400 hover:bg-white/5"
                        )}
                      >
                        {cat}
@@ -1468,13 +1518,13 @@ export default function FinanceDashboard() {
                         <div className="flex items-center gap-4">
                           <div className={cn(
                             "w-11 h-11 rounded-xl flex items-center justify-center border",
-                            isPositive ? "bg-[#D4FE44]/10 text-[#D4FE44] border-[#D4FE44]/20" : "bg-zinc-800 text-zinc-400 dark:text-zinc-400 border-[#222226]"
+                            isPositive ? "bg-[#D4FE44]/10 text-[#D4FE44] border-[#D4FE44]/20" : "bg-zinc-800 text-zinc-400 border-[#222226]"
                           )}>
                              {isPositive ? <ArrowDownRight size={18} /> : <ArrowUpRight size={18} />}
                           </div>
                           <div>
                             <h4 className="text-sm font-bold text-zinc-100">{entry.project}</h4>
-                            <p className="text-xs text-zinc-400 dark:text-zinc-500 font-medium">
+                            <p className="text-xs text-zinc-400 font-medium">
                               {entry.date} • {entry.givenTo}
                               {entry.walletId && (
                                 <span className="ml-1 text-[#D4FE44]/70">
@@ -1489,11 +1539,11 @@ export default function FinanceDashboard() {
                         </div>
                         <div className="text-right">
                           <p className={cn("text-sm font-bold", isPositive ? "text-[#D4FE44]" : "text-zinc-100")}>
-                            {isPositive ? "+" : "-"}${amount.toLocaleString()}
+                            {isPositive ? "+" : "-"}{bankSymbol}{amount.toLocaleString()}
                           </p>
                           <div className="flex justify-end gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => setEditingEntry(entry)} className="text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:text-zinc-300"><Edit2 size={12} /></button>
-                            <button onClick={() => setDeletingTransactionId(entry.id)} className="text-zinc-400 dark:text-zinc-500 hover:text-red-400"><Trash2 size={12} /></button>
+                            <button onClick={() => setEditingEntry(entry)} className="text-zinc-400 hover:text-zinc-600"><Edit2 size={12} /></button>
+                            <button onClick={() => setDeletingTransactionId(entry.id)} className="text-zinc-400 hover:text-red-400"><Trash2 size={12} /></button>
                           </div>
                         </div>
                       </div>
@@ -1501,7 +1551,7 @@ export default function FinanceDashboard() {
                   })}
                   
                   {filteredEntries.length === 0 && (
-                    <div className="h-full flex flex-col items-center justify-center text-zinc-400 dark:text-zinc-500">
+                    <div className="h-full flex flex-col items-center justify-center text-zinc-400">
                        <HelpCircle size={32} className="mb-2 opacity-50" />
                        <span className="text-sm font-medium">No transactions found</span>
                     </div>
@@ -1557,7 +1607,7 @@ export default function FinanceDashboard() {
                       <BarChart data={monthlyData} margin={{top: 10, right: 10, left: -20, bottom: 0}}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#222226" vertical={false} />
                         <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#71717A' }} dy={10} />
-                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#71717A' }} tickFormatter={(val) => `$${val}`} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#71717A' }} tickFormatter={(val) => `${bankSymbol}${val}`} />
                         <Tooltip contentStyle={{ backgroundColor: '#131316', borderRadius: 16, border: '1px solid rgba(255,255,255,0.1)', color: '#FAFAFA' }} />
                         <Bar dataKey="earned" fill="#D4FE44" radius={[6,6,0,0]} maxBarSize={40} />
                         <Bar dataKey="given" fill="#f87171" radius={[6,6,0,0]} maxBarSize={40} />
@@ -1582,7 +1632,7 @@ export default function FinanceDashboard() {
                           </defs>
                           <CartesianGrid strokeDasharray="3 3" stroke="#222226" vertical={false} />
                           <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#71717A' }} />
-                          <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#71717A' }} tickFormatter={(val) => `$${val}`} />
+                          <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#71717A' }} tickFormatter={(val) => `${bankSymbol}${val}`} />
                           <Tooltip contentStyle={{ backgroundColor: '#131316', borderRadius: 16, border: '1px solid rgba(255,255,255,0.1)', color: '#FAFAFA' }} />
                           <Area type="monotone" dataKey="saved" stroke="#D4FE44" strokeWidth={2} fillOpacity={1} fill="url(#colorSaved)" />
                         </AreaChart>
@@ -1606,7 +1656,7 @@ export default function FinanceDashboard() {
                             </div>
                           </div>
                           <span className={cn("text-sm font-bold", entry.earned > 0 ? "text-emerald-400" : "text-red-400")}>
-                            {entry.earned > 0 ? '+' : '-'}${(entry.earned || entry.given).toFixed(2)}
+                            {entry.earned > 0 ? '+' : '-'}{bankSymbol}{(entry.earned || entry.given).toFixed(2)}
                           </span>
                         </div>
                       ))}
@@ -1667,7 +1717,7 @@ export default function FinanceDashboard() {
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="#222226" vertical={false} />
                         <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#71717A' }} dy={10} />
-                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#71717A' }} tickFormatter={(val) => `$${val}`} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#71717A' }} tickFormatter={(val) => `${bankSymbol}${val}`} />
                         <Tooltip contentStyle={{ backgroundColor: '#131316', borderRadius: 16, border: '1px solid rgba(255,255,255,0.1)', color: '#FAFAFA' }} />
                         <Area type="monotone" dataKey="saved" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorInvested)" name="Invested" />
                         <Area type="monotone" dataKey="earned" stroke="#a855f7" strokeWidth={2} fillOpacity={1} fill="url(#colorCurrentValue)" name="Current Value" />
@@ -1791,18 +1841,18 @@ export default function FinanceDashboard() {
 
                 <h3 className="text-lg font-bold text-zinc-100 mt-10 mb-6">Card Settings</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                   <div className="bg-[#131316] border border-[#222226] rounded-2xl p-4 flex items-center gap-4 cursor-pointer hover:bg-[#1C1C21] transition-colors">
+                   <button onClick={() => alert('Card freeze feature coming soon')} className="bg-[#131316] border border-[#222226] rounded-2xl p-4 flex items-center gap-4 cursor-pointer hover:bg-[#1C1C21] transition-colors text-left">
                      <div className="w-10 h-10 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center"><Snowflake size={18}/></div>
                      <div><p className="font-bold text-zinc-100 text-sm">Freeze Card</p><p className="text-xs text-zinc-500">Temporarily lock</p></div>
-                   </div>
-                   <div className="bg-[#131316] border border-[#222226] rounded-2xl p-4 flex items-center gap-4 cursor-pointer hover:bg-[#1C1C21] transition-colors">
+                   </button>
+                   <button onClick={() => alert('Spending limits feature coming soon')} className="bg-[#131316] border border-[#222226] rounded-2xl p-4 flex items-center gap-4 cursor-pointer hover:bg-[#1C1C21] transition-colors text-left">
                      <div className="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center"><Activity size={18}/></div>
                      <div><p className="font-bold text-zinc-100 text-sm">Spending Limits</p><p className="text-xs text-zinc-500">Set daily limits</p></div>
-                   </div>
-                   <div className="bg-[#131316] border border-[#222226] rounded-2xl p-4 flex items-center gap-4 cursor-pointer hover:bg-[#1C1C21] transition-colors">
+                   </button>
+                   <button onClick={() => alert('Card details feature coming soon')} className="bg-[#131316] border border-[#222226] rounded-2xl p-4 flex items-center gap-4 cursor-pointer hover:bg-[#1C1C21] transition-colors text-left">
                      <div className="w-10 h-10 rounded-full bg-amber-500/10 text-amber-400 flex items-center justify-center"><EyeOff size={18}/></div>
                      <div><p className="font-bold text-zinc-100 text-sm">Show Details</p><p className="text-xs text-zinc-500">View CVV and expiry</p></div>
-                   </div>
+                   </button>
                 </div>
               </div>
             ) : (
@@ -1890,8 +1940,9 @@ export default function FinanceDashboard() {
                       </div>
                     )}
                     <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-zinc-400">Current Passcode</label>
+                      <label htmlFor="securityCurrentPass" className="text-xs font-medium text-zinc-400">Current Passcode</label>
                       <input 
+                        id="securityCurrentPass"
                         type="password" 
                         maxLength={6}
                         value={securityCurrentPass}
@@ -1901,8 +1952,9 @@ export default function FinanceDashboard() {
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-zinc-400">New Passcode (6 digits)</label>
+                      <label htmlFor="securityNewPass" className="text-xs font-medium text-zinc-400">New Passcode (6 digits)</label>
                       <input 
+                        id="securityNewPass"
                         type="password" 
                         maxLength={6}
                         value={securityNewPass}
@@ -1925,7 +1977,7 @@ export default function FinanceDashboard() {
                         }
                         // Save to API (server verifies current, hashes new)
                         try {
-                          const res = await fetch('/api/settings', {
+                          const res = await apiFetch('/api/settings', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ currentPasscode: securityCurrentPass, newPasscode: securityNewPass }),
@@ -1936,9 +1988,6 @@ export default function FinanceDashboard() {
                             return;
                           }
                           // Update local state
-                          const { hashPasscode } = await import('./utils/encryption');
-                          const newHash = await hashPasscode(securityNewPass);
-                          setPasscodeHash(newHash);
                           setAppPasscode(securityNewPass);
                         } catch (err) {
                           console.error("[savePasscode] failed:", err);
@@ -2002,8 +2051,9 @@ export default function FinanceDashboard() {
                   <div className="flex-1 space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-zinc-400">First Name</label>
+                        <label htmlFor="firstName" className="text-xs font-medium text-zinc-400">First Name</label>
                         <input 
+                          id="firstName"
                           type="text" 
                           value={firstName} 
                           onChange={(e) => setFirstName(e.target.value)}
@@ -2011,8 +2061,9 @@ export default function FinanceDashboard() {
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-zinc-400">Last Name</label>
+                        <label htmlFor="lastName" className="text-xs font-medium text-zinc-400">Last Name</label>
                         <input 
+                          id="lastName"
                           type="text" 
                           value={lastName} 
                           onChange={(e) => setLastName(e.target.value)}
@@ -2020,10 +2071,11 @@ export default function FinanceDashboard() {
                         />
                       </div>
                       <div className="space-y-1.5 md:col-span-2">
-                        <label className="text-xs font-medium text-zinc-400">Email Address</label>
+                        <label htmlFor="email" className="text-xs font-medium text-zinc-400">Email Address</label>
                         <div className="relative">
                           <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" />
                           <input 
+                            id="email"
                             type="email" 
                             value={email} 
                             onChange={(e) => setEmail(e.target.value)}
@@ -2066,12 +2118,7 @@ export default function FinanceDashboard() {
                       <span className="text-lg">{cat.icon}</span>
                       <span className="flex-1 text-sm text-zinc-100 font-medium">{cat.name}</span>
                       <div className="w-3 h-3 rounded-full" style={{backgroundColor: cat.color}} />
-                      <button onClick={async () => {
-                        if (confirm(`Delete "${cat.name}" category?`)) {
-                          await fetch(`/api/banks-categories?id=${cat.id}`, { method: "DELETE" });
-                          setDbCategories(prev => prev.filter(c => c.id !== cat.id));
-                        }
-                      }} className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400 transition-all">
+                      <button onClick={() => setDeletingCategoryId(cat.id)} className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400 transition-all">
                         <X size={14} />
                       </button>
                     </div>
@@ -2086,7 +2133,7 @@ export default function FinanceDashboard() {
                     const nameInput = document.getElementById("newCatNameInput") as HTMLInputElement;
                     const iconSelect = document.getElementById("newCatIcon") as HTMLSelectElement;
                     if (!nameInput?.value.trim()) return;
-                    const res = await fetch("/api/banks-categories", {
+                    const res = await apiFetch("/api/banks-categories", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ name: nameInput.value.trim(), icon: iconSelect.value }),
@@ -2176,12 +2223,12 @@ export default function FinanceDashboard() {
               </div>
               <div>
                 <h3 className="text-sm font-bold text-zinc-100">{firstName} {lastName ? `${lastName[0]}.` : ''}</h3>
-                <p className="text-xs text-zinc-400 dark:text-zinc-500 font-medium">Premium Member</p>
+                <p className="text-xs text-zinc-400 font-medium">Premium Member</p>
               </div>
             </div>
             <button 
               onClick={() => setActiveTab('Settings')}
-              className="w-10 h-10 rounded-full bg-[#131316] border border-[#222226] flex items-center justify-center text-zinc-400 dark:text-zinc-400 hover:text-zinc-50 transition-colors"
+              className="w-10 h-10 rounded-full bg-[#131316] border border-[#222226] flex items-center justify-center text-zinc-400 hover:text-zinc-50 transition-colors"
             >
               <ChevronRight size={16} />
             </button>
@@ -2284,7 +2331,7 @@ export default function FinanceDashboard() {
          <button onClick={() => setActiveTab('Analytics')} className={cn("p-2 flex flex-col items-center gap-1 transition-colors", activeTab === 'Analytics' ? "text-[#D4FE44]" : "text-zinc-500")}><PieChart size={20} /><span className="text-[10px] font-semibold">Stats</span></button>
          <button onClick={() => setShowAdd(true)} className="p-3 bg-[#D4FE44] rounded-full text-black -mt-6 border-4 border-[#09090B] shadow-[0_0_20px_rgba(212,254,68,0.2)] hover:scale-105 transition-transform"><Plus size={24} strokeWidth={2.5}/></button>
          <button onClick={() => setActiveTab('Cards')} className={cn("p-2 flex flex-col items-center gap-1 transition-colors", activeTab === 'Cards' ? "text-[#D4FE44]" : "text-zinc-500")}><CreditCard size={20} /><span className="text-[10px] font-semibold">Cards</span></button>
-         <button onClick={() => setActiveTab('Settings')} className={cn("p-2 flex flex-col items-center gap-1 transition-colors", activeTab === 'Settings' ? "text-[#D4FE44]" : "text-zinc-500")}><Settings size={20} /><span className="text-[10px] font-semibold">Profile</span></button>
+         <button onClick={() => setActiveTab('Security')} className={cn("p-2 flex flex-col items-center gap-1 transition-colors", activeTab === 'Security' ? "text-[#D4FE44]" : "text-zinc-500")}><Shield size={20} /><span className="text-[10px] font-semibold">Security</span></button>
       </div>
 
       {/* MODALS */}
@@ -2322,7 +2369,7 @@ export default function FinanceDashboard() {
         }
         setShowAdd(false);
         try {
-          await fetch("/api/entries", {
+          await apiFetch("/api/entries", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(newEntry),
@@ -2343,7 +2390,7 @@ export default function FinanceDashboard() {
           setEntries(prev => prev.map(e => e.id === updatedEntry.id ? updatedEntry : e));
           setEditingEntry(null);
           try {
-            await fetch(`/api/entries/${updatedEntry.id}`, {
+            await apiFetch(`/api/entries/${updatedEntry.id}`, {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(updatedEntry),
@@ -2390,8 +2437,8 @@ export default function FinanceDashboard() {
         setEntries(prev => [fromEntry, toEntry, ...prev]);
         // Save both to API
         try {
-          await fetch("/api/entries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(fromEntry) });
-          await fetch("/api/entries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toEntry) });
+          await apiFetch("/api/entries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(fromEntry) });
+          await apiFetch("/api/entries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toEntry) });
         } catch (err) { console.error("[bankTransfer] save failed:", err); }
         fetchActivity();
       }} />}
@@ -2442,8 +2489,8 @@ export default function FinanceDashboard() {
         
         // Save BOTH entries to API so they persist across mode switches
         try {
-          await fetch("/api/entries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cryptoEntry) });
-          await fetch("/api/entries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(bankEntry) });
+          await apiFetch("/api/entries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cryptoEntry) });
+          await apiFetch("/api/entries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(bankEntry) });
         } catch (err) { console.error("[transferToBank] save failed:", err); }
         fetchActivity();
       }} />}
@@ -2491,7 +2538,7 @@ export default function FinanceDashboard() {
                   setEntries(prev => prev.filter(e => e.id !== id));
                   setDeletingTransactionId(null);
                   try {
-                    await fetch(`/api/entries/${id}`, { method: "DELETE" });
+                    await apiFetch(`/api/entries/${id}`, { method: "DELETE" });
                   } catch (err) {
                     console.error("[delete] failed:", err);
                   }
@@ -2517,17 +2564,17 @@ export default function FinanceDashboard() {
             {walletError && <div className="px-3 py-2 rounded-lg text-xs font-medium border bg-red-500/10 text-red-500 border-red-500/20 mb-4">{walletError}</div>}
             <div className="space-y-4">
               <div>
-                <label className="text-xs font-medium text-zinc-400 mb-1.5 block">Wallet Name</label>
-                <input value={walletForm.name} onChange={e => setWalletForm({...walletForm, name: e.target.value})} placeholder="e.g. MetaMask, Ledger" className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors" />
+                <label htmlFor="walletName" className="text-xs font-medium text-zinc-400 mb-1.5 block">Wallet Name</label>
+                <input id="walletName" value={walletForm.name} onChange={e => setWalletForm({...walletForm, name: e.target.value})} placeholder="e.g. MetaMask, Ledger" className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors" />
               </div>
               <div>
-                <label className="text-xs font-medium text-zinc-400 mb-1.5 block">Wallet Address</label>
-                <input value={walletForm.address} onChange={e => setWalletForm({...walletForm, address: e.target.value})} placeholder="0x... or Solana address" className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors font-mono text-xs" />
+                <label htmlFor="walletAddress" className="text-xs font-medium text-zinc-400 mb-1.5 block">Wallet Address</label>
+                <input id="walletAddress" value={walletForm.address} onChange={e => setWalletForm({...walletForm, address: e.target.value})} placeholder="0x... or Solana address" className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors font-mono text-xs" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-medium text-zinc-400 mb-1.5 block">Network</label>
-                  <select value={walletForm.network} onChange={e => setWalletForm({...walletForm, network: e.target.value})} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors">
+                  <label htmlFor="walletNetwork" className="text-xs font-medium text-zinc-400 mb-1.5 block">Network</label>
+                  <select id="walletNetwork" value={walletForm.network} onChange={e => setWalletForm({...walletForm, network: e.target.value})} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors">
                     <option value="Ethereum">Ethereum</option>
                     <option value="Solana">Solana</option>
                     <option value="Bitcoin">Bitcoin</option>
@@ -2538,8 +2585,8 @@ export default function FinanceDashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-zinc-400 mb-1.5 block">Balance (USD)</label>
-                  <input type="number" step="0.01" value={walletForm.balance} onChange={e => setWalletForm({...walletForm, balance: e.target.value})} placeholder="0.00" className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors" />
+                  <label htmlFor="walletBalance" className="text-xs font-medium text-zinc-400 mb-1.5 block">Balance (USD)</label>
+                  <input id="walletBalance" type="number" step="0.01" value={walletForm.balance} onChange={e => setWalletForm({...walletForm, balance: e.target.value})} placeholder="0.00" className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors" />
                 </div>
               </div>
               <div className="bg-[#09090B] border border-[#222226] rounded-xl p-4 flex items-center gap-3">
@@ -2555,8 +2602,8 @@ export default function FinanceDashboard() {
               </div>
               {walletForm.encrypt && (
                 <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4 space-y-2">
-                  <label className="text-xs font-medium text-amber-400">Enter Passcode to Encrypt</label>
-                  <input type="password" maxLength={6} value={encryptPasscode} onChange={e => setEncryptPasscode(e.target.value)} placeholder="••••••" className="w-full bg-[#09090B] border border-amber-500/30 rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-amber-400 transition-colors font-mono tracking-widest text-center" />
+                  <label htmlFor="encryptPasscode" className="text-xs font-medium text-amber-400">Enter Passcode to Encrypt</label>
+                  <input id="encryptPasscode" type="password" maxLength={6} value={encryptPasscode} onChange={e => setEncryptPasscode(e.target.value)} placeholder="••••••" className="w-full bg-[#09090B] border border-amber-500/30 rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-amber-400 transition-colors font-mono tracking-widest text-center" />
                   <p className="text-[10px] text-zinc-500">You'll need this passcode to reveal the address later.</p>
                 </div>
               )}
@@ -2585,7 +2632,7 @@ export default function FinanceDashboard() {
                     encryptedData: encrypted,
                   };
                 }
-                const res = await fetch('/api/wallets', {
+                const res = await apiFetch('/api/wallets', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify(payload),
@@ -2616,7 +2663,7 @@ export default function FinanceDashboard() {
                 const id = deletingWalletId;
                 setDeletingWalletId(null);
                 setWallets(prev => prev.filter(w => w.id !== id));
-                try { await fetch(`/api/wallets/${id}`, { method: 'DELETE' }); } catch {}
+                try { await apiFetch(`/api/wallets/${id}`, { method: 'DELETE' }); } catch {}
                 fetchWallets();
                 fetchActivity();
               }} className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold text-sm shadow-[0_5px_20px_rgba(239,68,68,0.3)] transition-all">Delete</button>
@@ -2636,22 +2683,22 @@ export default function FinanceDashboard() {
             {cardError && <div className="px-3 py-2 rounded-lg text-xs font-medium border bg-red-500/10 text-red-500 border-red-500/20 mb-4">{cardError}</div>}
             <div className="space-y-4">
               <div>
-                <label className="text-xs font-medium text-zinc-400 mb-1.5 block">Card Name</label>
-                <input value={cardForm.name} onChange={e => setCardForm({...cardForm, name: e.target.value})} placeholder="e.g. Chase Debit, Savings" className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors" />
+                <label htmlFor="cardName" className="text-xs font-medium text-zinc-400 mb-1.5 block">Card Name</label>
+                <input id="cardName" value={cardForm.name} onChange={e => setCardForm({...cardForm, name: e.target.value})} placeholder="e.g. Chase Debit, Savings" className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-medium text-zinc-400 mb-1.5 block">Last 4 Digits</label>
-                  <input maxLength={4} value={cardForm.last4} onChange={e => setCardForm({...cardForm, last4: e.target.value.replace(/\D/g, '')})} placeholder="4209" className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors font-mono" />
+                  <label htmlFor="cardLast4" className="text-xs font-medium text-zinc-400 mb-1.5 block">Last 4 Digits</label>
+                  <input id="cardLast4" maxLength={4} value={cardForm.last4} onChange={e => setCardForm({...cardForm, last4: e.target.value.replace(/\D/g, '')})} placeholder="4209" className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors font-mono" />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-zinc-400 mb-1.5 block">Expiry</label>
-                  <input maxLength={5} value={cardForm.expiry} onChange={e => setCardForm({...cardForm, expiry: e.target.value})} placeholder="MM/YY" className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors font-mono" />
+                  <label htmlFor="cardExpiry" className="text-xs font-medium text-zinc-400 mb-1.5 block">Expiry</label>
+                  <input id="cardExpiry" maxLength={5} value={cardForm.expiry} onChange={e => setCardForm({...cardForm, expiry: e.target.value})} placeholder="MM/YY" className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors font-mono" />
                 </div>
               </div>
               <div>
-                <label className="text-xs font-medium text-zinc-400 mb-1.5 block">Card Type</label>
-                <select value={cardForm.type} onChange={e => setCardForm({...cardForm, type: e.target.value as 'physical' | 'virtual'})} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors">
+                <label htmlFor="cardType" className="text-xs font-medium text-zinc-400 mb-1.5 block">Card Type</label>
+                <select id="cardType" value={cardForm.type} onChange={e => setCardForm({...cardForm, type: e.target.value as 'physical' | 'virtual'})} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors">
                   <option value="physical">Physical</option>
                   <option value="virtual">Virtual</option>
                 </select>
@@ -2671,7 +2718,7 @@ export default function FinanceDashboard() {
                 balance: 0,
               };
               try {
-                const res = await fetch('/api/cards', {
+                const res = await apiFetch('/api/cards', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify(cardData),
@@ -2704,8 +2751,28 @@ export default function FinanceDashboard() {
                 const id = deletingCardId;
                 setBankCards(prev => prev.filter(c => c.id !== id));
                 setDeletingCardId(null);
-                try { await fetch(`/api/cards/${id}`, { method: 'DELETE' }); } catch {}
+                try { await apiFetch(`/api/cards/${id}`, { method: 'DELETE' }); } catch {}
                 fetchActivity();
+              }} className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold text-sm shadow-[0_5px_20px_rgba(239,68,68,0.3)] transition-all">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Category Modal */}
+      {deletingCategoryId && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#131316] border border-[#222226] max-w-sm w-full rounded-3xl p-6 shadow-2xl relative text-center">
+            <Trash2 size={40} className="text-red-500 mx-auto mb-4 opacity-90" strokeWidth={1.5} />
+            <h3 className="text-xl font-bold text-zinc-100 mb-2">Delete Category?</h3>
+            <p className="text-zinc-400 text-sm mb-8">This will permanently remove this category. Transactions using it will not be affected.</p>
+            <div className="flex gap-4">
+              <button onClick={() => setDeletingCategoryId(null)} className="flex-1 py-3 bg-[#1C1C21] hover:bg-[#222226] text-zinc-300 rounded-xl font-semibold text-sm border border-[#2A2A30] transition-colors">Cancel</button>
+              <button onClick={async () => {
+                const id = deletingCategoryId;
+                setDeletingCategoryId(null);
+                setDbCategories(prev => prev.filter(c => c.id !== id));
+                try { await apiFetch(`/api/banks-categories?id=${id}`, { method: "DELETE" }); } catch {}
               }} className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold text-sm shadow-[0_5px_20px_rgba(239,68,68,0.3)] transition-all">Delete</button>
             </div>
           </div>
@@ -2727,7 +2794,7 @@ export default function FinanceDashboard() {
               <button onClick={async () => {
                 try {
                   // Fetch wallet to get encrypted data
-                  const walletRes = await fetch(`/api/wallets/${decryptingWalletId}`);
+                  const walletRes = await apiFetch(`/api/wallets/${decryptingWalletId}`);
                   if (!walletRes.ok) throw new Error('Wallet not found');
                   const wallet = await walletRes.json();
                   if (!wallet.encryptedData) throw new Error('No encrypted data');
@@ -2742,7 +2809,7 @@ export default function FinanceDashboard() {
                   );
                   
                   // Update wallet to remove encryption and restore real address
-                  const updateRes = await fetch(`/api/wallets/${decryptingWalletId}`, {
+                  const updateRes = await apiFetch(`/api/wallets/${decryptingWalletId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({

@@ -60,7 +60,6 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
   const [appPasscodeVerified, setAppPasscodeVerified] = useState(() => {
     try { return sessionStorage.getItem("korgon_verified") === "true"; } catch { return false; }
   });
-  const [passcodeHash, setPasscodeHash] = useState("");
   const [currency, setCurrencyState] = useState<Currency>("USD");
   const [hideBalances, setHideBalancesState] = useState(false);
   const [currentPage, setCurrentPageState] = useState<AppPage>("home");
@@ -73,7 +72,6 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
         const res = await fetch('/api/settings');
         if (res.ok) {
           const data = await res.json();
-          if (data.passcodeHash) setPasscodeHash(data.passcodeHash);
           if (data.theme === 'dark' || data.theme === 'light') setIsDarkState(data.theme === 'dark');
         }
       } catch {}
@@ -104,8 +102,8 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
   }, [isDark]);
 
   const verifyAppPasscode = (passcode: string): boolean => {
-    // For now, do a simple check — the real verification happens in the main page
-    // This is just for the context's local state
+    // Deprecated: verification now happens server-side via POST /api/settings
+    // This is kept for backwards compatibility with MasterPasscodeGuard
     if (passcode.length === 6 && /^\d+$/.test(passcode)) {
       setAppPasscodeVerified(true);
       try { sessionStorage.setItem("korgon_verified", "true"); } catch {}
@@ -121,13 +119,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ currentPasscode, newPasscode }),
       });
-      if (res.ok) {
-        const { hashPasscode } = await import('../utils/encryption');
-        const newHash = await hashPasscode(newPasscode);
-        setPasscodeHash(newHash);
-        return true;
-      }
-      return false;
+      return res.ok;
     } catch {
       return false;
     }

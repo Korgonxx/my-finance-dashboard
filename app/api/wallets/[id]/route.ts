@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/db";
+import { walletUpdateSchema } from "../../../_lib/validation";
 
 export async function GET(
   _req: NextRequest,
@@ -19,7 +20,6 @@ export async function GET(
       balance:       Number(row.currentBalance),
       createdAt:     row.createdAt.toISOString().slice(0,10),
       isEncrypted:   (row.walletMeta as any)?.isEncrypted   ?? false,
-      encryptedData: (row.walletMeta as any)?.encryptedData ?? null,
     });
   } catch (err) {
     console.error("[GET /api/wallets/[id]]", err);
@@ -51,9 +51,14 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await req.json();
+    const parsed = walletUpdateSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    }
+    const data = parsed.data;
 
     // Handle decrypt action - just return encrypted data
-    if (body.action === "decrypt") {
+    if (data.action === "decrypt") {
       const row = await db.account.findUnique({ where: { id } });
       if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
       return NextResponse.json({
@@ -63,17 +68,17 @@ export async function PUT(
 
     // Handle update
     const updateData: any = {};
-    if (body.name !== undefined) updateData.name = body.name;
-    if (body.address !== undefined) updateData.walletAddress = body.address;
-    if (body.network !== undefined) updateData.network = body.network;
-    if (body.balance !== undefined) {
-      updateData.currentBalance = body.balance;
-      updateData.availableBalance = body.balance;
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.address !== undefined) updateData.walletAddress = data.address;
+    if (data.network !== undefined) updateData.network = data.network;
+    if (data.balance !== undefined) {
+      updateData.currentBalance = data.balance;
+      updateData.availableBalance = data.balance;
     }
-    if (body.isEncrypted !== undefined) {
-      updateData.walletMeta = body.isEncrypted ? {
+    if (data.isEncrypted !== undefined) {
+      updateData.walletMeta = data.isEncrypted ? {
         isEncrypted: true,
-        encryptedData: body.encryptedData ?? null,
+        encryptedData: data.encryptedData ?? null,
       } : undefined;
     }
 
@@ -89,7 +94,6 @@ export async function PUT(
       balance:       Number(row.currentBalance),
       createdAt:     row.createdAt.toISOString().slice(0,10),
       isEncrypted:   (row.walletMeta as any)?.isEncrypted   ?? false,
-      encryptedData: (row.walletMeta as any)?.encryptedData ?? null,
     });
   } catch (err) {
     console.error("[PUT /api/wallets/[id]]", err);
