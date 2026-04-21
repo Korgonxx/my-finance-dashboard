@@ -10,12 +10,12 @@ model User {
   id          String       @id @default(cuid())
   email       String       @unique
   name        String?
-  passcode    String?   @default("123456")
   avatarUrl   String?
   timezone    String       @default("UTC")
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   deletedAt   DateTime?
+  passcode    String?      @default("123456")
   accounts    Account[]
   auditLogs   AuditLog[]
   categories  Category[]
@@ -265,7 +265,7 @@ model AuditLog {
 }
 
 model BanksDashboardEntry {
-  id        String   @id @default(cuid())
+  id        String   @id(map: "web2_dashboard_entries_pkey") @default(cuid())
   date      String
   project   String
   earned    Decimal  @default(0) @db.Decimal(20, 8)
@@ -275,13 +275,13 @@ model BanksDashboardEntry {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([date])
-  @@index([createdAt])
+  @@index([createdAt], map: "web2_dashboard_entries_createdAt_idx")
+  @@index([date], map: "web2_dashboard_entries_date_idx")
   @@map("banks_dashboard_entries")
 }
 
 model BanksDashboardGoal {
-  id        String   @id @default(cuid())
+  id        String   @id(map: "web2_dashboard_goal_pkey") @default(cuid())
   amount    Decimal  @db.Decimal(20, 8)
   currency  String   @default("USD")
   createdAt DateTime @default(now())
@@ -291,7 +291,7 @@ model BanksDashboardGoal {
 }
 
 model BanksCard {
-  id        String   @id @default(cuid())
+  id        String   @id(map: "web2_cards_pkey") @default(cuid())
   name      String
   cardType  String
   lastFour  String
@@ -302,13 +302,13 @@ model BanksCard {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([createdAt])
+  @@index([createdAt], map: "web2_cards_createdAt_idx")
   @@map("banks_cards")
 }
 
 model BanksPerformance {
-  id        String   @id @default(cuid())
-  month     String   @unique
+  id        String   @id(map: "web2_performance_pkey") @default(cuid())
+  month     String   @unique(map: "web2_performance_month_key")
   earned    Decimal  @default(0) @db.Decimal(20, 8)
   saved     Decimal  @default(0) @db.Decimal(20, 8)
   given     Decimal  @default(0) @db.Decimal(20, 8)
@@ -320,7 +320,7 @@ model BanksPerformance {
 }
 
 model CryptoDashboardEntry {
-  id               String   @id @default(cuid())
+  id               String   @id(map: "web3_dashboard_entries_pkey") @default(cuid())
   date             String
   project          String
   walletAddress    String
@@ -332,14 +332,14 @@ model CryptoDashboardEntry {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  @@index([date])
-  @@index([walletAddress])
-  @@index([createdAt])
+  @@index([createdAt], map: "web3_dashboard_entries_createdAt_idx")
+  @@index([date], map: "web3_dashboard_entries_date_idx")
+  @@index([walletAddress], map: "web3_dashboard_entries_walletAddress_idx")
   @@map("crypto_dashboard_entries")
 }
 
 model CryptoDashboardGoal {
-  id        String   @id @default(cuid())
+  id        String   @id(map: "web3_dashboard_goal_pkey") @default(cuid())
   amount    Decimal  @db.Decimal(20, 8)
   currency  String   @default("USD")
   createdAt DateTime @default(now())
@@ -349,9 +349,9 @@ model CryptoDashboardGoal {
 }
 
 model CryptoWalletLegacy {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  address   String   @unique
+  id        String   @id(map: "web3_wallets_pkey") @default(cuid())
+  name      String   @unique(map: "web3_wallets_name_key")
+  address   String   @unique(map: "web3_wallets_address_key")
   network   String
   balance   Decimal  @default(0) @db.Decimal(20, 8)
   currency  String   @default("USD")
@@ -360,13 +360,13 @@ model CryptoWalletLegacy {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([address])
-  @@index([createdAt])
+  @@index([address], map: "web3_wallets_address_idx")
+  @@index([createdAt], map: "web3_wallets_createdAt_idx")
   @@map("crypto_wallets")
 }
 
 model CryptoPerformance {
-  id              String   @id @default(cuid())
+  id              String   @id(map: "web3_performance_pkey") @default(cuid())
   month           String
   walletAddress   String
   investmentTotal Decimal  @default(0) @db.Decimal(20, 8)
@@ -375,9 +375,9 @@ model CryptoPerformance {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  @@unique([month, walletAddress])
-  @@index([walletAddress])
-  @@index([month])
+  @@unique([month, walletAddress], map: "web3_performance_month_walletAddress_key")
+  @@index([month], map: "web3_performance_month_idx")
+  @@index([walletAddress], map: "web3_performance_walletAddress_idx")
   @@map("crypto_performance")
 }
 
