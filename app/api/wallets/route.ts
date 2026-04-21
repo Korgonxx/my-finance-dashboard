@@ -6,7 +6,15 @@ async function getDefaultUserId(): Promise<string> {
   const user = await db.user.findFirst();
   if (user) return user.id;
   const created = await db.user.create({
-    data: { email: "default@korgon.finance", name: "Default User" },
+    data: {
+      email: "korgon@local",
+      name: "Korgon",
+      firstName: "Korgon",
+      lastName: "",
+      theme: "dark",
+      banksGoal: 0,
+      cryptoGoal: 0,
+    },
   });
   return created.id;
 }

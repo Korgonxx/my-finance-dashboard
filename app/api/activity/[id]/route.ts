@@ -20,10 +20,18 @@ export async function DELETE(req: NextRequest) {
         await db.cryptoDashboardEntry.delete({ where: { id } });
         break;
       case 'card':
-        await db.banksCard.delete({ where: { id } });
+        // Cards are stored in Account table
+        await db.account.update({
+          where: { id },
+          data: { deletedAt: new Date() },
+        });
         break;
       case 'wallet':
-        await db.cryptoWalletLegacy.delete({ where: { id } });
+        // Wallets are stored in Account table
+        await db.account.update({
+          where: { id },
+          data: { deletedAt: new Date() },
+        });
         break;
       default:
         return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
