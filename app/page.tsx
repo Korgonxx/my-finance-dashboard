@@ -270,13 +270,15 @@ function TransferModal({ onClose, onTransfer }: { onClose: () => void, onTransfe
   );
 }
 
-function TransferToWeb2Modal({ onClose, onTransfer, bankCards }: { 
+function TransferToWeb2Modal({ onClose, onTransfer, bankCards, wallets }: { 
   onClose: () => void; 
-  onTransfer: (amount: number, cardId: string) => void;
+  onTransfer: (amount: number, cardId: string, walletId: string) => void;
   bankCards: Array<{ id: string; name: string; last4: string; balance: number }>;
+  wallets: Array<{ id: string; name: string; address: string; balance: number }>;
 }) {
   const [amount, setAmount] = useState("");
   const [cardId, setCardId] = useState(bankCards[0]?.id || "");
+  const [walletId, setWalletId] = useState(wallets[0]?.id || "");
   const [isTransferring, setIsTransferring] = useState(false);
   const USD_TO_INR = 83.5;
 
@@ -284,7 +286,7 @@ function TransferToWeb2Modal({ onClose, onTransfer, bankCards }: {
     setIsTransferring(true);
     setTimeout(() => {
       setIsTransferring(false);
-      onTransfer(Number(amount), cardId);
+      onTransfer(Number(amount), cardId, walletId);
       onClose();
     }, 1000);
   };
@@ -299,6 +301,14 @@ function TransferToWeb2Modal({ onClose, onTransfer, bankCards }: {
         <p className="text-sm text-zinc-400 dark:text-zinc-400 mb-8 mt-2">Off-ramp crypto to your connected bank account.</p>
         
         <div className="space-y-5">
+          {wallets.length > 0 && (
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-zinc-400">From Wallet</label>
+            <select value={walletId} onChange={e => setWalletId(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none focus:border-emerald-400 transition-colors">
+              {wallets.map(w => <option key={w.id} value={w.id}>{w.name} ({w.address.slice(0,6)}...${w.address.slice(-4)}) — ${w.balance.toFixed(2)}</option>)}
+            </select>
+          </div>
+          )}
           {bankCards.length > 0 && (
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-zinc-400">To Card</label>
@@ -327,9 +337,9 @@ function TransferToWeb2Modal({ onClose, onTransfer, bankCards }: {
             <button onClick={onClose} className="flex-1 py-3.5 bg-white/5 hover:bg-white/10 transition-colors text-zinc-300 rounded-2xl font-semibold">Cancel</button>
             <button 
               onClick={handleTransfer} 
-              disabled={isTransferring || !amount || Number(amount) <= 0 || !cardId}
+              disabled={isTransferring || !amount || Number(amount) <= 0 || !cardId || !walletId}
               className={cn("flex-[2] py-3.5 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-[0_5px_20px_rgba(52,211,153,0.15)]", 
-                isTransferring || !amount || Number(amount) <= 0 || !cardId ? "bg-emerald-400/70 text-[#0A0A0A]/70 cursor-not-allowed" : "bg-emerald-400 text-[#0A0A0A] hover:bg-emerald-300 hover:-translate-y-0.5"
+                isTransferring || !amount || Number(amount) <= 0 || !cardId || !walletId ? "bg-emerald-400/70 text-[#0A0A0A]/70 cursor-not-allowed" : "bg-emerald-400 text-[#0A0A0A] hover:bg-emerald-300 hover:-translate-y-0.5"
               )}
             >
               {isTransferring ? (
@@ -479,13 +489,23 @@ export default function FinanceDashboard() {
   
   // Bank cards state
   type BankCard = { id: string; name: string; last4: string; holder: string; expiry: string; type: 'physical' | 'virtual'; balance: number };
-  const [bankCards, setBankCards] = useState<BankCard[]>([
+  const defaultBankCards: BankCard[] = [
     { id: 'card1', name: 'korgon Premium', last4: '4209', holder: `${firstName} ${lastName}`, expiry: '12/28', type: 'physical', balance: 0 },
     { id: 'card2', name: 'Virtual Card', last4: '8831', holder: `${firstName} ${lastName}`, expiry: '05/25', type: 'virtual', balance: 0 },
-  ]);
+  ];
+  const [bankCards, setBankCards] = useState<BankCard[]>(defaultBankCards);
   const [showAddCard, setShowAddCard] = useState(false);
   const [cardForm, setCardForm] = useState({ name: '', last4: '', expiry: '', type: 'virtual' as 'physical' | 'virtual' });
   const [cardError, setCardError] = useState('');
+  // Load bankCards from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('fv_bankCards');
+    if (saved) {
+      try { setBankCards(JSON.parse(saved)); } catch {}
+    }
+  }, []);
+  // Persist bankCards to localStorage on change
+  useEffect(() => { localStorage.setItem('fv_bankCards', JSON.stringify(bankCards)); }, [bankCards]);
   const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
   
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -1768,7 +1788,15 @@ export default function FinanceDashboard() {
           if (mode === 'web2') {
             setBankCards(prev => prev.map(c => c.id === newEntry.walletId ? { ...c, balance: Math.max(0, c.balance + delta) } : c));
           } else {
-            setWallets(prev => prev.map(w => w.id === newEntry.walletId ? { ...w, balance: Math.max(0, w.balance + delta) } : w));
+            setWallets(prev => prev.map(w => {
+              if (w.id === newEntry.walletId) {
+                const newBal = Math.max(0, w.balance + delta);
+                // Persist to API
+                fetch(`/api/wallets/${w.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
+                return { ...w, balance: newBal };
+              }
+              return w;
+            }));
           }
         }
         setShowAdd(false);
@@ -1783,7 +1811,7 @@ export default function FinanceDashboard() {
         }
       }} />}
       
-      {showTransfer && <TransferModal onClose={() => setShowTransfer(false)} onTransfer={(amount, fromCardId, toCardId) => {
+      {showTransfer && <TransferModal onClose={() => setShowTransfer(false)} onTransfer={async (amount, fromCardId, toCardId) => {
         const from = bankCards.find(c => c.id === fromCardId)?.name || "Card";
         const to = bankCards.find(c => c.id === toCardId)?.name || "Card";
         // Update card balances
@@ -1793,58 +1821,70 @@ export default function FinanceDashboard() {
           return c;
         }));
         // Create transfer entries
-        setEntries(prev => [
-            {
-                id: Math.random().toString(36).substr(2, 9),
-                date: new Date().toISOString().split('T')[0],
-                project: `Transfer: ${from} → ${to}`,
-                earned: 0,
-                saved: 0,
-                given: amount,
-                givenTo: "Transfer",
-                mode: "web2" as const
-            },
-            ...prev
-        ]);
+        const fromEntry = {
+            id: Math.random().toString(36).substr(2, 9),
+            date: new Date().toISOString().split('T')[0],
+            project: `Transfer: ${from} → ${to}`,
+            earned: 0, saved: 0, given: amount,
+            givenTo: "Transfer", mode: "web2" as const, walletId: fromCardId,
+        };
+        const toEntry = {
+            id: Math.random().toString(36).substr(2, 9),
+            date: new Date().toISOString().split('T')[0],
+            project: `Received: ${from} → ${to}`,
+            earned: amount, saved: 0, given: 0,
+            givenTo: "Transfer", mode: "web2" as const, walletId: toCardId,
+        };
+        setEntries(prev => [fromEntry, toEntry, ...prev]);
+        // Save both to API
+        try {
+          await fetch("/api/entries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(fromEntry) });
+          await fetch("/api/entries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toEntry) });
+        } catch (err) { console.error("[bankTransfer] save failed:", err); }
       }} />}
       
       {showTransferToWeb2 && <TransferToWeb2Modal 
         onClose={() => setShowTransferToWeb2(false)} 
         bankCards={bankCards.map(c => ({ id: c.id, name: c.name, last4: c.last4, balance: c.balance }))}
-        onTransfer={(amount, cardId) => {
+        wallets={wallets.map(w => ({ id: w.id, name: w.name, address: w.address, balance: w.balance }))}
+        onTransfer={async (amount, cardId, walletId) => {
         // Add to bank card balance
         setBankCards(prev => prev.map(c => c.id === cardId ? { ...c, balance: c.balance + amount } : c));
-        // Create crypto entry
+        // Deduct from crypto wallet balance & persist
+        setWallets(prev => prev.map(w => {
+          if (w.id === walletId) {
+            const newBal = Math.max(0, w.balance - amount);
+            fetch(`/api/wallets/${w.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
+            return { ...w, balance: newBal };
+          }
+          return w;
+        }));
         const cardName = bankCards.find(c => c.id === cardId)?.name || 'Bank Card';
-        setEntries(prev => [
-            {
-                id: Math.random().toString(36).substr(2, 9),
-                date: new Date().toISOString().split('T')[0],
-                project: `Off-Ramp → ${cardName}`,
-                earned: 0,
-                saved: 0,
-                given: amount,
-                givenTo: cardName,
-                mode: "web3" as const,
-                walletId: cardId,
-            },
-            ...prev
-        ]);
-        // Create receiving entry on banks side
-        setEntries(prev => [
-            {
-                id: Math.random().toString(36).substr(2, 9),
-                date: new Date().toISOString().split('T')[0],
-                project: `Received from Crypto`,
-                earned: amount,
-                saved: 0,
-                given: 0,
-                givenTo: "Crypto Off-Ramp",
-                mode: "web2" as const,
-                walletId: cardId,
-            },
-            ...prev
-        ]);
+        const walletName = wallets.find(w => w.id === walletId)?.name || 'Crypto Wallet';
+        const cryptoId = Math.random().toString(36).substr(2, 9);
+        const bankId = Math.random().toString(36).substr(2, 9);
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Create crypto entry (shown in crypto mode)
+        const cryptoEntry = {
+            id: cryptoId, date: today,
+            project: `Off-Ramp → ${cardName}`, earned: 0, saved: 0, given: amount,
+            givenTo: cardName, mode: "web3" as const, walletId: walletId,
+        };
+        // Create bank entry (shown in banks mode)
+        const bankEntry = {
+            id: bankId, date: today,
+            project: `Received from ${walletName}`, earned: amount, saved: 0, given: 0,
+            givenTo: "Crypto Off-Ramp", mode: "web2" as const, walletId: cardId,
+        };
+        
+        setEntries(prev => [cryptoEntry, bankEntry, ...prev]);
+        
+        // Save BOTH entries to API so they persist across mode switches
+        try {
+          await fetch("/api/entries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cryptoEntry) });
+          await fetch("/api/entries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(bankEntry) });
+        } catch (err) { console.error("[transferToBank] save failed:", err); }
       }} />}
       
       {deletingTransactionId && (
@@ -1870,7 +1910,14 @@ export default function FinanceDashboard() {
                     if (entry.mode === 'web2') {
                       setBankCards(prev => prev.map(c => c.id === entry.walletId ? { ...c, balance: Math.max(0, c.balance + delta) } : c));
                     } else {
-                      setWallets(prev => prev.map(w => w.id === entry.walletId ? { ...w, balance: Math.max(0, w.balance + delta) } : w));
+                      setWallets(prev => prev.map(w => {
+                        if (w.id === entry.walletId) {
+                          const newBal = Math.max(0, w.balance + delta);
+                          fetch(`/api/wallets/${w.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
+                          return { ...w, balance: newBal };
+                        }
+                        return w;
+                      }));
                     }
                   }
                   setEntries(prev => prev.filter(e => e.id !== id));
@@ -2051,6 +2098,7 @@ export default function FinanceDashboard() {
                 holder: `${firstName} ${lastName}`,
                 expiry: cardForm.expiry,
                 type: cardForm.type,
+                balance: 0,
               };
               setBankCards(prev => [...prev, newCard]);
               setShowAddCard(false);
