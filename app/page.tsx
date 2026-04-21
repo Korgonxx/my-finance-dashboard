@@ -506,6 +506,24 @@ export default function FinanceDashboard() {
   
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
+  // Activity feed state
+  type Activity = { id: string; type: string; action: string; amount: number; date: string; mode: string };
+  const [activities, setActivities] = useState<Activity[]>([]);
+  async function fetchActivity() {
+    try {
+      const res = await fetch('/api/activity');
+      if (res.ok) setActivities(await res.json());
+    } catch {}
+  }
+  useEffect(() => { fetchActivity(); }, []);
+
+  async function deleteActivity(id: string, type: string) {
+    try {
+      await fetch(`/api/activity?id=${id}&type=${type}`, { method: 'DELETE' });
+      setActivities(prev => prev.filter(a => a.id !== id));
+    } catch {}
+  }
+
   const handleProfileImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -1813,38 +1831,59 @@ export default function FinanceDashboard() {
                 </div>
               </div>
 
-              {/* Connected Accounts */}
+              {/* Recent Activity */}
               <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm">
                 <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-lg font-bold text-zinc-100">Connected Institutions</h3>
-                  <button className="text-xs font-semibold text-[#D4FE44] hover:underline flex items-center gap-1"><Plus size={14}/> Add New</button>
+                  <h3 className="text-lg font-bold text-zinc-100">Recent Activity</h3>
+                  <span className="text-xs text-zinc-500 font-medium">{activities.length} actions</span>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-4 border border-[#222226] bg-[#09090B] rounded-2xl flex justify-between items-center group">
-                     <div className="flex items-center gap-3">
-                       <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500">
-                         <Briefcase size={18} />
-                       </div>
-                       <div>
-                         <p className="text-sm font-bold text-zinc-100">Chase Bank</p>
-                         <p className="text-xs text-zinc-500 mt-0.5">Checking •••• 4209</p>
-                       </div>
-                     </div>
-                     <button className="px-3 py-1.5 text-xs font-semibold text-zinc-400 border border-[#222226] rounded-lg group-hover:text-red-400 group-hover:border-red-400/30 transition-colors">Disconnect</button>
+                {activities.length === 0 ? (
+                  <div className="text-center py-8 text-zinc-500 text-sm">
+                    <Activity size={24} className="mx-auto mb-2 opacity-50" />
+                    No activity yet. Add a card, wallet, or entry to get started.
                   </div>
-                  <div className="p-4 border border-[#222226] bg-[#09090B] rounded-2xl flex justify-between items-center group">
-                     <div className="flex items-center gap-3">
-                       <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-500">
-                         <Zap size={18} />
-                       </div>
-                       <div>
-                         <p className="text-sm font-bold text-zinc-100">Coinbase</p>
-                         <p className="text-xs text-zinc-500 mt-0.5">Crypto Exchange</p>
-                       </div>
-                     </div>
-                     <button className="px-3 py-1.5 text-xs font-semibold text-zinc-400 border border-[#222226] rounded-lg group-hover:text-red-400 group-hover:border-red-400/30 transition-colors">Disconnect</button>
+                ) : (
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar pr-1">
+                    {activities.map((a) => (
+                      <div key={a.id} className="flex items-center justify-between p-3 bg-[#09090B] border border-[#222226] rounded-xl group hover:border-zinc-600 transition-colors">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                            a.type === 'bank_entry' ? 'bg-emerald-500/10 text-emerald-400' :
+                            a.type === 'crypto_entry' ? 'bg-purple-500/10 text-purple-400' :
+                            a.type === 'card' ? 'bg-blue-500/10 text-blue-400' :
+                            'bg-amber-500/10 text-amber-400'
+                          }`}>
+                            {a.type === 'card' ? <CreditCard size={14} /> :
+                             a.type === 'wallet' ? <Wallet size={14} /> :
+                             <ArrowRightLeft size={14} />}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-zinc-200 truncate">{a.action}</p>
+                            <p className="text-xs text-zinc-500">
+                              {new Date(a.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              {' • '}
+                              <span className={a.mode === 'banks' ? 'text-emerald-400' : 'text-purple-400'}>
+                                {a.mode === 'banks' ? 'Banks' : 'Crypto'}
+                              </span>
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-xs font-mono text-zinc-400">
+                            {a.mode === 'banks' ? '₹' : '$'}{a.amount.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}
+                          </span>
+                          <button
+                            onClick={() => deleteActivity(a.id, a.type)}
+                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/10 text-zinc-500 hover:text-red-400 transition-all"
+                            title="Delete this activity"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                </div>
+                )}
               </div>
 
             </div>
@@ -2022,6 +2061,7 @@ export default function FinanceDashboard() {
         } catch (err) {
           console.error("[addEntry] failed:", err);
         }
+        fetchActivity();
       }} />}
       
       {showTransfer && <TransferModal onClose={() => setShowTransfer(false)} onTransfer={async (amount, fromCardId, toCardId) => {
@@ -2062,6 +2102,7 @@ export default function FinanceDashboard() {
           await fetch("/api/entries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(fromEntry) });
           await fetch("/api/entries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toEntry) });
         } catch (err) { console.error("[bankTransfer] save failed:", err); }
+        fetchActivity();
       }} />}
       
       {showTransferToWeb2 && <TransferToWeb2Modal 
@@ -2113,6 +2154,7 @@ export default function FinanceDashboard() {
           await fetch("/api/entries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cryptoEntry) });
           await fetch("/api/entries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(bankEntry) });
         } catch (err) { console.error("[transferToBank] save failed:", err); }
+        fetchActivity();
       }} />}
       
       {deletingTransactionId && (
@@ -2162,6 +2204,7 @@ export default function FinanceDashboard() {
                   } catch (err) {
                     console.error("[delete] failed:", err);
                   }
+                  fetchActivity();
                 }}
                 className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold text-sm shadow-[0_5px_20px_rgba(239,68,68,0.3)] transition-all"
               >
@@ -2260,6 +2303,7 @@ export default function FinanceDashboard() {
                 setShowAddWallet(false);
                 setWalletForm({ name: '', address: '', network: 'Ethereum', balance: '', encrypt: false });
                 fetchWallets();
+                fetchActivity();
               } catch (err: any) { setWalletError('Failed to add wallet: ' + err.message); }
             }} className="w-full py-3 mt-6 bg-[#D4FE44] text-[#0A0A0A] rounded-xl font-bold text-sm hover:bg-[#bceb29] transition-colors">
               Add Wallet
@@ -2283,6 +2327,7 @@ export default function FinanceDashboard() {
                 setWallets(prev => prev.filter(w => w.id !== id));
                 try { await fetch(`/api/wallets/${id}`, { method: 'DELETE' }); } catch {}
                 fetchWallets();
+                fetchActivity();
               }} className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold text-sm shadow-[0_5px_20px_rgba(239,68,68,0.3)] transition-all">Delete</button>
             </div>
           </div>
@@ -2343,6 +2388,7 @@ export default function FinanceDashboard() {
                 if (res.ok) {
                   const saved = await res.json();
                   setBankCards(prev => [...prev, saved]);
+                  fetchActivity();
                 }
               } catch (err) { console.error("[addCard] failed:", err); }
               setShowAddCard(false);
@@ -2368,6 +2414,7 @@ export default function FinanceDashboard() {
                 setBankCards(prev => prev.filter(c => c.id !== id));
                 setDeletingCardId(null);
                 try { await fetch(`/api/cards/${id}`, { method: 'DELETE' }); } catch {}
+                fetchActivity();
               }} className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold text-sm shadow-[0_5px_20px_rgba(239,68,68,0.3)] transition-all">Delete</button>
             </div>
           </div>
