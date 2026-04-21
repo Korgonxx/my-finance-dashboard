@@ -203,13 +203,14 @@ function TransferModal({ onClose, onTransfer }: { onClose: () => void, onTransfe
     { id: "card2", name: "Virtual Card", last4: "8831" },
   ];
 
-  const handleTransfer = () => {
+  const handleTransfer = async () => {
     setIsTransferring(true);
-    setTimeout(() => {
+    try {
+      await onTransfer(Number(amount), fromCard, toCard);
+    } finally {
       setIsTransferring(false);
-      onTransfer(Number(amount), fromCard, toCard);
       onClose();
-    }, 1000);
+    }
   };
 
   return (
@@ -282,13 +283,14 @@ function TransferToWeb2Modal({ onClose, onTransfer, bankCards, wallets }: {
   const [isTransferring, setIsTransferring] = useState(false);
   const USD_TO_INR = 83.5;
 
-  const handleTransfer = () => {
+  const handleTransfer = async () => {
     setIsTransferring(true);
-    setTimeout(() => {
+    try {
+      await onTransfer(Number(amount), cardId, walletId);
+    } finally {
       setIsTransferring(false);
-      onTransfer(Number(amount), cardId, walletId);
       onClose();
-    }, 1000);
+    }
   };
 
   return (
@@ -395,14 +397,14 @@ export default function FinanceDashboard() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [web2Goal, setWeb2Goal] = useState(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('fv_web2Goal');
+      const saved = localStorage.getItem('fv_banksGoal');
       if (saved) try { return JSON.parse(saved); } catch {}
     }
     return { amount: 10000, currency: "USD" };
   });
   const [web3Goal, setWeb3Goal] = useState(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('fv_web3Goal');
+      const saved = localStorage.getItem('fv_cryptoGoal');
       if (saved) try { return JSON.parse(saved); } catch {}
     }
     return { amount: 5, currency: "ETH" };
@@ -597,8 +599,8 @@ export default function FinanceDashboard() {
   useEffect(() => { localStorage.setItem('fv_lastName', lastName); }, [lastName]);
   useEffect(() => { localStorage.setItem('fv_email', email); }, [email]);
   useEffect(() => { localStorage.setItem('fv_profilePic', profilePic); }, [profilePic]);
-  useEffect(() => { localStorage.setItem('fv_web2Goal', JSON.stringify(web2Goal)); }, [web2Goal]);
-  useEffect(() => { localStorage.setItem('fv_web3Goal', JSON.stringify(web3Goal)); }, [web3Goal]);
+  useEffect(() => { localStorage.setItem('fv_banksGoal', JSON.stringify(web2Goal)); }, [web2Goal]);
+  useEffect(() => { localStorage.setItem('fv_cryptoGoal', JSON.stringify(web3Goal)); }, [web3Goal]);
 
   // Hydrate profile from localStorage (fixes Next.js SSR override)
   useEffect(() => {
@@ -614,9 +616,9 @@ export default function FinanceDashboard() {
     if (savedEmail) setEmail(savedEmail);
     const savedPic = localStorage.getItem('fv_profilePic');
     if (savedPic) setProfilePic(savedPic);
-    const savedWeb2 = localStorage.getItem('fv_web2Goal');
+    const savedWeb2 = localStorage.getItem('fv_banksGoal');
     if (savedWeb2) try { setWeb2Goal(JSON.parse(savedWeb2)); } catch {}
-    const savedWeb3 = localStorage.getItem('fv_web3Goal');
+    const savedWeb3 = localStorage.getItem('fv_cryptoGoal');
     if (savedWeb3) try { setWeb3Goal(JSON.parse(savedWeb3)); } catch {}
   }, []);
 

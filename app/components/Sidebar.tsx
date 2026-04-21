@@ -217,8 +217,8 @@ export function Sidebar({ isDark, setIsDark }: { isDark: boolean; setIsDark: (v:
 
   // Use stable values on server, real values after hydration
   // Check document class for initial mode to prevent jitter
-  const initialMode = typeof document !== 'undefined' && document.documentElement.classList.contains('web3-mode') ? 'web3' : 'web2';
-  const currentMode = hydrated ? (isWeb3 ? "web3" : "web2") : initialMode;
+  const initialMode = typeof document !== 'undefined' && document.documentElement.classList.contains('web3-mode') ? 'crypto' : 'banks';
+  const currentMode = hydrated ? (isWeb3 ? "crypto" : "banks") : initialMode;
   const cardIcon = hydrated && isWeb3 ? Wallet : CreditCard;
   const cardLabel = hydrated && isWeb3 ? "Wallets" : "Cards";
 

@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, useMemo, ReactNode } from "react";
 
-export type AppMode = "web2" | "web3";
+export type AppMode = "banks" | "crypto";
 
 interface WalletAddress {
   id: string;
@@ -24,7 +24,7 @@ interface Web3ContextType {
 }
 
 const Web3Context = createContext<Web3ContextType>({
-  mode: "web2",
+  mode: "banks",
   setMode: () => {},
   isWeb3: false,
   wallets: [],
@@ -50,12 +50,12 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     if (modeCache) return modeCache;
     try {
       const m = localStorage.getItem("app_mode") as AppMode | null;
-      const resolvedMode = (m === "web2" || m === "web3") ? m : "web2";
+      const resolvedMode = (m === "banks" || m === "crypto") ? m : "banks";
       modeCache = resolvedMode;
       return resolvedMode;
     } catch {
-      modeCache = "web2";
-      return "web2";
+      modeCache = "banks";
+      return "banks";
     }
   });
   
@@ -95,7 +95,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     setModeState(m);
     try { 
       localStorage.setItem("app_mode", m);
-      if (m === "web3") {
+      if (m === "crypto") {
         document.documentElement.classList.add("web3-mode");
       } else {
         document.documentElement.classList.remove("web3-mode");
@@ -116,8 +116,8 @@ export function Web3Provider({ children }: { children: ReactNode }) {
 
   // Memoized isWeb3 to prevent recalculation on every render
   const stableIsWeb3 = useMemo(() => {
-    if (!isHydrated) return modeRef.current === "web3";
-    return mode === "web3";
+    if (!isHydrated) return modeRef.current === "crypto";
+    return mode === "crypto";
   }, [mode, isHydrated]);
 
   const value = useMemo(() => ({

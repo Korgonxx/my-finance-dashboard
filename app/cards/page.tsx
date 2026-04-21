@@ -76,10 +76,10 @@ export default function CardsPage() {
             <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "3rem" }}>
               <div>
                 <h1 style={{ fontSize: 42, fontWeight: 800, letterSpacing: "-0.04em", marginBottom: 8 }}>
-                  {mode === "web3" ? "Wallets" : "Bank Cards"}
+                  {mode === "crypto" ? "Wallets" : "Bank Cards"}
                 </h1>
                 <div style={{ display: "flex", gap: 12 }}>
-                  {["web2", "web3"].map(m => (
+                  {["banks", "crypto"].map(m => (
                     <button key={m} onClick={() => setMode(m as any)}
                       style={{ padding: "8px 20px", borderRadius: 99, border: "none", fontSize: 13, fontWeight: 700,
                         background: mode === m ? T.textPri : T.pill, color: mode === m ? T.bg : T.textSec, cursor: "pointer", transition: "all 0.2s" }}>
@@ -89,7 +89,7 @@ export default function CardsPage() {
                 </div>
               </div>
               <button onClick={() => setAddModal(true)} style={{ padding: "0 24px", height: 48, borderRadius: 16, background: T.yellow, border: "none", cursor: "pointer", fontSize: 14, fontWeight: 800, color: "#000", display: "flex", alignItems: "center", gap: 8, boxShadow: `0 8px 20px ${T.yellow}40` }}>
-                <Plus size={20} strokeWidth={3} /> Add {mode === "web3" ? "Wallet" : "Card"}
+                <Plus size={20} strokeWidth={3} /> Add {mode === "crypto" ? "Wallet" : "Card"}
               </button>
             </header>
 
@@ -109,34 +109,34 @@ export default function CardsPage() {
 
                 <div className="bento-card" style={{ background: T.yellow + "15", borderRadius: 32, padding: "2rem", border: `1px solid ${T.yellow}30` }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: T.textSec, textTransform: "uppercase", marginBottom: 4 }}>Total Balance</div>
-                  <div style={{ fontSize: 32, fontWeight: 800 }}>${(mode === "web3" ? wallets : cards).reduce((s, c) => s + c.balance, 0).toLocaleString()}</div>
+                  <div style={{ fontSize: 32, fontWeight: 800 }}>${(mode === "crypto" ? wallets : cards).reduce((s, c) => s + c.balance, 0).toLocaleString()}</div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 12, color: T.green }}>
                     <Activity size={14} />
-                    <span style={{ fontSize: 12, fontWeight: 700 }}>{mode === "web3" ? wallets.length : cards.length} Active Assets</span>
+                    <span style={{ fontSize: 12, fontWeight: 700 }}>{mode === "crypto" ? wallets.length : cards.length} Active Assets</span>
                   </div>
                 </div>
               </div>
 
               {/* Assets Grid */}
               <div style={{ gridColumn: "span 8", display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "1.5rem" }}>
-                {(mode === "web3" ? wallets : cards).map((asset: any) => (
+                {(mode === "crypto" ? wallets : cards).map((asset: any) => (
                   <div key={asset.id} className="bento-card" style={{ background: T.card, borderRadius: 32, padding: "2rem", border: `1px solid ${T.border}`, position: "relative", overflow: "hidden" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                         <div style={{ width: 44, height: 44, borderRadius: 14, background: T.pill, display: "flex", alignItems: "center", justifyContent: "center", color: T.textSec }}>
-                          {mode === "web3" ? <Wallet size={20} /> : <CreditCard size={20} />}
+                          {mode === "crypto" ? <Wallet size={20} /> : <CreditCard size={20} />}
                         </div>
                         <div>
                           <div style={{ fontSize: 16, fontWeight: 800 }}>{asset.name}</div>
-                          <div style={{ fontSize: 12, color: T.textMut }}>{mode === "web3" ? asset.network : asset.bank}</div>
+                          <div style={{ fontSize: 12, color: T.textMut }}>{mode === "crypto" ? asset.network : asset.bank}</div>
                         </div>
                       </div>
-                      <button onClick={() => mode === "web3" ? removeWallet(asset.id) : saveCards(cards.filter(c => c.id !== asset.id))} style={{ width: 36, height: 36, borderRadius: 10, background: T.pill, border: "none", cursor: "pointer", color: T.red, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <button onClick={() => mode === "crypto" ? removeWallet(asset.id) : saveCards(cards.filter(c => c.id !== asset.id))} style={{ width: 36, height: 36, borderRadius: 10, background: T.pill, border: "none", cursor: "pointer", color: T.red, display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <Trash2 size={14} />
                       </button>
                     </div>
                     
-                    {mode === "web2" && <div className="card-chip" />}
+                    {mode === "banks" && <div className="card-chip" />}
                     
                     <div style={{ marginBottom: "1.5rem" }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: T.textSec, textTransform: "uppercase", marginBottom: 4 }}>Balance</div>
@@ -145,17 +145,17 @@ export default function CardsPage() {
 
                     <div style={{ background: T.pill, borderRadius: 16, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span style={{ fontSize: 13, color: T.textSec, fontFamily: "monospace" }}>
-                        {mode === "web3" ? shortAddr(asset.address) : "**** **** **** " + asset.number.slice(-4)}
+                        {mode === "crypto" ? shortAddr(asset.address) : "**** **** **** " + asset.number.slice(-4)}
                       </span>
                       <Copy size={14} color={T.textMut} />
                     </div>
                   </div>
                 ))}
 
-                {(mode === "web3" ? wallets : cards).length === 0 && (
+                {(mode === "crypto" ? wallets : cards).length === 0 && (
                   <div style={{ gridColumn: "span 2", background: T.pill, borderRadius: 32, padding: "4rem", border: `1px dashed ${T.border}`, textAlign: "center", color: T.textMut }}>
                     <Plus size={48} style={{ marginBottom: 16, opacity: 0.2 }} />
-                    <div style={{ fontSize: 16, fontWeight: 700 }}>No {mode === "web3" ? "wallets" : "cards"} added yet</div>
+                    <div style={{ fontSize: 16, fontWeight: 700 }}>No {mode === "crypto" ? "wallets" : "cards"} added yet</div>
                     <p style={{ fontSize: 13, marginTop: 4 }}>Click the button above to add your first asset.</p>
                   </div>
                 )}

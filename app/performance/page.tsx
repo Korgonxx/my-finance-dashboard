@@ -20,18 +20,18 @@ export default function PerformancePage() {
   const { isDark, setIsDark } = useAppSettings();
   const [hydrated, setHydrated] = useState(false);
   
-  const initialMode = typeof document !== 'undefined' && document.documentElement.classList.contains('web3-mode') ? 'web3' : 'web2';
-  const [perfMode, setPerfMode] = useState<"web2"|"web3">(initialMode);
+  const initialMode = typeof document !== 'undefined' && document.documentElement.classList.contains('web3-mode') ? 'crypto' : 'banks';
+  const [perfMode, setPerfMode] = useState<"banks"|"crypto">(initialMode);
   const [chartType, setChartType] = useState<"bar"|"line"|"radar">("bar");
 
   useEffect(() => {
     setHydrated(true);
-    setPerfMode(mode === "web3" ? "web3" : "web2");
+    setPerfMode(mode === "crypto" ? "crypto" : "banks");
   }, [mode]);
 
   const T = isDark ? THEME.dark : THEME.light;
-  const { web2Entries, web3Entries } = useEntries(perfMode === "web3");
-  const entries = perfMode === "web2" ? web2Entries : web3Entries;
+  const { web2Entries, web3Entries } = useEntries(perfMode === "crypto");
+  const entries = perfMode === "banks" ? web2Entries : web3Entries;
 
   const perfData = MONTHS.map(month => {
     const me = entries.filter(e => MONTHS[new Date(e.date).getMonth()] === month);
@@ -83,7 +83,7 @@ export default function PerformancePage() {
                   Performance
                 </h1>
                 <div style={{ display: "flex", gap: 12 }}>
-                  {["web2", "web3"].map(m => (
+                  {["banks", "crypto"].map(m => (
                     <button key={m} onClick={() => setPerfMode(m as any)}
                       style={{ padding: "8px 20px", borderRadius: 99, border: "none", fontSize: 13, fontWeight: 700,
                         background: perfMode === m ? T.textPri : T.pill, color: perfMode === m ? T.bg : T.textSec, cursor: "pointer", transition: "all 0.2s" }}>

@@ -193,7 +193,7 @@ export function BottomToolsBar({ isDark, setIsDark }: { isDark: boolean; setIsDa
 
             {/* Web2/Web3 Toggle */}
             <button
-              onClick={() => setMode(isWeb3 ? "web2" : "web3")}
+              onClick={() => setMode(isWeb3 ? "banks" : "crypto")}
               style={{
                 background: T.btnGhost,
                 border: `1px solid ${T.border}`,
