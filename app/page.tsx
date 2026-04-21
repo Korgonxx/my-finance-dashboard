@@ -19,7 +19,7 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-type Mode = "web2" | "web3";
+type Mode = "banks" | "crypto";
 
 type Entry = {
   id: string;
@@ -62,7 +62,7 @@ function EntryModal({ onClose, onSave, mode, bankCards, wallets }: {
   const [walletId, setWalletId] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const items = mode === 'web2' 
+  const items = mode === 'banks' 
     ? bankCards.map(c => ({ id: c.id, label: `${c.name} (**** ${c.last4})` }))
     : wallets.map(w => ({ id: w.id, label: `${w.name} (${w.address.slice(0,6)}...${w.address.slice(-4)})` }));
 
@@ -127,9 +127,9 @@ function EntryModal({ onClose, onSave, mode, bankCards, wallets }: {
           </div>
           {items.length > 0 && (
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-400">{mode === 'web2' ? 'Card' : 'Wallet'}</label>
+            <label className="text-xs font-medium text-zinc-400">{mode === 'banks' ? 'Card' : 'Wallet'}</label>
             <select value={walletId} onChange={e => setWalletId(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors">
-              <option value="">Select {mode === 'web2' ? 'card' : 'wallet'}...</option>
+              <option value="">Select {mode === 'banks' ? 'card' : 'wallet'}...</option>
               {items.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
             </select>
           </div>
@@ -381,7 +381,7 @@ export default function FinanceDashboard() {
   const { changeAppPasscode: changeContextPasscode } = useAppSettings();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loadingEntries, setLoadingEntries] = useState(true);
-  const [mode, setMode] = useState<Mode>("web2");
+  const [mode, setMode] = useState<Mode>("banks");
   const [filter, setFilter] = useState("All");
   const [showAdd, setShowAdd] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
@@ -489,28 +489,21 @@ export default function FinanceDashboard() {
   
   // Bank cards state
   type BankCard = { id: string; name: string; last4: string; holder: string; expiry: string; type: 'physical' | 'virtual'; balance: number };
-  const defaultBankCards: BankCard[] = [
-    { id: 'card1', name: 'korgon Premium', last4: '4209', holder: `${firstName} ${lastName}`, expiry: '12/28', type: 'physical', balance: 0 },
-    { id: 'card2', name: 'Virtual Card', last4: '8831', holder: `${firstName} ${lastName}`, expiry: '05/25', type: 'virtual', balance: 0 },
-  ];
-  const [bankCards, setBankCards] = useState<BankCard[]>(defaultBankCards);
+  const [bankCards, setBankCards] = useState<BankCard[]>([]);
   const [showAddCard, setShowAddCard] = useState(false);
   const [cardForm, setCardForm] = useState({ name: '', last4: '', expiry: '', type: 'virtual' as 'physical' | 'virtual' });
   const [cardError, setCardError] = useState('');
-  // Load bankCards from localStorage on mount (merge with defaults if localStorage has fewer cards)
-  useEffect(() => {
-    const saved = localStorage.getItem('fv_bankCards');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setBankCards(parsed);
-        }
-      } catch {}
-    }
-  }, []);
-  // Persist bankCards to localStorage on change
-  useEffect(() => { localStorage.setItem('fv_bankCards', JSON.stringify(bankCards)); }, [bankCards]);
+  // Fetch cards from API on mount
+  async function fetchCards() {
+    try {
+      const res = await fetch('/api/cards');
+      if (res.ok) {
+        const data = await res.json();
+        setBankCards(data);
+      }
+    } catch {}
+  }
+  useEffect(() => { fetchCards(); }, []);
   const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
   
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -657,7 +650,7 @@ export default function FinanceDashboard() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (!cancelled && data.amount) {
-          if (mode === "web2") {
+          if (mode === "banks") {
             setWeb2Goal({ amount: data.amount, currency: data.currency || "USD" });
           } else {
             setWeb3Goal({ amount: data.amount, currency: data.currency || "ETH" });
@@ -846,9 +839,9 @@ export default function FinanceDashboard() {
             <PieChart size={20} />
             {!sidebarCollapsed && <span className="font-medium">Analytics</span>}
           </button>
-          <button onClick={() => setActiveTab('Cards')} title={mode === 'web2' ? 'My Cards' : 'My Wallets'} className={cn("flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full", activeTab === 'Cards' ? "bg-white/5 text-zinc-50 border border-white/5" : "text-zinc-400 hover:text-zinc-50 hover:bg-white/5")}>
+          <button onClick={() => setActiveTab('Cards')} title={mode === 'banks' ? 'My Cards' : 'My Wallets'} className={cn("flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full", activeTab === 'Cards' ? "bg-white/5 text-zinc-50 border border-white/5" : "text-zinc-400 hover:text-zinc-50 hover:bg-white/5")}>
             <CreditCard size={20} />
-            {!sidebarCollapsed && <span className="font-medium">{mode === 'web2' ? 'My Cards' : 'My Wallets'}</span>}
+            {!sidebarCollapsed && <span className="font-medium">{mode === 'banks' ? 'My Cards' : 'My Wallets'}</span>}
           </button>
           <button onClick={() => setActiveTab('Security')} title="Security" className={cn("flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full", activeTab === 'Security' ? "bg-white/5 text-zinc-50 border border-white/5" : "text-zinc-400 hover:text-zinc-50 hover:bg-white/5")}>
             <Shield size={20} />
@@ -878,14 +871,14 @@ export default function FinanceDashboard() {
             {/* Context Switcher (Overview / Crypto) */}
             <div className="bg-[#131316] p-1 rounded-xl flex border border-[#222226] flex-1 md:flex-initial">
               <button 
-                onClick={() => setMode('web2')} 
-                className={cn("flex-1 md:flex-none px-4 md:px-5 py-2 rounded-lg text-sm font-semibold transition-all", mode === 'web2' ? "bg-white/10 text-zinc-50 shadow-md" : "text-zinc-400 dark:text-zinc-400 hover:text-zinc-200")}
+                onClick={() => setMode('banks')} 
+                className={cn("flex-1 md:flex-none px-4 md:px-5 py-2 rounded-lg text-sm font-semibold transition-all", mode === 'banks' ? "bg-white/10 text-zinc-50 shadow-md" : "text-zinc-400 dark:text-zinc-400 hover:text-zinc-200")}
               >
                 Banking
               </button>
               <button 
-                onClick={() => setMode('web3')} 
-                className={cn("flex-1 md:flex-none px-4 md:px-5 py-2 rounded-lg text-sm font-semibold transition-all", mode === 'web3' ? "bg-white/10 text-zinc-50 shadow-md" : "text-zinc-400 dark:text-zinc-400 hover:text-zinc-200")}
+                onClick={() => setMode('crypto')} 
+                className={cn("flex-1 md:flex-none px-4 md:px-5 py-2 rounded-lg text-sm font-semibold transition-all", mode === 'crypto' ? "bg-white/10 text-zinc-50 shadow-md" : "text-zinc-400 dark:text-zinc-400 hover:text-zinc-200")}
               >
                 Crypto
               </button>
@@ -1022,9 +1015,9 @@ export default function FinanceDashboard() {
             <div className="bg-[#131316] p-6 rounded-3xl border border-[#222226] shadow-sm flex flex-col justify-between">
               <div className="flex justify-between items-start mb-6">
                 <div>
-                  <p className="text-sm font-medium text-zinc-400 mb-1">{mode === 'web2' ? 'Financial Goal' : 'Crypto Goal'}</p>
+                  <p className="text-sm font-medium text-zinc-400 mb-1">{mode === 'banks' ? 'Financial Goal' : 'Crypto Goal'}</p>
                     <div className="flex-1">
-                      {mode === 'web2' ? (
+                      {mode === 'banks' ? (
                         <div className="flex items-center gap-1">
                           <span className="text-3xl font-bold text-zinc-50 leading-none">
                             {web2Goal.currency === 'USD' ? '$' : web2Goal.currency === 'EUR' ? '€' : web2Goal.currency === 'GBP' ? '£' : web2Goal.currency === 'INR' ? '₹' : '$'}
@@ -1038,7 +1031,7 @@ export default function FinanceDashboard() {
                               fetch("/api/goal", {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ mode: "web2", amount: newGoal.amount, currency: newGoal.currency }),
+                                body: JSON.stringify({ mode: "banks", amount: newGoal.amount, currency: newGoal.currency }),
                               }).catch(err => console.error("[saveGoal web2] failed:", err));
                             }}
                             className="bg-transparent text-3xl font-bold text-zinc-50 w-28 outline-none border-b border-[#222226] focus:border-[#D4FE44] leading-none"
@@ -1056,7 +1049,7 @@ export default function FinanceDashboard() {
                               fetch("/api/goal", {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ mode: "web3", amount: newGoal.amount, currency: "USD" }),
+                                body: JSON.stringify({ mode: "crypto", amount: newGoal.amount, currency: "USD" }),
                               }).catch(err => console.error("[saveGoal web3] failed:", err));
                             }}
                             className="bg-transparent text-3xl font-bold text-zinc-50 w-28 outline-none border-b border-[#222226] focus:border-[#D4FE44] leading-none"
@@ -1065,7 +1058,7 @@ export default function FinanceDashboard() {
                       )}
                     </div>
                     <div className="mt-1">
-                      {mode === 'web2' ? (
+                      {mode === 'banks' ? (
                         <select 
                           value={web2Goal.currency}
                           onChange={(e) => {
@@ -1074,7 +1067,7 @@ export default function FinanceDashboard() {
                             fetch("/api/goal", {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ mode: "web2", amount: newGoal.amount, currency: newGoal.currency }),
+                              body: JSON.stringify({ mode: "banks", amount: newGoal.amount, currency: newGoal.currency }),
                             }).catch(err => console.error("[saveGoal web2 currency] failed:", err));
                           }}
                           className="bg-transparent text-xs text-zinc-500 font-semibold outline-none cursor-pointer w-auto"
@@ -1093,7 +1086,7 @@ export default function FinanceDashboard() {
               </div>
               <div className="flex items-center gap-2 text-sm h-5">
                 <div className="w-full bg-[#222226] h-1.5 rounded-full overflow-hidden mt-1">
-                  <div className="bg-[#D4FE44] h-full" style={{width: `${Math.min((totalSaved / (mode === 'web2' ? web2Goal.amount : web3Goal.amount * 3000)) * 100, 100)}%`}}></div>
+                  <div className="bg-[#D4FE44] h-full" style={{width: `${Math.min((totalSaved / (mode === 'banks' ? web2Goal.amount : web3Goal.amount * 3000)) * 100, 100)}%`}}></div>
                 </div>
               </div>
             </div>
@@ -1180,7 +1173,7 @@ export default function FinanceDashboard() {
                   <button onClick={handleExportCSV} title="Export CSV" className="p-2 border border-[#222226] bg-[#131316] hover:bg-[#1C1C21] text-zinc-400 hover:text-zinc-200 rounded-xl transition-colors min-w-[34px]">
                      <Download size={16} />
                   </button>
-                  {mode === 'web3' && (
+                  {mode === 'crypto' && (
                     <button 
                       onClick={() => setShowTransferToWeb2(true)} 
                       title="Transfer to Bank"
@@ -1231,7 +1224,7 @@ export default function FinanceDashboard() {
                               {entry.date} • {entry.givenTo}
                               {entry.walletId && (
                                 <span className="ml-1 text-[#D4FE44]/70">
-                                  • {mode === 'web2' 
+                                  • {mode === 'banks' 
                                     ? (bankCards.find(c => c.id === entry.walletId)?.name || 'Card')
                                     : (wallets.find(w => w.id === entry.walletId)?.name || 'Wallet')
                                   }
@@ -1271,7 +1264,7 @@ export default function FinanceDashboard() {
         {activeTab === 'Analytics' && (
           <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
              <div className="mb-8">
-                <h2 className="text-2xl font-bold text-zinc-100">{mode === 'web2' ? 'Financial Analytics' : 'Crypto Analytics'}</h2>
+                <h2 className="text-2xl font-bold text-zinc-100">{mode === 'banks' ? 'Financial Analytics' : 'Crypto Analytics'}</h2>
                 <p className="text-sm text-zinc-400">Detailed performance metrics and category breakdowns.</p>
              </div>
              
@@ -1331,7 +1324,7 @@ export default function FinanceDashboard() {
 
         {activeTab === 'Cards' && (
           <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
-            {mode === 'web2' ? (
+            {mode === 'banks' ? (
               <div className="max-w-5xl mx-auto space-y-6 pb-20 md:pb-0">
                 <div className="flex justify-between items-end mb-8">
                   <div>
@@ -1681,7 +1674,7 @@ export default function FinanceDashboard() {
           {/* VIRTUAL CARD */}
           <div className="mb-8">
             <div className="flex justify-between items-end mb-4">
-               <h3 className="text-sm font-bold text-zinc-100">{mode === 'web2' ? 'My Cards' : 'My Wallets'}</h3>
+               <h3 className="text-sm font-bold text-zinc-100">{mode === 'banks' ? 'My Cards' : 'My Wallets'}</h3>
                <button 
                 onClick={() => setActiveTab('Cards')}
                 className="text-xs font-semibold text-[#D4FE44] hover:underline cursor-pointer"
@@ -1790,8 +1783,15 @@ export default function FinanceDashboard() {
         // Update card/wallet balance
         if (newEntry.walletId) {
           const delta = (newEntry.earned || 0) - (newEntry.given || 0);
-          if (mode === 'web2') {
-            setBankCards(prev => prev.map(c => c.id === newEntry.walletId ? { ...c, balance: Math.max(0, c.balance + delta) } : c));
+          if (mode === 'banks') {
+            setBankCards(prev => prev.map(c => {
+              if (c.id === newEntry.walletId) {
+                const newBal = Math.max(0, c.balance + delta);
+                fetch(`/api/cards/${c.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
+                return { ...c, balance: newBal };
+              }
+              return c;
+            }));
           } else {
             setWallets(prev => prev.map(w => {
               if (w.id === newEntry.walletId) {
@@ -1819,10 +1819,18 @@ export default function FinanceDashboard() {
       {showTransfer && <TransferModal onClose={() => setShowTransfer(false)} onTransfer={async (amount, fromCardId, toCardId) => {
         const from = bankCards.find(c => c.id === fromCardId)?.name || "Card";
         const to = bankCards.find(c => c.id === toCardId)?.name || "Card";
-        // Update card balances
+        // Update card balances & persist
         setBankCards(prev => prev.map(c => {
-          if (c.id === fromCardId) return { ...c, balance: Math.max(0, c.balance - amount) };
-          if (c.id === toCardId) return { ...c, balance: c.balance + amount };
+          if (c.id === fromCardId) {
+            const newBal = Math.max(0, c.balance - amount);
+            fetch(`/api/cards/${c.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
+            return { ...c, balance: newBal };
+          }
+          if (c.id === toCardId) {
+            const newBal = c.balance + amount;
+            fetch(`/api/cards/${c.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
+            return { ...c, balance: newBal };
+          }
           return c;
         }));
         // Create transfer entries
@@ -1831,14 +1839,14 @@ export default function FinanceDashboard() {
             date: new Date().toISOString().split('T')[0],
             project: `Transfer: ${from} → ${to}`,
             earned: 0, saved: 0, given: amount,
-            givenTo: "Transfer", mode: "web2" as const, walletId: fromCardId,
+            givenTo: "Transfer", mode: "banks" as const, walletId: fromCardId,
         };
         const toEntry = {
             id: Math.random().toString(36).substr(2, 9),
             date: new Date().toISOString().split('T')[0],
             project: `Received: ${from} → ${to}`,
             earned: amount, saved: 0, given: 0,
-            givenTo: "Transfer", mode: "web2" as const, walletId: toCardId,
+            givenTo: "Transfer", mode: "banks" as const, walletId: toCardId,
         };
         setEntries(prev => [fromEntry, toEntry, ...prev]);
         // Save both to API
@@ -1853,8 +1861,15 @@ export default function FinanceDashboard() {
         bankCards={bankCards.map(c => ({ id: c.id, name: c.name, last4: c.last4, balance: c.balance }))}
         wallets={wallets.map(w => ({ id: w.id, name: w.name, address: w.address, balance: w.balance }))}
         onTransfer={async (amount, cardId, walletId) => {
-        // Add to bank card balance
-        setBankCards(prev => prev.map(c => c.id === cardId ? { ...c, balance: c.balance + amount } : c));
+        // Add to bank card balance & persist
+        setBankCards(prev => prev.map(c => {
+          if (c.id === cardId) {
+            const newBal = c.balance + amount;
+            fetch(`/api/cards/${c.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
+            return { ...c, balance: newBal };
+          }
+          return c;
+        }));
         // Deduct from crypto wallet balance & persist
         setWallets(prev => prev.map(w => {
           if (w.id === walletId) {
@@ -1874,13 +1889,13 @@ export default function FinanceDashboard() {
         const cryptoEntry = {
             id: cryptoId, date: today,
             project: `Off-Ramp → ${cardName}`, earned: 0, saved: 0, given: amount,
-            givenTo: cardName, mode: "web3" as const, walletId: walletId,
+            givenTo: cardName, mode: "crypto" as const, walletId: walletId,
         };
         // Create bank entry (shown in banks mode)
         const bankEntry = {
             id: bankId, date: today,
             project: `Received from ${walletName}`, earned: amount, saved: 0, given: 0,
-            givenTo: "Crypto Off-Ramp", mode: "web2" as const, walletId: cardId,
+            givenTo: "Crypto Off-Ramp", mode: "banks" as const, walletId: cardId,
         };
         
         setEntries(prev => [cryptoEntry, bankEntry, ...prev]);
@@ -1912,8 +1927,15 @@ export default function FinanceDashboard() {
                   const entry = entries.find(e => e.id === id);
                   if (entry?.walletId) {
                     const delta = -((entry.earned || 0) - (entry.given || 0));
-                    if (entry.mode === 'web2') {
-                      setBankCards(prev => prev.map(c => c.id === entry.walletId ? { ...c, balance: Math.max(0, c.balance + delta) } : c));
+                    if (entry.mode === 'banks') {
+                      setBankCards(prev => prev.map(c => {
+                        if (c.id === entry.walletId) {
+                          const newBal = Math.max(0, c.balance + delta);
+                          fetch(`/api/cards/${c.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
+                          return { ...c, balance: newBal };
+                        }
+                        return c;
+                      }));
                     } else {
                       setWallets(prev => prev.map(w => {
                         if (w.id === entry.walletId) {
@@ -2091,13 +2113,12 @@ export default function FinanceDashboard() {
                 </select>
               </div>
             </div>
-            <button onClick={() => {
+            <button onClick={async () => {
               setCardError('');
               if (!cardForm.name.trim()) { setCardError('Card name is required.'); return; }
               if (cardForm.last4.length !== 4) { setCardError('Last 4 digits must be exactly 4 numbers.'); return; }
               if (!cardForm.expiry.match(/^\d{2}\/\d{2}$/)) { setCardError('Expiry must be MM/YY format.'); return; }
-              const newCard: BankCard = {
-                id: 'card_' + Math.random().toString(36).substr(2, 9),
+              const cardData = {
                 name: cardForm.name.trim(),
                 last4: cardForm.last4,
                 holder: `${firstName} ${lastName}`,
@@ -2105,7 +2126,17 @@ export default function FinanceDashboard() {
                 type: cardForm.type,
                 balance: 0,
               };
-              setBankCards(prev => [...prev, newCard]);
+              try {
+                const res = await fetch('/api/cards', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(cardData),
+                });
+                if (res.ok) {
+                  const saved = await res.json();
+                  setBankCards(prev => [...prev, saved]);
+                }
+              } catch (err) { console.error("[addCard] failed:", err); }
               setShowAddCard(false);
               setCardForm({ name: '', last4: '', expiry: '', type: 'virtual' });
             }} className="w-full py-3 mt-6 bg-[#D4FE44] text-[#0A0A0A] rounded-xl font-bold text-sm hover:bg-[#bceb29] transition-colors">
@@ -2124,7 +2155,12 @@ export default function FinanceDashboard() {
             <p className="text-zinc-400 text-sm mb-8">This will permanently remove this card.</p>
             <div className="flex gap-4">
               <button onClick={() => setDeletingCardId(null)} className="flex-1 py-3 bg-[#1C1C21] hover:bg-[#222226] text-zinc-300 rounded-xl font-semibold text-sm border border-[#2A2A30] transition-colors">Cancel</button>
-              <button onClick={() => { setBankCards(prev => prev.filter(c => c.id !== deletingCardId)); setDeletingCardId(null); }} className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold text-sm shadow-[0_5px_20px_rgba(239,68,68,0.3)] transition-all">Delete</button>
+              <button onClick={async () => {
+                const id = deletingCardId;
+                setBankCards(prev => prev.filter(c => c.id !== id));
+                setDeletingCardId(null);
+                try { await fetch(`/api/cards/${id}`, { method: 'DELETE' }); } catch {}
+              }} className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold text-sm shadow-[0_5px_20px_rgba(239,68,68,0.3)] transition-all">Delete</button>
             </div>
           </div>
         </div>

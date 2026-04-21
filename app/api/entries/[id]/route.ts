@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/db";
 
-function toEntry(row: any, mode: string) {
-  if (mode === "web3") {
+function toDbMode(mode: string): string {
+  if (mode === "banks") return "web2";
+  if (mode === "crypto") return "web3";
+  return mode;
+}
+
+function toEntry(row: any, dbMode: string) {
+  if (dbMode === "web3") {
     return {
       id:               row.id,
-      mode:             "web3",
+      mode:             "crypto",
       date:             row.date,
       project:          row.project,
       walletAddress:    row.walletAddress,
@@ -22,7 +28,7 @@ function toEntry(row: any, mode: string) {
   }
   return {
     id:      row.id,
-    mode:    "web2",
+    mode:    "banks",
     date:    row.date,
     project: row.project,
     earned:  Number(row.earned),
@@ -33,7 +39,6 @@ function toEntry(row: any, mode: string) {
 }
 
 async function findEntry(id: string) {
-  // Try web2 first, then web3
   const web2 = await db.web2DashboardEntry.findUnique({ where: { id } });
   if (web2) return { row: web2, mode: "web2" };
   const web3 = await db.web3DashboardEntry.findUnique({ where: { id } });
@@ -45,10 +50,10 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
   try {
     const { id } = await context.params;
     const body = await req.json();
-    const mode = body.mode ?? "web2";
+    const dbMode = toDbMode(body.mode ?? "banks");
 
     let row;
-    if (mode === "web3") {
+    if (dbMode === "web3") {
       row = await db.web3DashboardEntry.update({
         where: { id },
         data: {
@@ -75,7 +80,7 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
         },
       });
     }
-    return NextResponse.json(toEntry(row, mode));
+    return NextResponse.json(toEntry(row, dbMode));
   } catch (err) {
     console.error("[PUT /api/entries/[id]]", err);
     return NextResponse.json({ error: "Failed to update entry" }, { status: 500 });

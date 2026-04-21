@@ -1,10 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/db";
 
-function toWeb2Entry(row: any) {
+// Map frontend modes to DB table modes
+function toDbMode(mode: string): string {
+  if (mode === "banks") return "web2";
+  if (mode === "crypto") return "web3";
+  return mode; // fallback for legacy
+}
+
+function toFrontendMode(dbMode: string): string {
+  if (dbMode === "web2") return "banks";
+  if (dbMode === "web3") return "crypto";
+  return dbMode;
+}
+
+function toBanksEntry(row: any) {
   return {
     id:      row.id,
-    mode:    "web2",
+    mode:    "banks",
     date:    row.date,
     project: row.project,
     earned:  Number(row.earned),
@@ -14,10 +27,10 @@ function toWeb2Entry(row: any) {
   };
 }
 
-function toWeb3Entry(row: any) {
+function toCryptoEntry(row: any) {
   return {
     id:               row.id,
-    mode:             "web3",
+    mode:             "crypto",
     date:             row.date,
     project:          row.project,
     walletAddress:    row.walletAddress,
@@ -26,7 +39,6 @@ function toWeb3Entry(row: any) {
     investmentAmount: Number(row.investmentAmount),
     currentValue:     Number(row.currentValue),
     roi:              Number(row.roi),
-    // Map to earned/saved/given for unified frontend processing
     earned:           Number(row.currentValue),
     saved:            Number(row.investmentAmount),
     given:            0,
@@ -34,33 +46,16 @@ function toWeb3Entry(row: any) {
   };
 }
 
-function toLegacyEntry(row: any) {
-  return {
-    id:               row.id,
-    mode:             row.mode,
-    date:             row.date,
-    project:          row.project,
-    earned:           Number(row.earned),
-    saved:            Number(row.saved),
-    given:            Number(row.given),
-    givenTo:          row.givenTo,
-    walletAddress:    row.walletAddress ?? "",
-    walletName:       row.walletName    ?? "",
-    investmentAmount: row.investmentAmount ? Number(row.investmentAmount) : undefined,
-    currentValue:     row.currentValue     ? Number(row.currentValue)     : undefined,
-  };
-}
-
 export async function GET(req: NextRequest) {
-  const mode = req.nextUrl.searchParams.get("mode") ?? "web2";
+  const mode = toDbMode(req.nextUrl.searchParams.get("mode") ?? "banks");
   
   try {
     if (mode === "web3") {
       const rows = await db.web3DashboardEntry.findMany({ orderBy: { date: "desc" } });
-      return NextResponse.json(rows.map(toWeb3Entry));
+      return NextResponse.json(rows.map(toCryptoEntry));
     } else {
       const rows = await db.web2DashboardEntry.findMany({ orderBy: { date: "desc" } });
-      return NextResponse.json(rows.map(toWeb2Entry));
+      return NextResponse.json(rows.map(toBanksEntry));
     }
   } catch (err) {
     console.error("[GET /api/entries]", err);
@@ -71,9 +66,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const mode = body.mode ?? "web2";
+    const dbMode = toDbMode(body.mode ?? "banks");
 
-    if (mode === "web3") {
+    if (dbMode === "web3") {
       const data = {
         date:             body.date,
         project:          body.project,
@@ -89,7 +84,7 @@ export async function POST(req: NextRequest) {
         update: data,
         create: { ...data, id: body.id },
       });
-      return NextResponse.json(toWeb3Entry(row), { status: 201 });
+      return NextResponse.json(toCryptoEntry(row), { status: 201 });
     } else {
       const data = {
         date:    body.date,
@@ -104,7 +99,7 @@ export async function POST(req: NextRequest) {
         update: data,
         create: { ...data, id: body.id },
       });
-      return NextResponse.json(toWeb2Entry(row), { status: 201 });
+      return NextResponse.json(toBanksEntry(row), { status: 201 });
     }
   } catch (err) {
     console.error("[POST /api/entries]", err);

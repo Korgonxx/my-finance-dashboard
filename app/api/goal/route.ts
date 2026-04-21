@@ -1,27 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/db";
 
+function toDbMode(mode: string): string {
+  if (mode === "banks") return "web2";
+  if (mode === "crypto") return "web3";
+  return mode;
+}
+
 export async function GET(req: NextRequest) {
-  const mode = req.nextUrl.searchParams.get("mode") ?? "web2";
+  const mode = toDbMode(req.nextUrl.searchParams.get("mode") ?? "banks");
   
   try {
     if (mode === "web3") {
       const row = await db.web3DashboardGoal.findFirst();
-      if (!row) return NextResponse.json({ amount: 60000, currency: "USD" });
+      if (!row) return NextResponse.json({ amount: 100000, currency: "USD" });
       return NextResponse.json({ amount: Number(row.amount), currency: row.currency });
     } else {
       const row = await db.web2DashboardGoal.findFirst();
-      if (!row) return NextResponse.json({ amount: 60000, currency: "USD" });
+      if (!row) return NextResponse.json({ amount: 5000, currency: "USD" });
       return NextResponse.json({ amount: Number(row.amount), currency: row.currency });
     }
   } catch (err) {
     console.error("[GET /api/goal]", err);
-    return NextResponse.json({ amount: 60000, currency: "USD" });
+    return NextResponse.json({ amount: 5000, currency: "USD" });
   }
 }
 
 export async function POST(req: NextRequest) {
-  const { mode, amount, currency } = await req.json();
+  const { mode: rawMode, amount, currency } = await req.json();
+  const mode = toDbMode(rawMode ?? "banks");
   
   try {
     if (mode === "web3") {
