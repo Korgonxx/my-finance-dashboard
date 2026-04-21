@@ -269,6 +269,17 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+model BanksEntryCategory {
+  id        String   @id @default(cuid())
+  name      String
+  icon      String   @default("📁")
+  color     String   @default("#22c55e")
+  createdAt DateTime @default(now())
+
+  @@unique([name])
+  @@map("banks_entry_categories")
+}
+
 model BanksDashboardEntry {
   id        String   @id(map: "web2_dashboard_entries_pkey") @default(cuid())
   date      String

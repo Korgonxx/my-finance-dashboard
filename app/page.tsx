@@ -61,6 +61,33 @@ function EntryModal({ onClose, onSave, mode, bankCards, wallets }: {
   const [saved, setSaved] = useState("");
   const [given, setGiven] = useState("");
   const [givenTo, setGivenTo] = useState("");
+  const [categories, setCategories] = useState<Array<{id: string; name: string; icon: string; color: string}>>([]);
+  const [showNewCat, setShowNewCat] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
+  const [newCatIcon, setNewCatIcon] = useState("📁");
+
+  useEffect(() => {
+    fetch("/api/banks-categories").then(r => r.json()).then(setCategories).catch(() => {});
+  }, []);
+
+  const addCategory = async () => {
+    if (!newCatName.trim()) return;
+    try {
+      const res = await fetch("/api/banks-categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newCatName.trim(), icon: newCatIcon }),
+      });
+      if (res.ok) {
+        const cat = await res.json();
+        setCategories(prev => [...prev, cat].sort((a, b) => a.name.localeCompare(b.name)));
+        setGivenTo(cat.name);
+        setShowNewCat(false);
+        setNewCatName("");
+      }
+    } catch {}
+  };
+
   const [walletId, setWalletId] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -108,13 +135,24 @@ function EntryModal({ onClose, onSave, mode, bankCards, wallets }: {
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-zinc-400">Category</label>
-              <input
-                type="text"
-                value={givenTo}
-                onChange={(e) => setGivenTo(e.target.value)}
-                placeholder="e.g. Freelance, DeFi"
-                className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
-              />
+              {showNewCat ? (
+                <div className="flex gap-2">
+                  <select value={newCatIcon} onChange={e => setNewCatIcon(e.target.value)} className="w-14 bg-[#09090B] border border-[#222226] rounded-xl px-2 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]">
+                    {["📁","💰","🍔","🚗","🛍️","📄","🎬","💊","📚","💻","📈","📊","🎮","✈️","🏠","⚡","🎯","🔥","💎","🌐"].map(e => <option key={e} value={e}>{e}</option>)}
+                  </select>
+                  <input type="text" value={newCatName} onChange={e => setNewCatName(e.target.value)} onKeyDown={e => e.key === "Enter" && addCategory()} placeholder="Category name" className="flex-1 bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]" />
+                  <button onClick={addCategory} className="px-3 py-2.5 bg-[#D4FE44] text-black rounded-xl text-sm font-bold">✓</button>
+                  <button onClick={() => setShowNewCat(false)} className="px-3 py-2.5 bg-white/5 text-zinc-400 rounded-xl text-sm">✕</button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <select value={givenTo} onChange={e => e.target.value === "__new__" ? setShowNewCat(true) : setGivenTo(e.target.value)} className="flex-1 bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]">
+                    <option value="">Select category...</option>
+                    {categories.map(c => <option key={c.id} value={c.name}>{c.icon} {c.name}</option>)}
+                    <option value="__new__">+ New Category</option>
+                  </select>
+                </div>
+              )}
             </div>
           </div>
           <div className="space-y-1.5">
@@ -209,6 +247,33 @@ function EditModal({ entry, onClose, onSave, mode, bankCards, wallets }: {
   const [saved, setSaved] = useState(String(entry.saved));
   const [given, setGiven] = useState(String(entry.given));
   const [givenTo, setGivenTo] = useState(entry.givenTo);
+  const [categories, setCategories] = useState<Array<{id: string; name: string; icon: string; color: string}>>([]);
+  const [showNewCat, setShowNewCat] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
+  const [newCatIcon, setNewCatIcon] = useState("📁");
+
+  useEffect(() => {
+    fetch("/api/banks-categories").then(r => r.json()).then(setCategories).catch(() => {});
+  }, []);
+
+  const addCategory = async () => {
+    if (!newCatName.trim()) return;
+    try {
+      const res = await fetch("/api/banks-categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newCatName.trim(), icon: newCatIcon }),
+      });
+      if (res.ok) {
+        const cat = await res.json();
+        setCategories(prev => [...prev, cat].sort((a, b) => a.name.localeCompare(b.name)));
+        setGivenTo(cat.name);
+        setShowNewCat(false);
+        setNewCatName("");
+      }
+    } catch {}
+  };
+
   const [walletId, setWalletId] = useState(entry.walletId || "");
   const [submitting, setSubmitting] = useState(false);
 
@@ -257,13 +322,24 @@ function EditModal({ entry, onClose, onSave, mode, bankCards, wallets }: {
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-zinc-400">Category</label>
-              <input
-                type="text"
-                value={givenTo}
-                onChange={(e) => setGivenTo(e.target.value)}
-                placeholder="e.g. Freelance, DeFi"
-                className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
-              />
+              {showNewCat ? (
+                <div className="flex gap-2">
+                  <select value={newCatIcon} onChange={e => setNewCatIcon(e.target.value)} className="w-14 bg-[#09090B] border border-[#222226] rounded-xl px-2 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]">
+                    {["📁","💰","🍔","🚗","🛍️","📄","🎬","💊","📚","💻","📈","📊","🎮","✈️","🏠","⚡","🎯","🔥","💎","🌐"].map(e => <option key={e} value={e}>{e}</option>)}
+                  </select>
+                  <input type="text" value={newCatName} onChange={e => setNewCatName(e.target.value)} onKeyDown={e => e.key === "Enter" && addCategory()} placeholder="Category name" className="flex-1 bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]" />
+                  <button onClick={addCategory} className="px-3 py-2.5 bg-[#D4FE44] text-black rounded-xl text-sm font-bold">✓</button>
+                  <button onClick={() => setShowNewCat(false)} className="px-3 py-2.5 bg-white/5 text-zinc-400 rounded-xl text-sm">✕</button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <select value={givenTo} onChange={e => e.target.value === "__new__" ? setShowNewCat(true) : setGivenTo(e.target.value)} className="flex-1 bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]">
+                    <option value="">Select category...</option>
+                    {categories.map(c => <option key={c.id} value={c.name}>{c.icon} {c.name}</option>)}
+                    <option value="__new__">+ New Category</option>
+                  </select>
+                </div>
+              )}
             </div>
           </div>
           <div className="space-y-1.5">
@@ -552,6 +628,10 @@ export default function FinanceDashboard() {
   const [web2Goal, setWeb2Goal] = useState({ amount: 10000, currency: "USD" });
   const [web3Goal, setWeb3Goal] = useState({ amount: 5, currency: "ETH" });
   const { convert } = useExchangeRates();
+  const [dbCategories, setDbCategories] = useState<Array<{id: string; name: string; icon: string; color: string}>>([]);
+  useEffect(() => {
+    fetch("/api/banks-categories").then(r => r.json()).then(setDbCategories).catch(() => {});
+  }, []);
   const bankCurrency = web2Goal.currency || 'USD';
   const bankSymbol = bankCurrency === 'INR' ? '₹' : bankCurrency === 'EUR' ? '€' : bankCurrency === 'GBP' ? '£' : '$';
   const toBankDisplay = (usdAmount: number) => {
@@ -709,7 +789,10 @@ export default function FinanceDashboard() {
   
   const filteredEntries = useMemo(() => {
     let res = entries.filter(e => e.mode === mode && new Date(e.date).getFullYear() === selectedYear);
-    if (filter !== "All") res = res.filter(e => e.givenTo.toLowerCase() === filter.toLowerCase());
+    if (filter !== "All") {
+      const filterName = filter.replace(/^[\p{Emoji}\s]+/u, "").trim().toLowerCase();
+      res = res.filter(e => e.givenTo.toLowerCase() === filterName);
+    }
     if (selectedMonth) res = res.filter(e => MONTHS[new Date(e.date).getMonth()] === selectedMonth);
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -724,7 +807,9 @@ export default function FinanceDashboard() {
     });
   }, [entries, mode, filter, selectedMonth, selectedYear, searchQuery]);
 
-  const categories = ["All", ...Array.from(new Set(entries.filter(e => e.mode === mode).map(e => e.givenTo.toLowerCase())))].map(c => c === "All" ? c : c.charAt(0).toUpperCase() + c.slice(1));
+  const categories = mode === "banks"
+    ? ["All", ...dbCategories.map(c => c.icon + " " + c.name)]
+    : ["All", ...Array.from(new Set(entries.filter(e => e.mode === mode).map(e => e.givenTo.toLowerCase())))].map(c => c === "All" ? c : c.charAt(0).toUpperCase() + c.slice(1));
 
   const monthlyData = useMemo(() => {
     return MONTHS.map(month => {
@@ -1964,6 +2049,54 @@ export default function FinanceDashboard() {
                       </button>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* Category Manager */}
+              <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm">
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h3 className="text-lg font-bold text-zinc-100">Transaction Categories</h3>
+                    <p className="text-xs text-zinc-500 mt-1">Manage your banks transaction categories</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+                  {dbCategories.map(cat => (
+                    <div key={cat.id} className="flex items-center gap-3 bg-[#09090B] border border-[#222226] rounded-xl px-4 py-3 group">
+                      <span className="text-lg">{cat.icon}</span>
+                      <span className="flex-1 text-sm text-zinc-100 font-medium">{cat.name}</span>
+                      <div className="w-3 h-3 rounded-full" style={{backgroundColor: cat.color}} />
+                      <button onClick={async () => {
+                        if (confirm(`Delete "${cat.name}" category?`)) {
+                          await fetch(`/api/banks-categories?id=${cat.id}`, { method: "DELETE" });
+                          setDbCategories(prev => prev.filter(c => c.id !== cat.id));
+                        }
+                      }} className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400 transition-all">
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <select id="newCatIcon" className="w-14 bg-[#09090B] border border-[#222226] rounded-xl px-2 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]">
+                    {["📁","💰","🍔","🚗","🛍️","📄","🎬","💊","📚","💻","📈","📊","🎮","✈️","🏠","⚡","🎯","🔥","💎","🌐"].map(e => <option key={e} value={e}>{e}</option>)}
+                  </select>
+                  <input id="newCatNameInput" type="text" placeholder="New category name" className="flex-1 bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]" />
+                  <button onClick={async () => {
+                    const nameInput = document.getElementById("newCatNameInput") as HTMLInputElement;
+                    const iconSelect = document.getElementById("newCatIcon") as HTMLSelectElement;
+                    if (!nameInput?.value.trim()) return;
+                    const res = await fetch("/api/banks-categories", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ name: nameInput.value.trim(), icon: iconSelect.value }),
+                    });
+                    if (res.ok) {
+                      const cat = await res.json();
+                      setDbCategories(prev => [...prev, cat].sort((a, b) => a.name.localeCompare(b.name)));
+                      nameInput.value = "";
+                    }
+                  }} className="px-4 py-2.5 bg-[#D4FE44] text-black rounded-xl text-sm font-bold hover:bg-[#bceb29] transition-colors">Add</button>
                 </div>
               </div>
 
