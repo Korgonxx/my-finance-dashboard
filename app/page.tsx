@@ -359,17 +359,19 @@ function TransferToWeb2Modal({ onClose, onTransfer, bankCards, wallets }: {
 }
 
 // --- Custom Chart Tooltip ---
-const CustomTooltip = ({ active, payload, label, selectedYear }: any) => {
+const CustomTooltip = ({ active, payload, label, selectedYear, currencySymbol, convertAmount }: any) => {
   if (active && payload && payload.length) {
+    const sym = currencySymbol || '$';
+    const fmt = convertAmount || ((v: number) => v.toLocaleString());
     return (
       <div className="bg-[#131316] border border-[#222226] p-4 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.5)]">
         <p className="font-bold text-zinc-100 mb-2">{label} {selectedYear}</p>
         <div className="space-y-1">
           <p className="text-sm font-semibold text-[#D4FE44]">
-            Income: ${payload[0]?.value?.toLocaleString()}
+            Income: {sym}{fmt(payload[0]?.value || 0)}
           </p>
           <p className="text-sm font-semibold text-zinc-300">
-            Expenses: ${payload[1]?.value?.toLocaleString()}
+            Expenses: {sym}{fmt(payload[1]?.value || 0)}
           </p>
         </div>
       </div>
@@ -397,6 +399,13 @@ export default function FinanceDashboard() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [web2Goal, setWeb2Goal] = useState({ amount: 10000, currency: "USD" });
   const [web3Goal, setWeb3Goal] = useState({ amount: 5, currency: "ETH" });
+  const USD_TO_INR = 83.5;
+  const bankCurrency = web2Goal.currency || 'USD';
+  const bankSymbol = bankCurrency === 'INR' ? '₹' : bankCurrency === 'EUR' ? '€' : bankCurrency === 'GBP' ? '£' : '$';
+  const toBankDisplay = (usdAmount: number) => {
+    if (bankCurrency === 'INR') return (usdAmount * USD_TO_INR).toLocaleString('en-IN', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+    return usdAmount.toLocaleString();
+  };
   
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -971,7 +980,7 @@ export default function FinanceDashboard() {
                 <div>
                   <p className="text-sm font-medium text-zinc-400 dark:text-zinc-400 mb-1">Total Income</p>
                   <div className="h-9 flex items-center">
-                    <h3 className="text-3xl font-bold text-zinc-50 leading-none">${totalEarned.toLocaleString()}</h3>
+                    <h3 className="text-3xl font-bold text-zinc-50 leading-none">{bankSymbol}{toBankDisplay(totalEarned)}</h3>
                   </div>
                 </div>
                 <div className="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
@@ -989,7 +998,7 @@ export default function FinanceDashboard() {
                 <div>
                   <p className="text-sm font-medium text-zinc-400 dark:text-zinc-400 mb-1">Total Expenses</p>
                   <div className="h-9 flex items-center">
-                    <h3 className="text-3xl font-bold text-zinc-50 leading-none">${totalGiven.toLocaleString()}</h3>
+                    <h3 className="text-3xl font-bold text-zinc-50 leading-none">{bankSymbol}{toBankDisplay(totalGiven)}</h3>
                   </div>
                 </div>
                 <div className="w-10 h-10 rounded-full bg-red-500/10 text-red-400 flex items-center justify-center">
@@ -1007,7 +1016,7 @@ export default function FinanceDashboard() {
                 <div>
                   <p className="text-sm font-medium text-zinc-400 dark:text-zinc-400 mb-1">Net Savings</p>
                   <div className="h-9 flex items-center">
-                    <h3 className="text-3xl font-bold text-zinc-50 leading-none">${totalSaved.toLocaleString()}</h3>
+                    <h3 className="text-3xl font-bold text-zinc-50 leading-none">{bankSymbol}{toBankDisplay(totalSaved)}</h3>
                   </div>
                 </div>
                 <div className="w-10 h-10 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center">
@@ -1140,7 +1149,7 @@ export default function FinanceDashboard() {
                     />
                     <Tooltip 
                       cursor={{ fill: 'rgba(255,255,255,0.03)', rx: 8 }} 
-                      content={<CustomTooltip selectedYear={selectedYear} />}
+                      content={<CustomTooltip selectedYear={selectedYear} currencySymbol={bankSymbol} convertAmount={toBankDisplay} />}
                     />
                     <Bar dataKey="earned" stackId="a" radius={[0,0,6,6]} style={{ cursor: 'pointer' }}>
                       {monthlyData.map((data, index) => <Cell key={`cell-${index}`} fill={BRAND} opacity={selectedMonth && selectedMonth !== data.month ? 0.15 : 1} stroke={selectedMonth === data.month ? "#fff" : "transparent"} strokeWidth={selectedMonth === data.month ? 2 : 0} />)}
@@ -1282,17 +1291,17 @@ export default function FinanceDashboard() {
                 {/* Summary Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {[
-                    { label: 'Total Earned', value: totalEarned, color: 'text-emerald-400', icon: ArrowUpRight, prefix: '$' },
-                    { label: 'Total Spent', value: totalGiven, color: 'text-red-400', icon: ArrowDownRight, prefix: '$' },
-                    { label: 'Net Income', value: netIncome, color: netIncome >= 0 ? 'text-emerald-400' : 'text-red-400', icon: TrendingUp, prefix: '$' },
-                    { label: 'Total Saved', value: totalSaved, color: 'text-[#D4FE44]', icon: Activity, prefix: '$' },
+                    { label: 'Total Earned', value: totalEarned, color: 'text-emerald-400', icon: ArrowUpRight, prefix: bankSymbol },
+                    { label: 'Total Spent', value: totalGiven, color: 'text-red-400', icon: ArrowDownRight, prefix: bankSymbol },
+                    { label: 'Net Income', value: netIncome, color: netIncome >= 0 ? 'text-emerald-400' : 'text-red-400', icon: TrendingUp, prefix: bankSymbol },
+                    { label: 'Total Saved', value: totalSaved, color: 'text-[#D4FE44]', icon: Activity, prefix: bankSymbol },
                   ].map((card, i) => (
                     <div key={i} className="bg-[#131316] border border-[#222226] rounded-2xl p-5">
                       <div className="flex items-center gap-2 mb-3">
                         <card.icon size={16} className={card.color} />
                         <span className="text-xs text-zinc-500 font-medium">{card.label}</span>
                       </div>
-                      <p className={cn("text-2xl font-bold", card.color)}>{card.prefix}{card.value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+                      <p className={cn("text-2xl font-bold", card.color)}>{card.prefix}{bankCurrency === 'INR' ? toBankDisplay(card.value) : card.value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
                     </div>
                   ))}
                 </div>
