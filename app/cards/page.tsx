@@ -45,15 +45,15 @@ export default function CardsPage() {
   useEffect(() => {
     setHydrated(true);
     setCurrentPage("cards");
-    try {
-      const s = localStorage.getItem("app_bank_cards");
-      if (s) setCards(JSON.parse(s));
-    } catch {}
+    // Load cards from API
+    fetch('/api/cards')
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { if (Array.isArray(data) && data.length > 0) setCards(data); })
+      .catch(() => {});
   }, [setCurrentPage]);
 
   const saveCards = (newCards: BankCard[]) => {
     setCards(newCards);
-    localStorage.setItem("app_bank_cards", JSON.stringify(newCards));
   };
 
   if (!hydrated) return null;

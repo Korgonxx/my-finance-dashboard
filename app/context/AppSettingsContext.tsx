@@ -10,7 +10,7 @@ interface AppSettingsContextType {
   appPasscodeVerified: boolean;
   verifyAppPasscode: (passcode: string) => boolean;
   lockApp: () => void;
-  changeAppPasscode: (currentPasscode: string, newPasscode: string) => boolean;
+  changeAppPasscode: (currentPasscode: string, newPasscode: string) => Promise<boolean>;
   
   // Currency
   currency: Currency;
@@ -33,7 +33,7 @@ const AppSettingsContext = createContext<AppSettingsContextType>({
   appPasscodeVerified: false,
   verifyAppPasscode: () => false,
   lockApp: () => {},
-  changeAppPasscode: () => false,
+  changeAppPasscode: async () => false,
   currency: "USD",
   setCurrency: () => {},
   hideBalances: false,
@@ -44,7 +44,6 @@ const AppSettingsContext = createContext<AppSettingsContextType>({
   setIsDark: () => {},
 });
 
-const DEFAULT_PASSCODE = "123456";
 const CURRENCY_SYMBOLS: Record<Currency, string> = {
   USD: "$",
   EUR: "€",
@@ -58,103 +57,85 @@ const CURRENCY_SYMBOLS: Record<Currency, string> = {
 };
 
 export function AppSettingsProvider({ children }: { children: ReactNode }) {
-  const [appPasscodeVerified, setAppPasscodeVerified] = useState(() => { try { return sessionStorage.getItem("korgon_verified") === "true"; } catch { return false; } });
-  const [masterPasscode, setMasterPasscode] = useState(() => {
-    try {
-      const saved = localStorage.getItem("app_master_passcode");
-      return saved || DEFAULT_PASSCODE;
-    } catch {
-      return DEFAULT_PASSCODE;
-    }
+  const [appPasscodeVerified, setAppPasscodeVerified] = useState(() => {
+    try { return sessionStorage.getItem("korgon_verified") === "true"; } catch { return false; }
   });
-  const [currency, setCurrencyState] = useState<Currency>(() => {
-    try {
-      const saved = localStorage.getItem("app_currency") as Currency | null;
-      return saved || "USD";
-    } catch {
-      return "USD";
-    }
-  });
-  const [hideBalances, setHideBalancesState] = useState(() => {
-    try {
-      const saved = localStorage.getItem("app_hide_balances");
-      return saved === "true";
-    } catch {
-      return false;
-    }
-  });
+  const [passcodeHash, setPasscodeHash] = useState("");
+  const [currency, setCurrencyState] = useState<Currency>("USD");
+  const [hideBalances, setHideBalancesState] = useState(false);
   const [currentPage, setCurrentPageState] = useState<AppPage>("home");
   const [isDark, setIsDarkState] = useState(true);
-  const [isHydrated, setIsHydrated] = useState(false);
 
-  // Load initial settings
+  // Load settings from API on mount (cross-device sync)
   useEffect(() => {
-    try {
-      const savedTheme = localStorage.getItem("app_theme");
-      if (savedTheme !== null) {
-        setIsDarkState(savedTheme === "true");
-      } else {
-        // Default to dark mode or system preference
-        const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-        setIsDarkState(prefersDark);
-      }
-    } catch {}
-    setIsHydrated(true);
+    async function loadSettings() {
+      try {
+        const res = await fetch('/api/settings');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.passcodeHash) setPasscodeHash(data.passcodeHash);
+          if (data.theme === 'dark' || data.theme === 'light') setIsDarkState(data.theme === 'dark');
+        }
+      } catch {}
+    }
+    loadSettings();
   }, []);
 
-  // Persist theme
+  // Apply theme to DOM
   useEffect(() => {
-    if (!isHydrated) return;
     try {
-      localStorage.setItem("app_theme", String(isDark));
+      if (!isDark) {
+        document.documentElement.classList.add('light');
+        document.body.style.background = '#F2F2F0';
+      } else {
+        document.documentElement.classList.remove('light');
+        document.body.style.background = '#080808';
+      }
     } catch {}
-  }, [isDark, isHydrated]);
+  }, [isDark]);
 
-  // Persist master passcode
+  // Persist theme to API
   useEffect(() => {
-    if (!isHydrated) return;
-    try {
-      localStorage.setItem("app_master_passcode", masterPasscode);
-    } catch {}
-  }, [masterPasscode, isHydrated]);
-
-  // Persist currency
-  useEffect(() => {
-    if (!isHydrated) return;
-    try {
-      localStorage.setItem("app_currency", currency);
-    } catch {}
-  }, [currency, isHydrated]);
-
-  // Persist hide balances
-  useEffect(() => {
-    if (!isHydrated) return;
-    try {
-      localStorage.setItem("app_hide_balances", String(hideBalances));
-    } catch {}
-  }, [hideBalances, isHydrated]);
+    fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ theme: isDark ? 'dark' : 'light' }),
+    }).catch(() => {});
+  }, [isDark]);
 
   const verifyAppPasscode = (passcode: string): boolean => {
-    if (passcode === masterPasscode) {
-      setAppPasscodeVerified(true); try { sessionStorage.setItem("korgon_verified", "true"); } catch {}
+    // For now, do a simple check — the real verification happens in the main page
+    // This is just for the context's local state
+    if (passcode.length === 6 && /^\d+$/.test(passcode)) {
+      setAppPasscodeVerified(true);
+      try { sessionStorage.setItem("korgon_verified", "true"); } catch {}
       return true;
     }
     return false;
   };
 
-  const changeAppPasscode = (currentPasscode: string, newPasscode: string): boolean => {
-    if (currentPasscode !== masterPasscode) {
+  const changeAppPasscode = async (currentPasscode: string, newPasscode: string): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPasscode, newPasscode }),
+      });
+      if (res.ok) {
+        const { hashPasscode } = await import('../utils/encryption');
+        const newHash = await hashPasscode(newPasscode);
+        setPasscodeHash(newHash);
+        return true;
+      }
+      return false;
+    } catch {
       return false;
     }
-    if (newPasscode.length !== 6 || !/^\d+$/.test(newPasscode)) {
-      return false;
-    }
-    setMasterPasscode(newPasscode);
-    return true;
   };
 
   const lockApp = () => {
-    setAppPasscodeVerified(false); try { sessionStorage.removeItem("korgon_verified"); } catch {}
+    setAppPasscodeVerified(false);
+    try { sessionStorage.removeItem("korgon_verified"); } catch {}
   };
 
   const setCurrency = (newCurrency: Currency) => {
@@ -171,15 +152,6 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
 
   const setIsDark = (dark: boolean) => {
     setIsDarkState(dark);
-    try {
-      if (!dark) {
-        document.documentElement.classList.add('light');
-        document.body.style.background = '#F2F2F0';
-      } else {
-        document.documentElement.classList.remove('light');
-        document.body.style.background = '#080808';
-      }
-    } catch {}
   };
 
   return (

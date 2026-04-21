@@ -53,7 +53,7 @@ function PasscodeModal({ T, onClose }: { T: ThemeType; onClose: () => void }) {
     setError("");
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (step==="menu") { setStep("verify"); setCurrent(""); setError(""); return; }
     if (step==="verify") {
       const ok = verifyAppPasscode(current);
@@ -66,7 +66,7 @@ function PasscodeModal({ T, onClose }: { T: ThemeType; onClose: () => void }) {
       if (newCode !== confirmCode) { setError("Codes don't match"); setConfirmCode(""); setStep("new"); setNewCode(""); return; }
       // Pad to 6 digits if needed
       const finalCode = newCode.length === 6 ? newCode : newCode.padEnd(6, "0");
-      const ok = changeAppPasscode(current, finalCode);
+      const ok = await changeAppPasscode(current, finalCode);
       if (ok) {
         setSuccess("Passcode changed!"); setStep("menu");
         setTimeout(() => { setSuccess(""); onClose(); }, 1500);
