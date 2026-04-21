@@ -24,6 +24,7 @@ function toBanksEntry(row: any) {
     saved:   Number(row.saved),
     given:   Number(row.given),
     givenTo: row.givenTo,
+    createdAt: row.createdAt?.toISOString?.() ?? row.createdAt ?? null,
   };
 }
 
@@ -43,6 +44,7 @@ function toCryptoEntry(row: any) {
     saved:            Number(row.investmentAmount),
     given:            0,
     givenTo:          row.network,
+    createdAt:        row.createdAt?.toISOString?.() ?? row.createdAt ?? null,
   };
 }
 

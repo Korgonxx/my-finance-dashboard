@@ -554,7 +554,13 @@ export default function FinanceDashboard() {
       const q = searchQuery.toLowerCase();
       res = res.filter(e => e.project.toLowerCase().includes(q) || e.givenTo.toLowerCase().includes(q));
     }
-    return res.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return res.sort((a: any, b: any) => {
+      const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
+      if (dateDiff !== 0) return dateDiff;
+      // Same date → sort by createdAt (newest first)
+      if (a.createdAt && b.createdAt) return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      return 0;
+    });
   }, [entries, mode, filter, selectedMonth, selectedYear, searchQuery]);
 
   const categories = ["All", ...Array.from(new Set(entries.filter(e => e.mode === mode).map(e => e.givenTo)))];
