@@ -76,7 +76,7 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
           earned:  body.earned  ?? 0,
           saved:   body.saved   ?? 0,
           given:   body.given   ?? 0,
-          givenTo: body.givenTo ?? "",
+          givenTo: (body.givenTo ?? "").toLowerCase(),
         },
       });
     }

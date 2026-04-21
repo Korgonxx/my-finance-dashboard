@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
         earned:  body.earned ?? 0,
         saved:   body.saved  ?? 0,
         given:   body.given  ?? 0,
-        givenTo: body.givenTo ?? "",
+        givenTo: (body.givenTo ?? "").toLowerCase(),
       };
       const row = await db.banksDashboardEntry.upsert({
         where: { id: body.id },

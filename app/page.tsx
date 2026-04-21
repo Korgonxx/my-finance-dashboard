@@ -194,6 +194,155 @@ function EntryModal({ onClose, onSave, mode, bankCards, wallets }: {
   );
 }
 
+// --- Edit Modal Component ---
+function EditModal({ entry, onClose, onSave, mode, bankCards, wallets }: {
+  entry: Entry;
+  onClose: () => void;
+  onSave: (entry: Entry) => void;
+  mode: Mode;
+  bankCards: Array<{ id: string; name: string; last4: string }>;
+  wallets: Array<{ id: string; name: string; address: string }>;
+}) {
+  const [date, setDate] = useState(entry.date);
+  const [project, setProject] = useState(entry.project);
+  const [earned, setEarned] = useState(String(entry.earned));
+  const [saved, setSaved] = useState(String(entry.saved));
+  const [given, setGiven] = useState(String(entry.given));
+  const [givenTo, setGivenTo] = useState(entry.givenTo);
+  const [walletId, setWalletId] = useState(entry.walletId || "");
+  const [submitting, setSubmitting] = useState(false);
+
+  const items = mode === 'banks'
+    ? bankCards.map(c => ({ id: c.id, label: `${c.name} (**** ${c.last4})` }))
+    : wallets.map(w => ({ id: w.id, label: `${w.name} (${w.address.slice(0,6)}...${w.address.slice(-4)})` }));
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    try {
+      await onSave({
+        ...entry,
+        date,
+        project,
+        earned: parseFloat(earned) || 0,
+        saved: parseFloat(saved) || 0,
+        given: parseFloat(given) || 0,
+        givenTo,
+        mode,
+        walletId: walletId || undefined,
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-[#131316] border border-[#222226] max-w-md w-full rounded-3xl p-8 shadow-2xl relative">
+        <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-zinc-400 hover:text-zinc-50 hover:bg-white/10 transition-colors">
+          <X size={18} />
+        </button>
+        <h2 className="text-2xl font-semibold mb-2 text-zinc-50">Edit Transaction</h2>
+        <p className="text-sm text-zinc-400 mb-8">Update your transaction details.</p>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-400">Date</label>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-400">Category</label>
+              <input
+                type="text"
+                value={givenTo}
+                onChange={(e) => setGivenTo(e.target.value)}
+                placeholder="e.g. Freelance, DeFi"
+                className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-zinc-400">Project / Description</label>
+            <input
+              type="text"
+              value={project}
+              onChange={(e) => setProject(e.target.value)}
+              placeholder="e.g. Client project, ETH staking"
+              className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
+            />
+          </div>
+          {items.length > 0 && (
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-zinc-400">{mode === 'banks' ? 'Card' : 'Wallet'}</label>
+            <select value={walletId} onChange={e => setWalletId(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors">
+              <option value="">Select {mode === 'banks' ? 'card' : 'wallet'}...</option>
+              {items.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+            </select>
+          </div>
+          )}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-400">Earned</label>
+              <input
+                type="number"
+                value={earned}
+                onChange={(e) => setEarned(e.target.value)}
+                placeholder="0"
+                className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-400">Saved</label>
+              <input
+                type="number"
+                value={saved}
+                onChange={(e) => setSaved(e.target.value)}
+                placeholder="0"
+                className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-400">Given</label>
+              <input
+                type="number"
+                value={given}
+                onChange={(e) => setGiven(e.target.value)}
+                placeholder="0"
+                className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
+              />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-4">
+            <button onClick={onClose} className="flex-1 py-3.5 bg-white/5 hover:bg-white/10 transition-colors text-zinc-300 rounded-2xl font-medium">Cancel</button>
+            <button
+              onClick={handleSubmit}
+              disabled={submitting || !project}
+              className={cn(
+                "flex-[2] py-3.5 rounded-2xl font-semibold transition-colors shadow-[0_0_20px_rgba(212,254,68,0.2)] flex items-center justify-center gap-2",
+                submitting || !project
+                  ? "bg-[#D4FE44]/70 text-[#0A0A0A]/70 cursor-not-allowed"
+                  : "bg-[#D4FE44] text-[#0A0A0A] hover:bg-[#bceb29]"
+              )}
+            >
+              {submitting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-[#0A0A0A]/50 border-t-[#0A0A0A] rounded-full animate-spin"></div>
+                  Saving...
+                </>
+              ) : "Save Changes"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TransferModal({ onClose, onTransfer }: { onClose: () => void, onTransfer: (amount: number, fromCard: string, toCard: string) => void }) {
   const [amount, setAmount] = useState("");
   const [fromCard, setFromCard] = useState("card1");
@@ -393,6 +542,7 @@ export default function FinanceDashboard() {
   const [showTransfer, setShowTransfer] = useState(false);
   const [showTransferToWeb2, setShowTransferToWeb2] = useState(false);
   const [deletingTransactionId, setDeletingTransactionId] = useState<string | null>(null);
+  const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [selectedYear, setSelectedYear] = useState<number>(2026);
   const [searchQuery, setSearchQuery] = useState("");
@@ -559,7 +709,7 @@ export default function FinanceDashboard() {
   
   const filteredEntries = useMemo(() => {
     let res = entries.filter(e => e.mode === mode && new Date(e.date).getFullYear() === selectedYear);
-    if (filter !== "All") res = res.filter(e => e.givenTo === filter);
+    if (filter !== "All") res = res.filter(e => e.givenTo.toLowerCase() === filter.toLowerCase());
     if (selectedMonth) res = res.filter(e => MONTHS[new Date(e.date).getMonth()] === selectedMonth);
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -574,7 +724,7 @@ export default function FinanceDashboard() {
     });
   }, [entries, mode, filter, selectedMonth, selectedYear, searchQuery]);
 
-  const categories = ["All", ...Array.from(new Set(entries.filter(e => e.mode === mode).map(e => e.givenTo)))];
+  const categories = ["All", ...Array.from(new Set(entries.filter(e => e.mode === mode).map(e => e.givenTo.toLowerCase())))].map(c => c === "All" ? c : c.charAt(0).toUpperCase() + c.slice(1));
 
   const monthlyData = useMemo(() => {
     return MONTHS.map(month => {
@@ -1257,7 +1407,7 @@ export default function FinanceDashboard() {
                             {isPositive ? "+" : "-"}${amount.toLocaleString()}
                           </p>
                           <div className="flex justify-end gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button className="text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:text-zinc-300"><Edit2 size={12} /></button>
+                            <button onClick={() => setEditingEntry(entry)} className="text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:text-zinc-300"><Edit2 size={12} /></button>
                             <button onClick={() => setDeletingTransactionId(entry.id)} className="text-zinc-400 dark:text-zinc-500 hover:text-red-400"><Trash2 size={12} /></button>
                           </div>
                         </div>
@@ -2049,7 +2199,29 @@ export default function FinanceDashboard() {
         }
         fetchActivity();
       }} />}
-      
+
+      {editingEntry && <EditModal
+        entry={editingEntry}
+        onClose={() => setEditingEntry(null)}
+        mode={mode}
+        bankCards={bankCards.map(c => ({ id: c.id, name: c.name, last4: c.last4 }))}
+        wallets={wallets.map(w => ({ id: w.id, name: w.name, address: w.address }))}
+        onSave={async (updatedEntry) => {
+          setEntries(prev => prev.map(e => e.id === updatedEntry.id ? updatedEntry : e));
+          setEditingEntry(null);
+          try {
+            await fetch(`/api/entries/${updatedEntry.id}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(updatedEntry),
+            });
+          } catch (err) {
+            console.error("[editEntry] failed:", err);
+          }
+          fetchActivity();
+        }}
+      />}
+
       {showTransfer && <TransferModal onClose={() => setShowTransfer(false)} onTransfer={async (amount, fromCardId, toCardId) => {
         const from = bankCards.find(c => c.id === fromCardId)?.name || "Card";
         const to = bankCards.find(c => c.id === toCardId)?.name || "Card";
