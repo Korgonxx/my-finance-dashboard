@@ -395,61 +395,19 @@ export default function FinanceDashboard() {
   const [showSearch, setShowSearch] = useState(false);
   const [activeTab, setActiveTab] = useState("Dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [web2Goal, setWeb2Goal] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('fv_banksGoal');
-      if (saved) try { return JSON.parse(saved); } catch {}
-    }
-    return { amount: 10000, currency: "USD" };
-  });
-  const [web3Goal, setWeb3Goal] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('fv_cryptoGoal');
-      if (saved) try { return JSON.parse(saved); } catch {}
-    }
-    return { amount: 5, currency: "ETH" };
-  });
+  const [web2Goal, setWeb2Goal] = useState({ amount: 10000, currency: "USD" });
+  const [web3Goal, setWeb3Goal] = useState({ amount: 5, currency: "ETH" });
   
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('fv_theme');
-      if (saved === 'dark' || saved === 'light') return saved;
-    }
-    return 'dark';
-  });
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [appPasscode, setAppPasscode] = useState("123456"); // kept in memory for encryption
   const [passcodeHash, setPasscodeHash] = useState(""); // server hash for verification
   const [passcode, setPasscode] = useState("");
   const [wrongPasscode, setWrongPasscode] = useState(false);
-  const [profilePic, setProfilePic] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('fv_profilePic');
-      if (saved) return saved;
-    }
-    return "https://picsum.photos/seed/avatar5/150/150";
-  });
-  const [firstName, setFirstName] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('fv_firstName');
-      if (saved) return saved;
-    }
-    return "Annette";
-  });
-  const [lastName, setLastName] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('fv_lastName');
-      if (saved) return saved;
-    }
-    return "Black";
-  });
-  const [email, setEmail] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('fv_email');
-      if (saved) return saved;
-    }
-    return "annette.b@example.com";
-  });
+  const [profilePic, setProfilePic] = useState<string>("https://picsum.photos/seed/avatar5/150/150");
+  const [firstName, setFirstName] = useState("Korgon");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([
@@ -537,12 +495,26 @@ export default function FinanceDashboard() {
     }
   };
 
-  const handleSaveChanges = () => {
+  const handleSaveChanges = async () => {
     setIsSaving(true);
-    // Simulate an API call to save settings
-    setTimeout(() => {
-      setIsSaving(false);
-    }, 1000);
+    try {
+      await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName,
+          lastName,
+          email,
+          avatarUrl: profilePic,
+          theme,
+          banksGoal: web2Goal.amount,
+          cryptoGoal: web3Goal.amount,
+        }),
+      });
+    } catch (err) {
+      console.error('[saveSettings] failed:', err);
+    }
+    setTimeout(() => setIsSaving(false), 500);
   };
 
   const handleExportCSV = () => {
@@ -618,40 +590,37 @@ export default function FinanceDashboard() {
     if (passcode.length < 6) setWrongPasscode(false);
   }, [passcode, passcodeHash, isAuthenticated]);
 
-  // Persist settings to localStorage
-  useEffect(() => { localStorage.setItem('fv_theme', theme); }, [theme]);
-  useEffect(() => { localStorage.setItem('fv_firstName', firstName); }, [firstName]);
-  useEffect(() => { localStorage.setItem('fv_lastName', lastName); }, [lastName]);
-  useEffect(() => { localStorage.setItem('fv_email', email); }, [email]);
-  useEffect(() => { localStorage.setItem('fv_profilePic', profilePic); }, [profilePic]);
-  useEffect(() => { localStorage.setItem('fv_banksGoal', JSON.stringify(web2Goal)); }, [web2Goal]);
-  useEffect(() => { localStorage.setItem('fv_cryptoGoal', JSON.stringify(web3Goal)); }, [web3Goal]);
-
-  // Hydrate profile from localStorage (fixes Next.js SSR override)
+  // Load all settings from API (cross-device sync)
   useEffect(() => {
-    const savedTheme = localStorage.getItem('fv_theme');
-    if (savedTheme === 'dark' || savedTheme === 'light') setTheme(savedTheme);
-    const savedFirst = localStorage.getItem('fv_firstName');
-    if (savedFirst) setFirstName(savedFirst);
-    const savedLast = localStorage.getItem('fv_lastName');
-    if (savedLast) setLastName(savedLast);
-    const savedEmail = localStorage.getItem('fv_email');
-    if (savedEmail) setEmail(savedEmail);
-    const savedPic = localStorage.getItem('fv_profilePic');
-    if (savedPic) setProfilePic(savedPic);
-    const savedWeb2 = localStorage.getItem('fv_banksGoal');
-    if (savedWeb2) try { setWeb2Goal(JSON.parse(savedWeb2)); } catch {}
-    const savedWeb3 = localStorage.getItem('fv_cryptoGoal');
-    if (savedWeb3) try { setWeb3Goal(JSON.parse(savedWeb3)); } catch {}
+    async function loadSettings() {
+      try {
+        const res = await fetch('/api/settings');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.firstName) setFirstName(data.firstName);
+          if (data.lastName !== undefined) setLastName(data.lastName);
+          if (data.email) setEmail(data.email);
+          if (data.avatarUrl) setProfilePic(data.avatarUrl);
+          if (data.theme === 'dark' || data.theme === 'light') setTheme(data.theme);
+          if (data.banksGoal !== undefined) setWeb2Goal({ amount: data.banksGoal, currency: 'USD' });
+          if (data.cryptoGoal !== undefined) setWeb3Goal({ amount: data.cryptoGoal, currency: 'ETH' });
+          if (data.passcodeHash) setPasscodeHash(data.passcodeHash);
+        }
+      } catch (err) {
+        console.error('[settings] load failed:', err);
+      }
+    }
+    loadSettings();
   }, []);
 
-  // Fetch passcode hash from API (cross-device verification)
-  useEffect(() => {
-    fetch('/api/settings')
-      .then(r => r.json())
-      .then(data => { if (data.passcodeHash) setPasscodeHash(data.passcodeHash); })
-      .catch(() => {});
-  }, []);
+  // Save individual settings to API (debounced)
+  function saveSetting(field: string, value: unknown) {
+    fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [field]: value }),
+    }).catch(() => {});
+  }
 
   // Fetch entries from API on mount and mode change
   useEffect(() => {
