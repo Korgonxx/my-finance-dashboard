@@ -1278,62 +1278,235 @@ export default function FinanceDashboard() {
         
         {activeTab === 'Analytics' && (
           <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
-             <div className="mb-8">
-                <h2 className="text-2xl font-bold text-zinc-100">{mode === 'banks' ? 'Financial Analytics' : 'Crypto Analytics'}</h2>
-                <p className="text-sm text-zinc-400">Detailed performance metrics and category breakdowns.</p>
-             </div>
-             
-             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                <div className="lg:col-span-2 bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm min-h-[400px] flex flex-col">
-                   <div className="flex justify-between items-center mb-6">
-                      <h3 className="text-lg font-bold text-zinc-100">Income and Expense Analytics</h3>
-                      <button className="text-xs font-semibold px-3 py-1.5 bg-[#1C1C21] rounded-lg text-zinc-300">Last 6 Months</button>
-                   </div>
-                   <div className="flex-1 w-full relative">
+            {mode === 'banks' ? (
+              /* ========== BANKS ANALYTICS ========== */
+              <div className="max-w-6xl mx-auto space-y-6 pb-20 md:pb-0">
+                <div className="mb-8">
+                  <h2 className="text-2xl font-bold text-zinc-100">Financial Analytics</h2>
+                  <p className="text-sm text-zinc-400">Track your income, spending, and savings performance.</p>
+                </div>
+
+                {/* Summary Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {[
+                    { label: 'Total Earned', value: totalEarned, color: 'text-emerald-400', icon: ArrowUpRight, prefix: '$' },
+                    { label: 'Total Spent', value: totalGiven, color: 'text-red-400', icon: ArrowDownRight, prefix: '$' },
+                    { label: 'Net Income', value: netIncome, color: netIncome >= 0 ? 'text-emerald-400' : 'text-red-400', icon: TrendingUp, prefix: '$' },
+                    { label: 'Total Saved', value: totalSaved, color: 'text-[#D4FE44]', icon: Activity, prefix: '$' },
+                  ].map((card, i) => (
+                    <div key={i} className="bg-[#131316] border border-[#222226] rounded-2xl p-5">
+                      <div className="flex items-center gap-2 mb-3">
+                        <card.icon size={16} className={card.color} />
+                        <span className="text-xs text-zinc-500 font-medium">{card.label}</span>
+                      </div>
+                      <p className={cn("text-2xl font-bold", card.color)}>{card.prefix}{card.value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Main Chart */}
+                <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm">
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-lg font-bold text-zinc-100">Income vs Expenses</h3>
+                    <div className="flex items-center gap-4 text-xs">
+                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#D4FE44]"></span> Earned</span>
+                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-400"></span> Spent</span>
+                    </div>
+                  </div>
+                  <div className="h-[300px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={monthlyData} margin={{top: 10, right: 10, left: -20, bottom: 0}}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#222226" vertical={false} />
+                        <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#71717A' }} dy={10} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#71717A' }} tickFormatter={(val) => `$${val}`} />
+                        <Tooltip contentStyle={{ backgroundColor: '#131316', borderRadius: 16, border: '1px solid rgba(255,255,255,0.1)', color: '#FAFAFA' }} />
+                        <Bar dataKey="earned" fill="#D4FE44" radius={[6,6,0,0]} maxBarSize={40} />
+                        <Bar dataKey="given" fill="#f87171" radius={[6,6,0,0]} maxBarSize={40} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Bottom Row */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Monthly Savings */}
+                  <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6">
+                    <h3 className="text-lg font-bold text-zinc-100 mb-6">Monthly Savings</h3>
+                    <div className="h-[200px] w-full">
                       <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={monthlyData} margin={{top: 10, right: 10, left: -20, bottom: 0}}>
                           <defs>
-                            <linearGradient id="colorEarned" x1="0" y1="0" x2="0" y2="1">
+                            <linearGradient id="colorSaved" x1="0" y1="0" x2="0" y2="1">
                               <stop offset="5%" stopColor="#D4FE44" stopOpacity={0.3}/>
                               <stop offset="95%" stopColor="#D4FE44" stopOpacity={0}/>
                             </linearGradient>
                           </defs>
                           <CartesianGrid strokeDasharray="3 3" stroke="#222226" vertical={false} />
-                          <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#71717A' }} dy={10} />
-                          <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#71717A' }} tickFormatter={(val) => `$${val}`} />
-                          <Tooltip 
-                            contentStyle={{ backgroundColor: '#131316', borderRadius: 16, border: '1px solid rgba(255,255,255,0.1)', color: '#FAFAFA' }}
-                            itemStyle={{ fontWeight: '500' }}
-                          />
-                          <Area type="monotone" dataKey="earned" stroke="#D4FE44" strokeWidth={3} fillOpacity={1} fill="url(#colorEarned)" />
+                          <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#71717A' }} />
+                          <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#71717A' }} tickFormatter={(val) => `$${val}`} />
+                          <Tooltip contentStyle={{ backgroundColor: '#131316', borderRadius: 16, border: '1px solid rgba(255,255,255,0.1)', color: '#FAFAFA' }} />
+                          <Area type="monotone" dataKey="saved" stroke="#D4FE44" strokeWidth={2} fillOpacity={1} fill="url(#colorSaved)" />
                         </AreaChart>
                       </ResponsiveContainer>
-                   </div>
-                </div>
-                
-                <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm flex flex-col min-h-[400px]">
-                   <h3 className="text-lg font-bold text-zinc-100 mb-6">Spending categories</h3>
-                   <div className="space-y-6 flex-1">
-                      {[
-                        { title: 'Housing & Rent', amount: 2400, color: 'bg-emerald-400', max: 3000 },
-                        { title: 'Food & Dining', amount: 850, color: 'bg-blue-400', max: 3000 },
-                        { title: 'Transportation', amount: 420, color: 'bg-purple-400', max: 3000 },
-                        { title: 'Subscriptions', amount: 140, color: 'bg-[#D4FE44]', max: 3000 },
-                        { title: 'Entertainment', amount: 320, color: 'bg-pink-400', max: 3000 }
-                      ].map((item, i) => (
-                         <div key={i}>
-                            <div className="flex justify-between items-end mb-2">
-                               <span className="text-sm font-semibold text-zinc-300">{item.title}</span>
-                               <span className="text-sm font-bold text-zinc-100">${item.amount}</span>
+                    </div>
+                  </div>
+
+                  {/* Recent Activity */}
+                  <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6">
+                    <h3 className="text-lg font-bold text-zinc-100 mb-4">Recent Activity</h3>
+                    <div className="space-y-3 max-h-[220px] overflow-y-auto custom-scrollbar">
+                      {filteredEntries.slice(0, 8).map((entry, i) => (
+                        <div key={entry.id} className="flex items-center justify-between p-3 rounded-xl bg-[#09090B] hover:bg-[#1C1C21] transition-colors">
+                          <div className="flex items-center gap-3">
+                            <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", entry.earned > 0 ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400")}>
+                              {entry.earned > 0 ? <ArrowUpRight size={14}/> : <ArrowDownRight size={14}/>}
                             </div>
-                            <div className="w-full bg-[#222226] h-2 rounded-full overflow-hidden">
-                               <div className={cn("h-full rounded-full", item.color)} style={{ width: `${(item.amount/item.max)*100}%` }}></div>
+                            <div>
+                              <p className="text-sm font-medium text-zinc-200">{entry.project}</p>
+                              <p className="text-xs text-zinc-500">{entry.date} • {entry.givenTo}</p>
                             </div>
-                         </div>
+                          </div>
+                          <span className={cn("text-sm font-bold", entry.earned > 0 ? "text-emerald-400" : "text-red-400")}>
+                            {entry.earned > 0 ? '+' : '-'}${(entry.earned || entry.given).toFixed(2)}
+                          </span>
+                        </div>
                       ))}
-                   </div>
+                      {filteredEntries.length === 0 && (
+                        <p className="text-sm text-zinc-500 text-center py-8">No transactions yet</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
-             </div>
+              </div>
+            ) : (
+              /* ========== CRYPTO ANALYTICS ========== */
+              <div className="max-w-6xl mx-auto space-y-6 pb-20 md:pb-0">
+                <div className="mb-8">
+                  <h2 className="text-2xl font-bold text-zinc-100">Crypto Analytics</h2>
+                  <p className="text-sm text-zinc-400">Portfolio performance, ROI tracking, and wallet distribution.</p>
+                </div>
+
+                {/* Summary Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {[
+                    { label: 'Portfolio Value', value: totalEarned, color: 'text-purple-400', icon: Wallet, prefix: '$' },
+                    { label: 'Total Invested', value: totalSaved, color: 'text-blue-400', icon: TrendingDown, prefix: '$' },
+                    { label: 'Net P&L', value: totalEarned - totalSaved, color: (totalEarned - totalSaved) >= 0 ? 'text-emerald-400' : 'text-red-400', icon: TrendingUp, prefix: '$' },
+                    { label: 'Transactions', value: filteredEntries.length, color: 'text-[#D4FE44]', icon: Activity, prefix: '' },
+                  ].map((card, i) => (
+                    <div key={i} className="bg-[#131316] border border-[#222226] rounded-2xl p-5">
+                      <div className="flex items-center gap-2 mb-3">
+                        <card.icon size={16} className={card.color} />
+                        <span className="text-xs text-zinc-500 font-medium">{card.label}</span>
+                      </div>
+                      <p className={cn("text-2xl font-bold", card.color)}>{card.prefix}{typeof card.value === 'number' ? (card.prefix === '' ? card.value : card.value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})) : card.value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Portfolio Chart */}
+                <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm">
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-lg font-bold text-zinc-100">Portfolio Value Over Time</h3>
+                    <div className="flex items-center gap-4 text-xs">
+                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-purple-400"></span> Current Value</span>
+                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-blue-400"></span> Invested</span>
+                    </div>
+                  </div>
+                  <div className="h-[300px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={monthlyData} margin={{top: 10, right: 10, left: -20, bottom: 0}}>
+                        <defs>
+                          <linearGradient id="colorCurrentValue" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#a855f7" stopOpacity={0}/>
+                          </linearGradient>
+                          <linearGradient id="colorInvested" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/>
+                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#222226" vertical={false} />
+                        <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#71717A' }} dy={10} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#71717A' }} tickFormatter={(val) => `$${val}`} />
+                        <Tooltip contentStyle={{ backgroundColor: '#131316', borderRadius: 16, border: '1px solid rgba(255,255,255,0.1)', color: '#FAFAFA' }} />
+                        <Area type="monotone" dataKey="saved" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorInvested)" name="Invested" />
+                        <Area type="monotone" dataKey="earned" stroke="#a855f7" strokeWidth={2} fillOpacity={1} fill="url(#colorCurrentValue)" name="Current Value" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Bottom Row */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Wallet Distribution */}
+                  <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6">
+                    <h3 className="text-lg font-bold text-zinc-100 mb-4">Wallet Distribution</h3>
+                    {wallets.length > 0 ? (
+                      <div className="space-y-4">
+                        {wallets.map((w, i) => {
+                          const totalBal = wallets.reduce((s, x) => s + x.balance, 0);
+                          const pct = totalBal > 0 ? (w.balance / totalBal) * 100 : 0;
+                          const colors = ['bg-purple-400', 'bg-blue-400', 'bg-emerald-400', 'bg-amber-400', 'bg-pink-400', 'bg-cyan-400'];
+                          return (
+                            <div key={w.id}>
+                              <div className="flex justify-between items-end mb-1.5">
+                                <div className="flex items-center gap-2">
+                                  <span className={cn("w-2.5 h-2.5 rounded-full", colors[i % colors.length])}></span>
+                                  <span className="text-sm font-medium text-zinc-300">{w.name}</span>
+                                </div>
+                                <span className="text-sm font-bold text-zinc-100">${w.balance.toLocaleString('en-US', {minimumFractionDigits: 2})}</span>
+                              </div>
+                              <div className="w-full bg-[#222226] h-2 rounded-full overflow-hidden">
+                                <div className={cn("h-full rounded-full transition-all", colors[i % colors.length])} style={{ width: `${pct}%` }}></div>
+                              </div>
+                              <p className="text-[10px] text-zinc-600 mt-0.5 font-mono">{w.address.slice(0,8)}...{w.address.slice(-4)} • {w.network}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <Wallet size={32} className="text-zinc-600 mx-auto mb-3" />
+                        <p className="text-sm text-zinc-500">No wallets added yet</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Recent Crypto Activity */}
+                  <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6">
+                    <h3 className="text-lg font-bold text-zinc-100 mb-4">Recent Transactions</h3>
+                    <div className="space-y-3 max-h-[280px] overflow-y-auto custom-scrollbar">
+                      {filteredEntries.slice(0, 8).map((entry, i) => {
+                        const wallet = wallets.find(w => w.id === entry.walletId);
+                        return (
+                          <div key={entry.id} className="flex items-center justify-between p-3 rounded-xl bg-[#09090B] hover:bg-[#1C1C21] transition-colors">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-purple-500/10 text-purple-400 flex items-center justify-center">
+                                <Wallet size={14}/>
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-zinc-200">{entry.project}</p>
+                                <p className="text-xs text-zinc-500">{entry.date}{wallet ? ` • ${wallet.name}` : ''}</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-sm font-bold text-purple-400">${entry.earned.toFixed(2)}</span>
+                              {entry.saved > 0 && entry.saved !== entry.earned && (
+                                <p className="text-[10px] text-zinc-500">Cost: ${entry.saved.toFixed(2)}</p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {filteredEntries.length === 0 && (
+                        <p className="text-sm text-zinc-500 text-center py-8">No transactions yet</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
