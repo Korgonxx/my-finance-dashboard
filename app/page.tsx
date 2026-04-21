@@ -418,8 +418,10 @@ export default function FinanceDashboard() {
     return 'dark';
   });
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [appPasscode, setAppPasscode] = useState("123456"); // loaded from API
+  const [appPasscode, setAppPasscode] = useState("123456"); // kept in memory for encryption
+  const [passcodeHash, setPasscodeHash] = useState(""); // server hash for verification
   const [passcode, setPasscode] = useState("");
+  const [wrongPasscode, setWrongPasscode] = useState(false);
   const [profilePic, setProfilePic] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('fv_profilePic');
@@ -579,12 +581,24 @@ export default function FinanceDashboard() {
     });
   }, [entries, mode]);
 
+  // Verify passcode against server hash
   useEffect(() => {
-    if (!isAuthenticated && passcode === appPasscode) {
-      setIsAuthenticated(true);
-      setPasscode("");
+    if (!isAuthenticated && passcode.length === 6 && passcodeHash) {
+      setWrongPasscode(false);
+      import('./utils/encryption').then(({ hashPasscode }) => {
+        hashPasscode(passcode).then(hash => {
+          if (hash === passcodeHash) {
+            setIsAuthenticated(true);
+            setAppPasscode(passcode); // keep entered passcode for encryption
+            setPasscode("");
+          } else {
+            setWrongPasscode(true);
+          }
+        });
+      });
     }
-  }, [passcode, appPasscode, isAuthenticated]);
+    if (passcode.length < 6) setWrongPasscode(false);
+  }, [passcode, passcodeHash, isAuthenticated]);
 
   // Persist settings to localStorage
   useEffect(() => { localStorage.setItem('fv_theme', theme); }, [theme]);
@@ -613,11 +627,11 @@ export default function FinanceDashboard() {
     if (savedWeb3) try { setWeb3Goal(JSON.parse(savedWeb3)); } catch {}
   }, []);
 
-  // Fetch passcode from API (cross-device sync)
+  // Fetch passcode hash from API (cross-device verification)
   useEffect(() => {
     fetch('/api/settings')
       .then(r => r.json())
-      .then(data => { if (data.passcode) setAppPasscode(data.passcode); })
+      .then(data => { if (data.passcodeHash) setPasscodeHash(data.passcodeHash); })
       .catch(() => {});
   }, []);
 
@@ -761,7 +775,7 @@ export default function FinanceDashboard() {
               </div>
               
               <div className="h-10 mt-8 flex items-center justify-center w-full">
-                 {passcode.length === appPasscode.length && passcode !== appPasscode && (
+                 {wrongPasscode && (
                    <div className="flex items-center gap-2 text-red-500 font-medium text-sm">
                      Incorrect Passcode
                    </div>
@@ -1497,17 +1511,28 @@ export default function FinanceDashboard() {
                           setSecurityPassMessage({ text: "New passcode must be exactly 6 digits.", type: "error" });
                           return;
                         }
-                        // Save to API for cross-device sync
+                        // Save to API (server verifies current, hashes new)
                         try {
-                          await fetch('/api/settings', {
+                          const res = await fetch('/api/settings', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ passcode: securityNewPass }),
+                            body: JSON.stringify({ currentPasscode: securityCurrentPass, newPasscode: securityNewPass }),
                           });
+                          if (!res.ok) {
+                            const data = await res.json();
+                            setSecurityPassMessage({ text: data.error || "Failed to update.", type: "error" });
+                            return;
+                          }
+                          // Update local state
+                          const { hashPasscode } = await import('./utils/encryption');
+                          const newHash = await hashPasscode(securityNewPass);
+                          setPasscodeHash(newHash);
+                          setAppPasscode(securityNewPass);
                         } catch (err) {
                           console.error("[savePasscode] failed:", err);
+                          setSecurityPassMessage({ text: "Network error.", type: "error" });
+                          return;
                         }
-                        setAppPasscode(securityNewPass);
                         changeContextPasscode(securityCurrentPass, securityNewPass);
                         setSecurityCurrentPass("");
                         setSecurityNewPass("");
