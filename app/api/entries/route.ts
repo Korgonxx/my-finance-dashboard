@@ -75,8 +75,8 @@ export async function POST(req: NextRequest) {
         walletAddress:    body.walletAddress ?? "",
         walletName:       body.walletName    ?? "",
         network:          body.network       ?? "Ethereum",
-        investmentAmount: body.investmentAmount ?? body.saved ?? 0,
-        currentValue:     body.currentValue    ?? body.earned ?? 0,
+        investmentAmount: body.investmentAmount ?? body.saved ?? body.given ?? 0,
+        currentValue:     body.currentValue    ?? body.earned ?? body.given ?? 0,
         roi:              body.roi             ?? 0,
       };
       const row = await db.cryptoDashboardEntry.upsert({
