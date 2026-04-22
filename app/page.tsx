@@ -117,8 +117,8 @@ function EntryModal({ onClose, onSave, mode, bankCards, wallets }: {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-[#131316] border border-[#222226] max-w-md w-full rounded-3xl p-8 shadow-2xl relative">
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm modal-backdrop">
+      <div className="bg-[#131316] border border-[#222226] max-w-md w-full rounded-3xl p-8 shadow-2xl relative modal-content">
         <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-zinc-400 hover:text-zinc-50 hover:bg-white/10 transition-colors">
           <X size={18} />
         </button>
@@ -156,6 +156,7 @@ function EntryModal({ onClose, onSave, mode, bankCards, wallets }: {
                       <input type="file" accept="image/*" className="hidden" onChange={e => {
                         const file = e.target.files?.[0];
                         if (file) {
+                          if (file.size > 500 * 1024) { alert('Image must be under 500KB'); return; }
                           const reader = new FileReader();
                           reader.onload = () => setNewCatImage(reader.result as string);
                           reader.readAsDataURL(file);
@@ -333,8 +334,8 @@ function EditModal({ entry, onClose, onSave, mode, bankCards, wallets }: {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-[#131316] border border-[#222226] max-w-md w-full rounded-3xl p-8 shadow-2xl relative">
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm modal-backdrop">
+      <div className="bg-[#131316] border border-[#222226] max-w-md w-full rounded-3xl p-8 shadow-2xl relative modal-content">
         <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-zinc-400 hover:text-zinc-50 hover:bg-white/10 transition-colors">
           <X size={18} />
         </button>
@@ -372,6 +373,7 @@ function EditModal({ entry, onClose, onSave, mode, bankCards, wallets }: {
                       <input type="file" accept="image/*" className="hidden" onChange={e => {
                         const file = e.target.files?.[0];
                         if (file) {
+                          if (file.size > 500 * 1024) { alert('Image must be under 500KB'); return; }
                           const reader = new FileReader();
                           reader.onload = () => setNewCatImage(reader.result as string);
                           reader.readAsDataURL(file);
@@ -500,8 +502,8 @@ function TransferModal({ onClose, onTransfer }: { onClose: () => void, onTransfe
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-[#131316] border border-[#222226] max-w-md w-full rounded-3xl p-8 shadow-2xl relative">
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm modal-backdrop">
+      <div className="bg-[#131316] border border-[#222226] max-w-md w-full rounded-3xl p-8 shadow-2xl relative modal-content">
         <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-zinc-400 hover:text-zinc-50 hover:bg-white/10 transition-colors">
           <X size={18} />
         </button>
@@ -583,8 +585,8 @@ function TransferToWeb2Modal({ onClose, onTransfer, bankCards, wallets, bankSymb
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-[#131316] border border-[#222226] max-w-md w-full rounded-3xl p-8 shadow-2xl relative">
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm modal-backdrop">
+      <div className="bg-[#131316] border border-[#222226] max-w-md w-full rounded-3xl p-8 shadow-2xl relative modal-content">
         <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-zinc-400 hover:text-zinc-50 hover:bg-white/10 transition-colors">
           <X size={18} />
         </button>
@@ -1298,19 +1300,36 @@ export default function FinanceDashboard() {
 
         
         {activeTab === 'Dashboard' && (
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 tab-content">
           
           {loadingEntries ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="flex flex-col items-center gap-4">
-                <div className="w-10 h-10 border-4 border-[#222226] border-t-[#D4FE44] rounded-full animate-spin"></div>
-                <p className="text-sm text-zinc-400 font-medium">Loading entries...</p>
+            <div className="space-y-6 animate-in fade-in">
+              {/* Skeleton stat cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
+                {[1,2,3,4].map(i => (
+                  <div key={i} className="bg-[#131316] p-6 rounded-3xl border border-[#222226]">
+                    <div className="skeleton h-4 w-24 mb-4"></div>
+                    <div className="skeleton h-8 w-32 mb-2"></div>
+                    <div className="skeleton h-3 w-20"></div>
+                  </div>
+                ))}
+              </div>
+              {/* Skeleton chart */}
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 md:gap-8">
+                <div className="xl:col-span-2 bg-[#131316] border border-[#222226] rounded-3xl p-6 h-[320px]">
+                  <div className="skeleton h-5 w-40 mb-6"></div>
+                  <div className="skeleton h-full w-full rounded-xl"></div>
+                </div>
+                <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 h-[320px]">
+                  <div className="skeleton h-5 w-32 mb-6"></div>
+                  {[1,2,3,4].map(i => <div key={i} className="skeleton h-14 w-full rounded-xl mb-3"></div>)}
+                </div>
               </div>
             </div>
           ) : (<>
           {/* TOP STATS */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
-            <div className="bg-[#131316] p-6 rounded-3xl border border-[#222226] shadow-sm flex flex-col justify-between group">
+            <div className="bg-[#131316] p-6 rounded-3xl border border-[#222226] shadow-sm flex flex-col justify-between group stat-card card-enter">
               <div className="flex justify-between items-start mb-6">
                 <div>
                   <p className="text-sm font-medium text-zinc-400 mb-1">Total Income</p>
@@ -1330,7 +1349,7 @@ export default function FinanceDashboard() {
               </div>
             </div>
 
-            <div className="bg-[#131316] p-6 rounded-3xl border border-[#222226] shadow-sm flex flex-col justify-between">
+            <div className="bg-[#131316] p-6 rounded-3xl border border-[#222226] shadow-sm flex flex-col justify-between stat-card card-enter">
               <div className="flex justify-between items-start mb-6">
                 <div>
                   <p className="text-sm font-medium text-zinc-400 mb-1">Total Expenses</p>
@@ -1350,7 +1369,7 @@ export default function FinanceDashboard() {
               </div>
             </div>
 
-            <div className="bg-[#131316] p-6 rounded-3xl border border-[#222226] shadow-sm flex flex-col justify-between">
+            <div className="bg-[#131316] p-6 rounded-3xl border border-[#222226] shadow-sm flex flex-col justify-between stat-card card-enter">
               <div className="flex justify-between items-start mb-6">
                 <div>
                   <p className="text-sm font-medium text-zinc-400 mb-1">Net Savings</p>
@@ -1368,7 +1387,7 @@ export default function FinanceDashboard() {
             </div>
 
             {/* GOAL CARD */}
-            <div className="bg-[#131316] p-6 rounded-3xl border border-[#222226] shadow-sm flex flex-col justify-between">
+            <div className="bg-[#131316] p-6 rounded-3xl border border-[#222226] shadow-sm flex flex-col justify-between stat-card card-enter">
               <div className="flex justify-between items-start mb-6">
                 <div>
                   <p className="text-sm font-medium text-zinc-400 mb-1">{mode === 'banks' ? 'Financial Goal' : 'Crypto Goal'}</p>
@@ -1442,7 +1461,7 @@ export default function FinanceDashboard() {
               </div>
               <div className="flex items-center gap-2 text-sm h-5">
                 <div className="w-full bg-[#222226] h-1.5 rounded-full overflow-hidden mt-1">
-                  <div className="bg-[#D4FE44] h-full" style={{width: `${Math.min((totalSaved / (mode === 'banks' ? web2Goal.amount : web3Goal.amount * 3000)) * 100, 100)}%`}}></div>
+                  <div className="bg-[#D4FE44] h-full" style={{width: `${Math.min((totalSaved / Math.max(mode === 'banks' ? web2Goal.amount : web3Goal.amount * 3000, 1)) * 100, 100)}%`}}></div>
                 </div>
               </div>
             </div>
@@ -1569,7 +1588,7 @@ export default function FinanceDashboard() {
                     const isPositive = entry.earned > entry.given;
                     const amount = isPositive ? entry.earned : entry.given;
                     return (
-                      <div key={entry.id} className="flex items-center justify-between p-3 rounded-2xl hover:bg-white/5 transition-colors group cursor-pointer border border-transparent hover:border-white/5">
+                      <div key={entry.id} className="flex items-center justify-between p-3 rounded-2xl hover:bg-white/5 transition-colors group cursor-pointer border border-transparent entry-row hover:border-white/5">
                         <div className="flex items-center gap-4">
                           <div className={cn(
                             "w-11 h-11 rounded-xl flex items-center justify-center border",
@@ -1621,7 +1640,7 @@ export default function FinanceDashboard() {
         )}
         
         {activeTab === 'Analytics' && (
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 tab-content">
             {mode === 'banks' ? (
               /* ========== BANKS ANALYTICS ========== */
               <div className="max-w-6xl mx-auto space-y-6 pb-20 md:pb-0">
@@ -1638,7 +1657,7 @@ export default function FinanceDashboard() {
                     { label: 'Net Income', value: netIncome, color: netIncome >= 0 ? 'text-emerald-400' : 'text-red-400', icon: TrendingUp, prefix: bankSymbol },
                     { label: 'Total Saved', value: totalSaved, color: 'text-[#D4FE44]', icon: Activity, prefix: bankSymbol },
                   ].map((card, i) => (
-                    <div key={i} className="bg-[#131316] border border-[#222226] rounded-2xl p-5">
+                    <div key={i} className="bg-[#131316] border border-[#222226] rounded-2xl p-5 stat-card card-enter">
                       <div className="flex items-center gap-2 mb-3">
                         <card.icon size={16} className={card.color} />
                         <span className="text-xs text-zinc-500 font-medium">{card.label}</span>
@@ -1738,7 +1757,7 @@ export default function FinanceDashboard() {
                     { label: 'Net P&L', value: totalEarned - totalSaved, color: (totalEarned - totalSaved) >= 0 ? 'text-emerald-400' : 'text-red-400', icon: TrendingUp, prefix: '$' },
                     { label: 'Transactions', value: filteredEntries.length, color: 'text-[#D4FE44]', icon: Activity, prefix: '' },
                   ].map((card, i) => (
-                    <div key={i} className="bg-[#131316] border border-[#222226] rounded-2xl p-5">
+                    <div key={i} className="bg-[#131316] border border-[#222226] rounded-2xl p-5 stat-card card-enter">
                       <div className="flex items-center gap-2 mb-3">
                         <card.icon size={16} className={card.color} />
                         <span className="text-xs text-zinc-500 font-medium">{card.label}</span>
@@ -1855,7 +1874,7 @@ export default function FinanceDashboard() {
         )}
 
         {activeTab === 'Cards' && (
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 tab-content">
             {mode === 'banks' ? (
               <div className="max-w-5xl mx-auto space-y-6 pb-20 md:pb-0">
                 <div className="flex justify-between items-end mb-8">
@@ -1870,7 +1889,7 @@ export default function FinanceDashboard() {
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                   {bankCards.map((card, i) => (
-                    <div key={card.id} className={`${i === 0 ? 'bg-gradient-to-tr from-[#D4FE44] to-[#A3D121]' : 'bg-zinc-800 border border-[#222226]'} rounded-3xl p-6 shadow-lg relative overflow-hidden h-64 flex flex-col justify-between group`}>
+                    <div key={card.id} className={`${i === 0 ? 'bg-gradient-to-tr from-[#D4FE44] to-[#A3D121]' : 'bg-zinc-800 border border-[#222226]'} rounded-3xl p-6 shadow-lg relative overflow-hidden h-64 flex flex-col justify-between group card-hover card-enter`}>
                       <div className={`absolute ${i === 0 ? '-right-8 -top-8 w-32 h-32 bg-white/20' : '-right-8 -bottom-8 w-32 h-32 bg-white/5'} rounded-full blur-2xl group-hover:bg-white/30 transition-colors`}></div>
                       <div className="flex justify-between items-start z-10 relative">
                         <span className={`${i === 0 ? 'text-[#0A0A0A]' : 'text-zinc-100'} font-bold text-lg tracking-tight`}>{card.name}</span>
@@ -1970,7 +1989,7 @@ export default function FinanceDashboard() {
         )}
 
         {activeTab === 'Security' && (
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 tab-content">
             <div className="max-w-4xl mx-auto space-y-6 pb-20 md:pb-0">
               <div className="mb-8">
                 <h2 className="text-2xl font-bold text-zinc-100">Security</h2>
@@ -2068,7 +2087,7 @@ export default function FinanceDashboard() {
         )}
 
         {activeTab === 'Settings' && (
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 tab-content">
             <div className="max-w-4xl mx-auto space-y-6 pb-20 md:pb-0">
               <div className="mb-8">
                 <h2 className="text-2xl font-bold text-zinc-100">Account Settings</h2>
@@ -2201,6 +2220,7 @@ export default function FinanceDashboard() {
                         <input type="file" accept="image/*" className="hidden" onChange={e => {
                           const file = e.target.files?.[0];
                           if (file) {
+                            if (file.size > 500 * 1024) { alert('Image must be under 500KB'); return; }
                             const reader = new FileReader();
                             reader.onload = () => setEditCatImage(reader.result as string);
                             reader.readAsDataURL(file);
@@ -2244,6 +2264,7 @@ export default function FinanceDashboard() {
                     <input type="file" accept="image/*" className="hidden" onChange={e => {
                       const file = e.target.files?.[0];
                       if (file) {
+                        if (file.size > 500 * 1024) { alert('Image must be under 500KB'); return; }
                         const reader = new FileReader();
                         reader.onload = () => setNewCatImageSettings(reader.result as string);
                         reader.readAsDataURL(file);
@@ -2457,7 +2478,7 @@ export default function FinanceDashboard() {
       <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#131316] border-t border-[#222226] z-50 flex items-center justify-around px-4 pb-safe shadow-[0_-10px_40px_rgba(0,0,0,0.8)]">
          <button onClick={() => setActiveTab('Dashboard')} className={cn("p-2 flex flex-col items-center gap-1 transition-colors", activeTab === 'Dashboard' ? "text-[#D4FE44]" : "text-zinc-500")}><Home size={20} /><span className="text-[10px] font-semibold">Home</span></button>
          <button onClick={() => setActiveTab('Analytics')} className={cn("p-2 flex flex-col items-center gap-1 transition-colors", activeTab === 'Analytics' ? "text-[#D4FE44]" : "text-zinc-500")}><PieChart size={20} /><span className="text-[10px] font-semibold">Stats</span></button>
-         <button onClick={() => setShowAdd(true)} className="p-3 bg-[#D4FE44] rounded-full text-black -mt-6 border-4 border-[#09090B] shadow-[0_0_20px_rgba(212,254,68,0.2)] hover:scale-105 transition-transform"><Plus size={24} strokeWidth={2.5}/></button>
+         <button onClick={() => setShowAdd(true)} className="p-3 bg-[#D4FE44] rounded-full text-black -mt-6 border-4 border-[#09090B] shadow-[0_0_20px_rgba(212,254,68,0.2)] hover:scale-105 transition-transform pulse-glow btn-press"><Plus size={24} strokeWidth={2.5}/></button>
          <button onClick={() => setActiveTab('Cards')} className={cn("p-2 flex flex-col items-center gap-1 transition-colors", activeTab === 'Cards' ? "text-[#D4FE44]" : "text-zinc-500")}><CreditCard size={20} /><span className="text-[10px] font-semibold">Cards</span></button>
          <button onClick={() => setActiveTab('Security')} className={cn("p-2 flex flex-col items-center gap-1 transition-colors", activeTab === 'Security' ? "text-[#D4FE44]" : "text-zinc-500")}><Shield size={20} /><span className="text-[10px] font-semibold">Security</span></button>
       </div>
@@ -2478,7 +2499,7 @@ export default function FinanceDashboard() {
             setBankCards(prev => prev.map(c => {
               if (c.id === newEntry.walletId) {
                 const newBal = Math.max(0, c.balance + delta);
-                fetch(`/api/cards/${c.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
+                apiFetch(`/api/cards/${c.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
                 return { ...c, balance: newBal };
               }
               return c;
@@ -2488,7 +2509,7 @@ export default function FinanceDashboard() {
               if (w.id === newEntry.walletId) {
                 const newBal = Math.max(0, w.balance + delta);
                 // Persist to API
-                fetch(`/api/wallets/${w.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
+                apiFetch(`/api/wallets/${w.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
                 return { ...w, balance: newBal };
               }
               return w;
@@ -2537,12 +2558,12 @@ export default function FinanceDashboard() {
         setBankCards(prev => prev.map(c => {
           if (c.id === fromCardId) {
             const newBal = Math.max(0, c.balance - amount);
-            fetch(`/api/cards/${c.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
+            apiFetch(`/api/cards/${c.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
             return { ...c, balance: newBal };
           }
           if (c.id === toCardId) {
             const newBal = c.balance + amount;
-            fetch(`/api/cards/${c.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
+            apiFetch(`/api/cards/${c.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
             return { ...c, balance: newBal };
           }
           return c;
@@ -2583,7 +2604,7 @@ export default function FinanceDashboard() {
         setBankCards(prev => prev.map(c => {
           if (c.id === cardId) {
             const newBal = c.balance + amount;
-            fetch(`/api/cards/${c.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
+            apiFetch(`/api/cards/${c.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
             return { ...c, balance: newBal };
           }
           return c;
@@ -2592,7 +2613,7 @@ export default function FinanceDashboard() {
         setWallets(prev => prev.map(w => {
           if (w.id === walletId) {
             const newBal = Math.max(0, w.balance - amount);
-            fetch(`/api/wallets/${w.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
+            apiFetch(`/api/wallets/${w.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
             return { ...w, balance: newBal };
           }
           return w;
@@ -2627,7 +2648,7 @@ export default function FinanceDashboard() {
       }} />}
       
       {deletingTransactionId && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm modal-backdrop">
           <div className="bg-[#131316] border border-[#222226] max-w-sm w-full rounded-3xl p-6 shadow-2xl relative text-center">
             <Trash2 size={40} className="text-red-500 mx-auto mb-4 opacity-90" strokeWidth={1.5} />
             <h3 className="text-xl font-bold text-zinc-100 mb-2">Delete Transaction?</h3>
@@ -2650,7 +2671,7 @@ export default function FinanceDashboard() {
                       setBankCards(prev => prev.map(c => {
                         if (c.id === entry.walletId) {
                           const newBal = Math.max(0, c.balance + delta);
-                          fetch(`/api/cards/${c.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
+                          apiFetch(`/api/cards/${c.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
                           return { ...c, balance: newBal };
                         }
                         return c;
@@ -2659,7 +2680,7 @@ export default function FinanceDashboard() {
                       setWallets(prev => prev.map(w => {
                         if (w.id === entry.walletId) {
                           const newBal = Math.max(0, w.balance + delta);
-                          fetch(`/api/wallets/${w.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
+                          apiFetch(`/api/wallets/${w.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
                           return { ...w, balance: newBal };
                         }
                         return w;
@@ -2686,7 +2707,7 @@ export default function FinanceDashboard() {
       
       {/* Add Wallet Modal */}
       {showAddWallet && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm modal-backdrop">
           <div className="bg-[#131316] border border-[#222226] max-w-md w-full rounded-3xl p-6 shadow-2xl">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-zinc-100">Add Wallet</h3>
@@ -2783,7 +2804,7 @@ export default function FinanceDashboard() {
 
       {/* Delete Wallet Modal */}
       {deletingWalletId && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm modal-backdrop">
           <div className="bg-[#131316] border border-[#222226] max-w-sm w-full rounded-3xl p-6 shadow-2xl relative text-center">
             <Trash2 size={40} className="text-red-500 mx-auto mb-4 opacity-90" strokeWidth={1.5} />
             <h3 className="text-xl font-bold text-zinc-100 mb-2">Delete Wallet?</h3>
@@ -2805,7 +2826,7 @@ export default function FinanceDashboard() {
 
       {/* Add Card Modal */}
       {showAddCard && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm modal-backdrop">
           <div className="bg-[#131316] border border-[#222226] max-w-md w-full rounded-3xl p-6 shadow-2xl">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-zinc-100">Add Card</h3>
@@ -2871,7 +2892,7 @@ export default function FinanceDashboard() {
 
       {/* Delete Card Modal */}
       {deletingCardId && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm modal-backdrop">
           <div className="bg-[#131316] border border-[#222226] max-w-sm w-full rounded-3xl p-6 shadow-2xl relative text-center">
             <Trash2 size={40} className="text-red-500 mx-auto mb-4 opacity-90" strokeWidth={1.5} />
             <h3 className="text-xl font-bold text-zinc-100 mb-2">Delete Card?</h3>
@@ -2892,7 +2913,7 @@ export default function FinanceDashboard() {
 
       {/* Delete Category Modal */}
       {deletingCategoryId && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm modal-backdrop">
           <div className="bg-[#131316] border border-[#222226] max-w-sm w-full rounded-3xl p-6 shadow-2xl relative text-center">
             <Trash2 size={40} className="text-red-500 mx-auto mb-4 opacity-90" strokeWidth={1.5} />
             <h3 className="text-xl font-bold text-zinc-100 mb-2">Delete Category?</h3>
@@ -2912,7 +2933,7 @@ export default function FinanceDashboard() {
 
       {/* Decrypt Wallet Modal */}
       {decryptingWalletId && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm modal-backdrop">
           <div className="bg-[#131316] border border-[#222226] max-w-sm w-full rounded-3xl p-6 shadow-2xl">
             <div className="text-center mb-6">
               <Lock size={40} className="text-amber-400 mx-auto mb-4" />

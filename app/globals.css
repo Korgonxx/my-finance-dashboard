@@ -56,26 +56,182 @@ input[type=number]::-webkit-inner-spin-button { opacity: 0.4; }
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* Animate in utilities */
+/* ===== ANIMATIONS ===== */
+
+/* Fade in */
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* Zoom + fade */
 @keyframes zoomIn95 {
   from { opacity: 0; transform: scale(0.95); }
   to { opacity: 1; transform: scale(1); }
 }
+
+/* Slide up + fade */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Slide from top */
 @keyframes slideInFromTop4 {
   from { opacity: 0; transform: translateY(-16px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* Slide from bottom */
+@keyframes slideInFromBottom {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Scale bounce */
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Shimmer loading */
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+
+/* Pulse glow */
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(212, 254, 68, 0.3); }
+  50% { box-shadow: 0 0 20px 4px rgba(212, 254, 68, 0.15); }
+}
+
+/* Float */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+/* Stagger children */
+@keyframes staggerFadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Base animation class */
 .animate-in {
-  animation-duration: 200ms;
+  animation-duration: 300ms;
   animation-fill-mode: both;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
 }
 .fade-in { animation-name: fadeIn; }
 .zoom-in-95 { animation-name: zoomIn95; }
+.slide-up { animation-name: slideUp; }
 .slide-in-from-top-4 { animation-name: slideInFromTop4; }
+.slide-in-from-bottom { animation-name: slideInFromBottom; }
+.scale-in { animation-name: scaleIn; }
 .duration-200 { animation-duration: 200ms; }
 .duration-300 { animation-duration: 300ms; }
 .duration-500 { animation-duration: 500ms; }
+
+/* Card hover lift */
+.card-hover {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+}
+
+/* Stat card hover glow */
+.stat-card {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+}
+
+/* Button press effect */
+.btn-press {
+  transition: transform 0.1s ease, background-color 0.15s ease;
+}
+.btn-press:active {
+  transform: scale(0.96);
+}
+
+/* Entry row hover */
+.entry-row {
+  transition: all 0.15s ease;
+}
+.entry-row:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+  transform: translateX(2px);
+}
+
+/* Modal backdrop */
+.modal-backdrop {
+  animation: fadeIn 200ms ease forwards;
+}
+.modal-content {
+  animation: scaleIn 300ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Stagger children - use with CSS custom property --stagger */
+.stagger-child {
+  opacity: 0;
+  animation: staggerFadeUp 400ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: calc(var(--stagger, 0) * 60ms);
+}
+
+/* Skeleton loading shimmer */
+.skeleton {
+  background: linear-gradient(90deg, #1a1a1e 25%, #252528 50%, #1a1a1e 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+
+/* Pulse glow for CTA */
+.pulse-glow {
+  animation: pulseGlow 2s infinite;
+}
+
+/* Floating animation */
+.float-animation {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Sidebar link transition */
+.nav-link {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.nav-link:hover {
+  transform: translateX(2px);
+}
+
+/* Card entrance for grids */
+.card-enter {
+  opacity: 0;
+  animation: slideUp 400ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.card-enter:nth-child(1) { animation-delay: 0ms; }
+.card-enter:nth-child(2) { animation-delay: 60ms; }
+.card-enter:nth-child(3) { animation-delay: 120ms; }
+.card-enter:nth-child(4) { animation-delay: 180ms; }
+.card-enter:nth-child(5) { animation-delay: 240ms; }
+.card-enter:nth-child(6) { animation-delay: 300ms; }
+
+/* Smooth tab transition */
+.tab-content {
+  animation: fadeIn 250ms ease forwards;
+}
+
+/* Notification badge bounce */
+@keyframes badgeBounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+.badge-bounce {
+  animation: badgeBounce 0.3s ease;
+}

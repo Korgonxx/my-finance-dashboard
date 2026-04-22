@@ -18,12 +18,14 @@ export function useExchangeRates() {
         // Check cache first
         const cached = localStorage.getItem(CACHE_KEY)
         if (cached) {
-          const { data, timestamp } = JSON.parse(cached)
-          if (Date.now() - timestamp < CACHE_DURATION) {
-            setRates(data)
-            setLoading(false)
-            return
-          }
+          try {
+            const { data, timestamp } = JSON.parse(cached)
+            if (Date.now() - timestamp < CACHE_DURATION) {
+              setRates(data)
+              setLoading(false)
+              return
+            }
+          } catch { /* corrupted cache, ignore */ }
         }
 
         // Fetch fresh rates from free API (no key needed)
