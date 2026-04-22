@@ -693,6 +693,9 @@ export default function FinanceDashboard() {
   const { convert } = useExchangeRates();
   const [dbCategories, setDbCategories] = useState<Array<{id: string; name: string; icon: string; color: string; imageUrl: string | null}>>([]);
   const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
+  const [newCatImageSettings, setNewCatImageSettings] = useState<string | null>(null);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editCatImage, setEditCatImage] = useState<string | null>(null);
   useEffect(() => {
     apiFetch("/api/banks-categories").then(r => r.json()).then(setDbCategories).catch(() => {});
   }, []);
@@ -2174,17 +2177,85 @@ export default function FinanceDashboard() {
                       )}
                       <span className="flex-1 text-sm text-zinc-100 font-medium">{cat.name}</span>
                       <div className="w-3 h-3 rounded-full" style={{backgroundColor: cat.color}} />
+                      <button onClick={() => { setEditingCategoryId(cat.id); setEditCatImage(cat.imageUrl); }} className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-zinc-300 transition-all">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                      </button>
                       <button onClick={() => setDeletingCategoryId(cat.id)} className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400 transition-all">
                         <X size={14} />
                       </button>
                     </div>
                   ))}
                 </div>
+                {editingCategoryId && (() => {
+                  const cat = dbCategories.find(c => c.id === editingCategoryId);
+                  if (!cat) return null;
+                  return (
+                    <div className="flex items-center gap-2 mb-4 p-3 bg-[#1a1a1e] border border-[#D4FE44]/30 rounded-xl">
+                      <select id="editCatIcon" defaultValue={cat.icon} className="w-14 bg-[#09090B] border border-[#222226] rounded-xl px-2 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]">
+                        {["📁","💰","🍔","🚗","🛍️","📄","🎬","💊","📚","💻","📈","📊","🎮","✈️","🏠","⚡","🎯","🔥","💎","🌐"].map(e => <option key={e} value={e}>{e}</option>)}
+                      </select>
+                      <input id="editCatName" type="text" defaultValue={cat.name} className="flex-1 bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]" />
+                      <label className="flex items-center gap-1.5 px-3 py-2.5 bg-white/5 hover:bg-white/10 rounded-xl cursor-pointer transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-400"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                        <span className="text-xs text-zinc-400">Icon</span>
+                        <input type="file" accept="image/*" className="hidden" onChange={e => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = () => setEditCatImage(reader.result as string);
+                            reader.readAsDataURL(file);
+                          }
+                        }} />
+                      </label>
+                      {editCatImage && (
+                        <img src={editCatImage} alt="" className="w-7 h-7 rounded object-cover" />
+                      )}
+                      {editCatImage && (
+                        <button onClick={() => setEditCatImage(null)} className="text-xs text-zinc-500 hover:text-red-400">✕</button>
+                      )}
+                      <button onClick={async () => {
+                        const nameInput = document.getElementById("editCatName") as HTMLInputElement;
+                        const iconSelect = document.getElementById("editCatIcon") as HTMLSelectElement;
+                        if (!nameInput?.value.trim()) return;
+                        const res = await apiFetch("/api/banks-categories", {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ id: editingCategoryId, name: nameInput.value.trim(), icon: iconSelect.value, imageUrl: editCatImage }),
+                        });
+                        if (res.ok) {
+                          const updated = await res.json();
+                          setDbCategories(prev => prev.map(c => c.id === updated.id ? updated : c));
+                          setEditingCategoryId(null);
+                          setEditCatImage(null);
+                        }
+                      }} className="px-3 py-2.5 bg-[#D4FE44] text-black rounded-xl text-sm font-bold">Save</button>
+                      <button onClick={() => { setEditingCategoryId(null); setEditCatImage(null); }} className="px-3 py-2.5 bg-white/5 text-zinc-400 rounded-xl text-sm">Cancel</button>
+                    </div>
+                  );
+                })()}
                 <div className="flex gap-2">
                   <select id="newCatIcon" className="w-14 bg-[#09090B] border border-[#222226] rounded-xl px-2 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]">
                     {["📁","💰","🍔","🚗","🛍️","📄","🎬","💊","📚","💻","📈","📊","🎮","✈️","🏠","⚡","🎯","🔥","💎","🌐"].map(e => <option key={e} value={e}>{e}</option>)}
                   </select>
                   <input id="newCatNameInput" type="text" placeholder="New category name" className="flex-1 bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]" />
+                  <label className="flex items-center gap-1.5 px-3 py-2.5 bg-white/5 hover:bg-white/10 rounded-xl cursor-pointer transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-400"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                    <span className="text-xs text-zinc-400">Icon</span>
+                    <input type="file" accept="image/*" className="hidden" onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = () => setNewCatImageSettings(reader.result as string);
+                        reader.readAsDataURL(file);
+                      }
+                    }} />
+                  </label>
+                  {newCatImageSettings && (
+                    <img src={newCatImageSettings} alt="" className="w-7 h-7 rounded object-cover" />
+                  )}
+                  {newCatImageSettings && (
+                    <button onClick={() => setNewCatImageSettings(null)} className="text-xs text-zinc-500 hover:text-red-400 self-center">✕</button>
+                  )}
                   <button onClick={async () => {
                     const nameInput = document.getElementById("newCatNameInput") as HTMLInputElement;
                     const iconSelect = document.getElementById("newCatIcon") as HTMLSelectElement;
@@ -2192,12 +2263,13 @@ export default function FinanceDashboard() {
                     const res = await apiFetch("/api/banks-categories", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ name: nameInput.value.trim(), icon: iconSelect.value }),
+                      body: JSON.stringify({ name: nameInput.value.trim(), icon: iconSelect.value, imageUrl: newCatImageSettings }),
                     });
                     if (res.ok) {
                       const cat = await res.json();
                       setDbCategories(prev => [...prev, cat].sort((a, b) => a.name.localeCompare(b.name)));
                       nameInput.value = "";
+                      setNewCatImageSettings(null);
                     }
                   }} className="px-4 py-2.5 bg-[#D4FE44] text-black rounded-xl text-sm font-bold hover:bg-[#bceb29] transition-colors">Add</button>
                 </div>
