@@ -510,17 +510,19 @@ function TransferModal({ onClose, onTransfer }: { onClose: () => void, onTransfe
   );
 }
 
-function TransferToWeb2Modal({ onClose, onTransfer, bankCards, wallets }: { 
+function TransferToWeb2Modal({ onClose, onTransfer, bankCards, wallets, bankSymbol, bankCurrency, toBankDisplay }: { 
   onClose: () => void; 
   onTransfer: (amount: number, cardId: string, walletId: string) => void;
   bankCards: Array<{ id: string; name: string; last4: string; balance: number }>;
   wallets: Array<{ id: string; name: string; address: string; balance: number }>;
+  bankSymbol: string;
+  bankCurrency: string;
+  toBankDisplay: (amount: number) => string;
 }) {
   const [amount, setAmount] = useState("");
   const [cardId, setCardId] = useState(bankCards[0]?.id || "");
   const [walletId, setWalletId] = useState(wallets[0]?.id || "");
   const [isTransferring, setIsTransferring] = useState(false);
-  const { convert } = useExchangeRates();
 
   const handleTransfer = async () => {
     setIsTransferring(true);
@@ -554,7 +556,7 @@ function TransferToWeb2Modal({ onClose, onTransfer, bankCards, wallets }: {
           <div className="space-y-1.5">
             <label htmlFor="tweb2Card" className="text-xs font-medium text-zinc-400">To Card</label>
             <select id="tweb2Card" value={cardId} onChange={e => setCardId(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none focus:border-emerald-400 transition-colors">
-              {bankCards.map(c => <option key={c.id} value={c.id}>{c.name} (**** {c.last4}) — ₹{convert(c.balance, 'INR').toLocaleString('en-IN', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</option>)}
+              {bankCards.map(c => <option key={c.id} value={c.id}>{c.name} (**** {c.last4}) — {bankSymbol}{toBankDisplay(c.balance)}</option>)}
             </select>
           </div>
           )}
@@ -572,7 +574,7 @@ function TransferToWeb2Modal({ onClose, onTransfer, bankCards, wallets }: {
                />
             </div>
             {amount && Number(amount) > 0 && (
-              <p className="text-xs text-zinc-500 mt-1">≈ ₹{convert(Number(amount), 'INR').toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})} INR</p>
+              <p className="text-xs text-zinc-500 mt-1">≈ {bankSymbol}{toBankDisplay(Number(amount))} {bankCurrency}</p>
             )}
           </div>
           <div className="flex gap-3 pt-4">
@@ -650,7 +652,9 @@ export default function FinanceDashboard() {
   const bankSymbol = bankCurrency === 'INR' ? '₹' : bankCurrency === 'EUR' ? '€' : bankCurrency === 'GBP' ? '£' : '$';
   const toBankDisplay = (usdAmount: number) => {
     if (bankCurrency === 'INR') return convert(usdAmount, 'INR').toLocaleString('en-IN', {minimumFractionDigits: 0, maximumFractionDigits: 0});
-    return usdAmount.toLocaleString();
+    if (bankCurrency === 'EUR') return convert(usdAmount, 'EUR').toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    if (bankCurrency === 'GBP') return convert(usdAmount, 'GBP').toLocaleString('en-GB', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    return usdAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
   };
   
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
@@ -1823,7 +1827,7 @@ export default function FinanceDashboard() {
                       </div>
                       <div className="z-10 relative">
                         <div className={`${i === 0 ? 'text-[#0A0A0A]/80' : 'text-zinc-300'} font-semibold tracking-widest text-xl font-mono mb-2`}>**** **** **** {card.last4}</div>
-                        <div className={`${i === 0 ? 'text-[#0A0A0A]' : 'text-zinc-100'} font-bold text-xl mb-2`}>₹{(card.balance * 83.5).toLocaleString('en-IN', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</div>
+                        <div className={`${i === 0 ? 'text-[#0A0A0A]' : 'text-zinc-100'} font-bold text-xl mb-2`}>{bankSymbol}{toBankDisplay(card.balance)}</div>
                         <div className="flex justify-between items-end">
                           <div>
                              <p className={`${i === 0 ? 'text-[#0A0A0A]/60' : 'text-zinc-500'} text-[10px] font-bold uppercase tracking-wider`}>Cardholder</p>
@@ -2186,7 +2190,7 @@ export default function FinanceDashboard() {
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <span className="text-xs font-mono text-zinc-400">
-                            {a.mode === 'banks' ? '₹' : '$'}{a.amount.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}
+                            {a.mode === 'banks' ? bankSymbol : '$'}{a.amount.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}
                           </span>
                           <button
                             onClick={() => deleteActivity(a.id, a.type)}
@@ -2447,6 +2451,9 @@ export default function FinanceDashboard() {
         onClose={() => setShowTransferToWeb2(false)} 
         bankCards={bankCards.map(c => ({ id: c.id, name: c.name, last4: c.last4, balance: c.balance }))}
         wallets={wallets.map(w => ({ id: w.id, name: w.name, address: w.address, balance: w.balance }))}
+        bankSymbol={bankSymbol}
+        bankCurrency={bankCurrency}
+        toBankDisplay={toBankDisplay}
         onTransfer={async (amount, cardId, walletId) => {
         // Add to bank card balance & persist
         setBankCards(prev => prev.map(c => {
