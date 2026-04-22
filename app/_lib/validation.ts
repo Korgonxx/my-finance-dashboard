@@ -65,6 +65,7 @@ export const categorySchema = z.object({
   name: z.string().min(1, "Name is required"),
   icon: z.string().optional().default("📁"),
   color: z.string().optional().default("#22c55e"),
+  imageUrl: z.string().optional().nullable(),
 });
 
 // Goal schema

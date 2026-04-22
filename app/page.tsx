@@ -62,10 +62,11 @@ function EntryModal({ onClose, onSave, mode, bankCards, wallets }: {
   const [saved, setSaved] = useState("");
   const [given, setGiven] = useState("");
   const [givenTo, setGivenTo] = useState("");
-  const [categories, setCategories] = useState<Array<{id: string; name: string; icon: string; color: string}>>([]);
+  const [categories, setCategories] = useState<Array<{id: string; name: string; icon: string; color: string; imageUrl: string | null}>>([]);
   const [showNewCat, setShowNewCat] = useState(false);
   const [newCatName, setNewCatName] = useState("");
   const [newCatIcon, setNewCatIcon] = useState("📁");
+  const [newCatImage, setNewCatImage] = useState<string | null>(null);
 
   useEffect(() => {
     apiFetch("/api/banks-categories").then(r => r.json()).then(setCategories).catch(() => {});
@@ -77,7 +78,7 @@ function EntryModal({ onClose, onSave, mode, bankCards, wallets }: {
       const res = await apiFetch("/api/banks-categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newCatName.trim(), icon: newCatIcon }),
+        body: JSON.stringify({ name: newCatName.trim(), icon: newCatIcon, imageUrl: newCatImage }),
       });
       if (res.ok) {
         const cat = await res.json();
@@ -85,6 +86,7 @@ function EntryModal({ onClose, onSave, mode, bankCards, wallets }: {
         setGivenTo(cat.name);
         setShowNewCat(false);
         setNewCatName("");
+        setNewCatImage(null);
       }
     } catch {}
   };
@@ -138,13 +140,35 @@ function EntryModal({ onClose, onSave, mode, bankCards, wallets }: {
             <div className="space-y-1.5">
               <label htmlFor="entryCategory" className="text-xs font-medium text-zinc-400">Category</label>
               {showNewCat ? (
-                <div className="flex gap-2">
-                  <select value={newCatIcon} onChange={e => setNewCatIcon(e.target.value)} className="w-14 bg-[#09090B] border border-[#222226] rounded-xl px-2 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]">
-                    {["📁","💰","🍔","🚗","🛍️","📄","🎬","💊","📚","💻","📈","📊","🎮","✈️","🏠","⚡","🎯","🔥","💎","🌐"].map(e => <option key={e} value={e}>{e}</option>)}
-                  </select>
-                  <input type="text" value={newCatName} onChange={e => setNewCatName(e.target.value)} onKeyDown={e => e.key === "Enter" && addCategory()} placeholder="Category name" className="flex-1 bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]" />
-                  <button onClick={addCategory} className="px-3 py-2.5 bg-[#D4FE44] text-black rounded-xl text-sm font-bold">✓</button>
-                  <button onClick={() => setShowNewCat(false)} className="px-3 py-2.5 bg-white/5 text-zinc-400 rounded-xl text-sm">✕</button>
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <select value={newCatIcon} onChange={e => setNewCatIcon(e.target.value)} className="w-14 bg-[#09090B] border border-[#222226] rounded-xl px-2 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]">
+                      {["📁","💰","🍔","🚗","🛍️","📄","🎬","💊","📚","💻","📈","📊","🎮","✈️","🏠","⚡","🎯","🔥","💎","🌐"].map(e => <option key={e} value={e}>{e}</option>)}
+                    </select>
+                    <input type="text" value={newCatName} onChange={e => setNewCatName(e.target.value)} onKeyDown={e => e.key === "Enter" && addCategory()} placeholder="Category name" className="flex-1 bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]" />
+                    <button onClick={addCategory} className="px-3 py-2.5 bg-[#D4FE44] text-black rounded-xl text-sm font-bold">✓</button>
+                    <button onClick={() => { setShowNewCat(false); setNewCatImage(null); }} className="px-3 py-2.5 bg-white/5 text-zinc-400 rounded-xl text-sm">✕</button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg cursor-pointer transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-400"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                      <span className="text-xs text-zinc-400">Custom icon</span>
+                      <input type="file" accept="image/*" className="hidden" onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = () => setNewCatImage(reader.result as string);
+                          reader.readAsDataURL(file);
+                        }
+                      }} />
+                    </label>
+                    {newCatImage && (
+                      <div className="flex items-center gap-1.5">
+                        <img src={newCatImage} alt="" className="w-6 h-6 rounded object-cover" />
+                        <button onClick={() => setNewCatImage(null)} className="text-xs text-zinc-500 hover:text-red-400">remove</button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="flex gap-2">
@@ -253,10 +277,11 @@ function EditModal({ entry, onClose, onSave, mode, bankCards, wallets }: {
   const [saved, setSaved] = useState(String(entry.saved));
   const [given, setGiven] = useState(String(entry.given));
   const [givenTo, setGivenTo] = useState(entry.givenTo);
-  const [categories, setCategories] = useState<Array<{id: string; name: string; icon: string; color: string}>>([]);
+  const [categories, setCategories] = useState<Array<{id: string; name: string; icon: string; color: string; imageUrl: string | null}>>([]);
   const [showNewCat, setShowNewCat] = useState(false);
   const [newCatName, setNewCatName] = useState("");
   const [newCatIcon, setNewCatIcon] = useState("📁");
+  const [newCatImage, setNewCatImage] = useState<string | null>(null);
 
   useEffect(() => {
     apiFetch("/api/banks-categories").then(r => r.json()).then(setCategories).catch(() => {});
@@ -268,7 +293,7 @@ function EditModal({ entry, onClose, onSave, mode, bankCards, wallets }: {
       const res = await apiFetch("/api/banks-categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newCatName.trim(), icon: newCatIcon }),
+        body: JSON.stringify({ name: newCatName.trim(), icon: newCatIcon, imageUrl: newCatImage }),
       });
       if (res.ok) {
         const cat = await res.json();
@@ -276,6 +301,7 @@ function EditModal({ entry, onClose, onSave, mode, bankCards, wallets }: {
         setGivenTo(cat.name);
         setShowNewCat(false);
         setNewCatName("");
+        setNewCatImage(null);
       }
     } catch {}
   };
@@ -330,13 +356,35 @@ function EditModal({ entry, onClose, onSave, mode, bankCards, wallets }: {
             <div className="space-y-1.5">
               <label htmlFor="editCategory" className="text-xs font-medium text-zinc-400">Category</label>
               {showNewCat ? (
-                <div className="flex gap-2">
-                  <select value={newCatIcon} onChange={e => setNewCatIcon(e.target.value)} className="w-14 bg-[#09090B] border border-[#222226] rounded-xl px-2 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]">
-                    {["📁","💰","🍔","🚗","🛍️","📄","🎬","💊","📚","💻","📈","📊","🎮","✈️","🏠","⚡","🎯","🔥","💎","🌐"].map(e => <option key={e} value={e}>{e}</option>)}
-                  </select>
-                  <input type="text" value={newCatName} onChange={e => setNewCatName(e.target.value)} onKeyDown={e => e.key === "Enter" && addCategory()} placeholder="Category name" className="flex-1 bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]" />
-                  <button onClick={addCategory} className="px-3 py-2.5 bg-[#D4FE44] text-black rounded-xl text-sm font-bold">✓</button>
-                  <button onClick={() => setShowNewCat(false)} className="px-3 py-2.5 bg-white/5 text-zinc-400 rounded-xl text-sm">✕</button>
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <select value={newCatIcon} onChange={e => setNewCatIcon(e.target.value)} className="w-14 bg-[#09090B] border border-[#222226] rounded-xl px-2 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]">
+                      {["📁","💰","🍔","🚗","🛍️","📄","🎬","💊","📚","💻","📈","📊","🎮","✈️","🏠","⚡","🎯","🔥","💎","🌐"].map(e => <option key={e} value={e}>{e}</option>)}
+                    </select>
+                    <input type="text" value={newCatName} onChange={e => setNewCatName(e.target.value)} onKeyDown={e => e.key === "Enter" && addCategory()} placeholder="Category name" className="flex-1 bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]" />
+                    <button onClick={addCategory} className="px-3 py-2.5 bg-[#D4FE44] text-black rounded-xl text-sm font-bold">✓</button>
+                    <button onClick={() => { setShowNewCat(false); setNewCatImage(null); }} className="px-3 py-2.5 bg-white/5 text-zinc-400 rounded-xl text-sm">✕</button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg cursor-pointer transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-400"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                      <span className="text-xs text-zinc-400">Custom icon</span>
+                      <input type="file" accept="image/*" className="hidden" onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = () => setNewCatImage(reader.result as string);
+                          reader.readAsDataURL(file);
+                        }
+                      }} />
+                    </label>
+                    {newCatImage && (
+                      <div className="flex items-center gap-1.5">
+                        <img src={newCatImage} alt="" className="w-6 h-6 rounded object-cover" />
+                        <button onClick={() => setNewCatImage(null)} className="text-xs text-zinc-500 hover:text-red-400">remove</button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="flex gap-2">
@@ -643,7 +691,7 @@ export default function FinanceDashboard() {
   const [web2Goal, setWeb2Goal] = useState({ amount: 10000, currency: "USD" });
   const [web3Goal, setWeb3Goal] = useState({ amount: 5, currency: "ETH" });
   const { convert } = useExchangeRates();
-  const [dbCategories, setDbCategories] = useState<Array<{id: string; name: string; icon: string; color: string}>>([]);
+  const [dbCategories, setDbCategories] = useState<Array<{id: string; name: string; icon: string; color: string; imageUrl: string | null}>>([]);
   const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
   useEffect(() => {
     apiFetch("/api/banks-categories").then(r => r.json()).then(setDbCategories).catch(() => {});
@@ -2119,7 +2167,11 @@ export default function FinanceDashboard() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-4">
                   {dbCategories.map(cat => (
                     <div key={cat.id} className="flex items-center gap-3 bg-[#09090B] border border-[#222226] rounded-xl px-4 py-3 group">
-                      <span className="text-lg">{cat.icon}</span>
+                      {cat.imageUrl ? (
+                        <img src={cat.imageUrl} alt="" className="w-6 h-6 rounded object-cover" />
+                      ) : (
+                        <span className="text-lg">{cat.icon}</span>
+                      )}
                       <span className="flex-1 text-sm text-zinc-100 font-medium">{cat.name}</span>
                       <div className="w-3 h-3 rounded-full" style={{backgroundColor: cat.color}} />
                       <button onClick={() => setDeletingCategoryId(cat.id)} className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400 transition-all">

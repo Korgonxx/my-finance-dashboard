@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
         name: data.name,
         icon: data.icon ?? "📁",
         color: data.color ?? "#22c55e",
+        imageUrl: data.imageUrl ?? null,
       },
     });
     return NextResponse.json(category, { status: 201 });
@@ -69,6 +70,7 @@ export async function PUT(req: NextRequest) {
         name: data.name,
         icon: data.icon,
         color: data.color,
+        imageUrl: data.imageUrl,
       },
     });
     return NextResponse.json(category);

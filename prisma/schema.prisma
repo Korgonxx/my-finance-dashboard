@@ -274,6 +274,7 @@ model BanksEntryCategory {
   name      String
   icon      String   @default("📁")
   color     String   @default("#22c55e")
+  imageUrl  String?  @db.Text
   createdAt DateTime @default(now())
 
   @@unique([name])
