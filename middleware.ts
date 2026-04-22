@@ -2,21 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 
 const API_KEY = process.env.API_KEY || "korgon-finance-2026";
 
-// Routes that don't need auth (passcode verification)
-const PUBLIC_ROUTES = ["/api/settings"];
-
 export function middleware(req: NextRequest) {
   // Only protect API routes
   if (!req.nextUrl.pathname.startsWith("/api")) {
     return NextResponse.next();
   }
 
-  // Allow public routes
-  if (PUBLIC_ROUTES.some(r => req.nextUrl.pathname.startsWith(r)) && req.method === "GET") {
+  // Allow all GET requests (data is loaded before passcode screen)
+  if (req.method === "GET") {
     return NextResponse.next();
   }
 
-  // Check API key
+  // Allow settings POST for passcode verification (no auth yet)
+  if (req.nextUrl.pathname === "/api/settings" && req.method === "POST") {
+    return NextResponse.next();
+  }
+
+  // Check API key for all mutating requests (POST/PUT/DELETE)
   const key = req.headers.get("x-api-key");
   if (key !== API_KEY) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
