@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/db";
-import { cardUpdateSchema } from "../../../_lib/validation";
+import { cardUpdateSchema } from "@/app/_lib/validation";
 
 export async function DELETE(
   _req: NextRequest,

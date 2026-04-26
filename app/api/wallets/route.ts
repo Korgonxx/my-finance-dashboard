@@ -53,9 +53,9 @@ export async function POST(req: NextRequest) {
     const row = await db.account.create({
       data: {
         userId,
-        name:             data.name,
+        name: data.name.toLowerCase().trim(),
         type:             "CRYPTO_WALLET",
-        network:          data.network       ?? "Ethereum",
+        network: (data.network ?? "ethereum").toLowerCase(),
         walletAddress:    data.address       ?? null,
         currentBalance:   data.balance       ?? 0,
         availableBalance: data.balance       ?? 0,

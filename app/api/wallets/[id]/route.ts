@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/db";
-import { walletUpdateSchema } from "../../../_lib/validation";
+import { walletUpdateSchema } from "@/app/_lib/validation";
 
 export async function GET(
   _req: NextRequest,

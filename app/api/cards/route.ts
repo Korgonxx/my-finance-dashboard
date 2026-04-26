@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
     const row = await db.account.create({
       data: {
         userId,
-        name:             data.name,
+        name:             data.name.toLowerCase().trim(),
         type:             data.type === "physical" ? "CREDIT_CARD" : "CHECKING",
         accountNumber:    data.last4 ?? null,
         institutionName:  data.holder ?? null,

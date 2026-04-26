@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/db";
-import { entryUpdateSchema } from "../../../_lib/validation";
+import { entryUpdateSchema } from "@/app/_lib/validation";
 
 function toDbMode(mode: string): string {
   if (mode === "banks") return "web2";

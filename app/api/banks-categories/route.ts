@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     const data = parsed.data;
     const category = await db.banksEntryCategory.create({
       data: {
-        name: data.name,
+        name: data.name.toLowerCase().trim(),
         icon: data.icon ?? "📁",
         color: data.color ?? "#22c55e",
         imageUrl: data.imageUrl ?? null,
