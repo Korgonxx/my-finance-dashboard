@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/db';
 
-// DELETE /api/activity?id=xxx&type=bank_entry|crypto_entry|card|wallet
-export async function DELETE(req: NextRequest) {
+// FIX: Use dynamic route param `id` from the URL segment, not searchParams
+// File lives at: app/api/activity/[id]/route.ts
+// Called as: DELETE /api/activity/{id}?type=bank_entry
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
+    const { id } = await params;
     const { searchParams } = new URL(req.url);
-    const id = searchParams.get('id');
     const type = searchParams.get('type');
 
     if (!id || !type) {
@@ -20,14 +25,12 @@ export async function DELETE(req: NextRequest) {
         await db.cryptoDashboardEntry.delete({ where: { id } });
         break;
       case 'card':
-        // Cards are stored in Account table
         await db.account.update({
           where: { id },
           data: { deletedAt: new Date() },
         });
         break;
       case 'wallet':
-        // Wallets are stored in Account table
         await db.account.update({
           where: { id },
           data: { deletedAt: new Date() },
@@ -39,7 +42,7 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('[activity] DELETE error:', error);
+    console.error('[activity/[id]] DELETE error:', error);
     return NextResponse.json({ error: 'Failed to delete' }, { status: 500 });
   }
 }

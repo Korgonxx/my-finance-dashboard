@@ -3,7 +3,7 @@ import { z } from "zod";
 // Entry schemas
 export const entrySchema = z.object({
   id: z.string().optional(),
-  mode: z.enum(["banks", "crypto"]).default("banks"),
+  mode: z.enum(["banks", "crypto", "web2", "web3"]).default("banks"),
   date: z.string(),
   project: z.string(),
   // Banks fields
@@ -18,6 +18,9 @@ export const entrySchema = z.object({
   investmentAmount: z.number().optional(),
   currentValue: z.number().optional(),
   roi: z.number().optional(),
+  // Optional client-side fields (ignored by API)
+  walletId: z.string().optional(),
+  createdAt: z.string().optional(),
 });
 
 export const entryUpdateSchema = entrySchema.partial().extend({
@@ -68,9 +71,9 @@ export const categorySchema = z.object({
   imageUrl: z.string().optional().nullable(),
 });
 
-// Goal schema
+// Goal schema — accepts both frontend modes ("banks"/"crypto") and legacy ("web2"/"web3")
 export const goalSchema = z.object({
-  mode: z.enum(["banks", "crypto"]).default("banks"),
+  mode: z.enum(["banks", "crypto", "web2", "web3"]).default("banks"),
   amount: z.number().min(0, "Amount must be positive"),
   currency: z.string().optional().default("USD"),
 });

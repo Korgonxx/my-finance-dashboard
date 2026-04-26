@@ -1,6 +1,9 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useRef, useMemo, ReactNode } from "react";
+import React, {
+  createContext, useContext, useState, useEffect,
+  useRef, useMemo, ReactNode,
+} from "react";
 
 export type AppMode = "banks" | "crypto";
 
@@ -35,9 +38,9 @@ const Web3Context = createContext<Web3ContextType>({
 });
 
 const SEED_WALLETS: WalletAddress[] = [
-  { id: "w1", name: "Main Wallet",    address: "0x71C7656EC7ab88b098defB751B7401B5f6d8976F", balance: 12450.80, network: "Ethereum" },
-  { id: "w2", name: "DeFi Wallet",   address: "0x3A76Bff1aA3c56E9f0E96c8B23B3a61B3f0c21D", balance: 5230.50, network: "Polygon"  },
-  { id: "w3", name: "Trading Wallet",address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", balance: 8900.00, network: "Arbitrum" },
+  { id: "w1", name: "Main Wallet",     address: "0x71C7656EC7ab88b098defB751B7401B5f6d8976F", balance: 12450.80, network: "Ethereum" },
+  { id: "w2", name: "DeFi Wallet",     address: "0x3A76Bff1aA3c56E9f0E96c8B23B3a61B3f0c21D", balance: 5230.50,  network: "Polygon"  },
+  { id: "w3", name: "Trading Wallet",  address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", balance: 8900.00,  network: "Arbitrum" },
 ];
 
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -45,20 +48,22 @@ const uid = () => Math.random().toString(36).slice(2, 9);
 // Global mode cache to prevent jitter during navigation
 let modeCache: AppMode | null = null;
 
+function readModeFromStorage(): AppMode {
+  if (modeCache) return modeCache;
+  try {
+    const m = localStorage.getItem("app_mode") as AppMode | null;
+    const resolved: AppMode = (m === "banks" || m === "crypto") ? m : "banks";
+    modeCache = resolved;
+    return resolved;
+  } catch {
+    modeCache = "banks";
+    return "banks";
+  }
+}
+
 export function Web3Provider({ children }: { children: ReactNode }) {
-  const [mode, setModeState] = useState<AppMode>(() => {
-    if (modeCache) return modeCache;
-    try {
-      const m = localStorage.getItem("app_mode") as AppMode | null;
-      const resolvedMode = (m === "banks" || m === "crypto") ? m : "banks";
-      modeCache = resolvedMode;
-      return resolvedMode;
-    } catch {
-      modeCache = "banks";
-      return "banks";
-    }
-  });
-  
+  const [mode, setModeState] = useState<AppMode>(readModeFromStorage);
+
   const [wallets, setWalletsState] = useState<WalletAddress[]>(() => {
     try {
       const raw = localStorage.getItem("wallet_addresses");
@@ -67,9 +72,9 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       return SEED_WALLETS;
     }
   });
-  
+
   const [isHydrated, setIsHydrated] = useState(false);
-  const modeRef = useRef(mode);
+  const modeRef = useRef<AppMode>(mode);
 
   /* ── hydration protection ── */
   useEffect(() => {
@@ -93,7 +98,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     modeCache = m;
     modeRef.current = m;
     setModeState(m);
-    try { 
+    try {
       localStorage.setItem("app_mode", m);
       if (m === "crypto") {
         document.documentElement.classList.add("web3-mode");
@@ -114,7 +119,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   const deleteWallet = (id: string) =>
     setWalletsState(prev => prev.filter(w => w.id !== id));
 
-  // Memoized isWeb3 to prevent recalculation on every render
+  // Memoized isWeb3 — stable reference, no recalculation jitter
   const stableIsWeb3 = useMemo(() => {
     if (!isHydrated) return modeRef.current === "crypto";
     return mode === "crypto";
@@ -129,6 +134,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     addWallet,
     updateWallet,
     deleteWallet,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [mode, stableIsWeb3, wallets]);
 
   return (

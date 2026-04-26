@@ -25,20 +25,23 @@ function toEntry(row: any, dbMode: string) {
       saved:            Number(row.investmentAmount),
       given:            0,
       givenTo:          row.network,
+      createdAt:        row.createdAt?.toISOString?.() ?? null,
     };
   }
   return {
-    id:      row.id,
-    mode:    "banks",
-    date:    row.date,
-    project: row.project,
-    earned:  Number(row.earned),
-    saved:   Number(row.saved),
-    given:   Number(row.given),
-    givenTo: row.givenTo,
+    id:        row.id,
+    mode:      "banks",
+    date:      row.date,
+    project:   row.project,
+    earned:    Number(row.earned),
+    saved:     Number(row.saved),
+    given:     Number(row.given),
+    givenTo:   row.givenTo,
+    createdAt: row.createdAt?.toISOString?.() ?? null,
   };
 }
 
+// FIX: Search both tables to find which one holds this entry
 async function findEntry(id: string) {
   const web2 = await db.banksDashboardEntry.findUnique({ where: { id } });
   if (web2) return { row: web2, mode: "web2" };
@@ -47,7 +50,10 @@ async function findEntry(id: string) {
   return null;
 }
 
-export async function PUT(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+export async function PUT(
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
   try {
     const { id } = await context.params;
     const body = await req.json();
@@ -60,29 +66,40 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
 
     let row;
     if (dbMode === "web3") {
+      // Verify the entry exists first
+      const existing = await db.cryptoDashboardEntry.findUnique({ where: { id } });
+      if (!existing) {
+        return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+      }
       row = await db.cryptoDashboardEntry.update({
         where: { id },
         data: {
           date:             data.date,
           project:          data.project,
-          walletAddress:    data.walletAddress  ?? "",
-          walletName:       data.walletName     ?? "",
-          network:          data.network        ?? "Ethereum",
-          investmentAmount: data.investmentAmount || data.saved || data.given || 0,
-          currentValue:     data.currentValue    || data.earned || data.given || 0,
-          roi:              data.roi             ?? 0,
+          walletAddress:    data.walletAddress  ?? existing.walletAddress,
+          walletName:       data.walletName     ?? existing.walletName,
+          network:          data.network        ?? existing.network,
+          investmentAmount: data.investmentAmount ?? data.saved ?? Number(existing.investmentAmount),
+          currentValue:     data.currentValue    ?? data.earned ?? Number(existing.currentValue),
+          roi:              data.roi             ?? Number(existing.roi),
         },
       });
     } else {
+      const existing = await db.banksDashboardEntry.findUnique({ where: { id } });
+      if (!existing) {
+        return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+      }
       row = await db.banksDashboardEntry.update({
         where: { id },
         data: {
-          date:    data.date,
-          project: data.project,
-          earned:  data.earned  ?? 0,
-          saved:   data.saved   ?? 0,
-          given:   data.given   ?? 0,
-          givenTo: (data.givenTo ?? "").toLowerCase(),
+          date:    data.date    ?? existing.date,
+          project: data.project ?? existing.project,
+          earned:  data.earned  ?? Number(existing.earned),
+          saved:   data.saved   ?? Number(existing.saved),
+          given:   data.given   ?? Number(existing.given),
+          givenTo: data.givenTo !== undefined
+            ? data.givenTo.toLowerCase()
+            : existing.givenTo,
         },
       });
     }
@@ -93,7 +110,10 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
   }
 }
 
-export async function DELETE(_req: NextRequest, context: { params: Promise<{ id: string }> }) {
+export async function DELETE(
+  _req: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
   try {
     const { id } = await context.params;
     const found = await findEntry(id);

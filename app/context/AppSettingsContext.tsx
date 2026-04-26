@@ -8,18 +8,18 @@ export type AppPage = "home" | "cards";
 interface AppSettingsContextType {
   // Master passcode
   appPasscodeVerified: boolean;
-  verifyAppPasscode: (passcode: string) => boolean;
+  verifyAppPasscode: (passcode: string) => Promise<boolean>;
   lockApp: () => void;
   changeAppPasscode: (currentPasscode: string, newPasscode: string) => Promise<boolean>;
-  
+
   // Currency
   currency: Currency;
   setCurrency: (currency: Currency) => void;
-  
+
   // Balance visibility
   hideBalances: boolean;
   setHideBalances: (hidden: boolean) => void;
-  
+
   // Floating window
   currentPage: AppPage;
   setCurrentPage: (page: AppPage) => void;
@@ -31,7 +31,7 @@ interface AppSettingsContextType {
 
 const AppSettingsContext = createContext<AppSettingsContextType>({
   appPasscodeVerified: false,
-  verifyAppPasscode: () => false,
+  verifyAppPasscode: async () => false,
   lockApp: () => {},
   changeAppPasscode: async () => false,
   currency: "USD",
@@ -65,7 +65,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
   const [currentPage, setCurrentPageState] = useState<AppPage>("home");
   const [isDark, setIsDarkState] = useState(true);
 
-  // Load settings from API on mount (cross-device sync)
+  // Load settings from API on mount
   useEffect(() => {
     async function loadSettings() {
       try {
@@ -101,14 +101,23 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
     }).catch(() => {});
   }, [isDark]);
 
-  const verifyAppPasscode = (passcode: string): boolean => {
-    // Deprecated: verification now happens server-side via POST /api/settings
-    // This is kept for backwards compatibility with MasterPasscodeGuard
-    if (passcode.length === 6 && /^\d+$/.test(passcode)) {
-      setAppPasscodeVerified(true);
-      try { sessionStorage.setItem("korgon_verified", "true"); } catch {}
-      return true;
-    }
+  // FIX: verifyAppPasscode now calls the server-side bcrypt check
+  const verifyAppPasscode = async (passcode: string): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'verify-passcode', passcode }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setAppPasscodeVerified(true);
+          try { sessionStorage.setItem("korgon_verified", "true"); } catch {}
+          return true;
+        }
+      }
+    } catch {}
     return false;
   };
 

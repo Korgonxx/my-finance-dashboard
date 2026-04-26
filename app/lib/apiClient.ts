@@ -2,8 +2,14 @@
 
 const API_KEY_STORAGE = "fv_api_key";
 
-// API key - verified client-side against passcode hash
+// In-memory key
 let apiKey = "";
+
+// FIX: Initialise key synchronously on module load so it is available
+// before any useEffect fires in app/page.tsx.
+if (typeof window !== "undefined") {
+  apiKey = sessionStorage.getItem(API_KEY_STORAGE) || "";
+}
 
 export function setApiKey(key: string) {
   apiKey = key;
@@ -13,8 +19,8 @@ export function setApiKey(key: string) {
 }
 
 export function getApiKey(): string {
-  if (apiKey) return apiKey;
-  if (typeof window !== "undefined") {
+  // Re-read from sessionStorage if in-memory value is empty (e.g. after SSR hydration)
+  if (!apiKey && typeof window !== "undefined") {
     apiKey = sessionStorage.getItem(API_KEY_STORAGE) || "";
   }
   return apiKey;
@@ -32,6 +38,6 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   const key = getApiKey();
   const headers = new Headers(options.headers || {});
   if (key) headers.set("x-api-key", key);
-  
+
   return fetch(url, { ...options, headers });
 }

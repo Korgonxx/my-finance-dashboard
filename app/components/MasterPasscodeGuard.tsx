@@ -9,6 +9,7 @@ export function MasterPasscodeGuard({ isDark, children }: { isDark: boolean; chi
   const [digits, setDigits] = useState(["", "", "", "", "", ""]);
   const [error, setError] = useState(false);
   const [shake, setShake] = useState(false);
+  const [loading, setLoading] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
@@ -18,17 +19,15 @@ export function MasterPasscodeGuard({ isDark, children }: { isDark: boolean; chi
     }
   }, [appPasscodeVerified]);
 
-  // This is the key fix:
-  // Always render exactly the same thing on server + client’s FIRST render
   const showOverlay = mounted && !appPasscodeVerified;
 
   if (!showOverlay) {
     return <>{children}</>;
   }
 
-  // ====================== PASS CODE LOGIC ======================
-  const handleDigit = (val: string, idx: number) => {
-    if (!/^\d?$/.test(val)) return;
+  // FIX: handleDigit now calls async verifyAppPasscode (server-side bcrypt)
+  const handleDigit = async (val: string, idx: number) => {
+    if (!/^\d?$/.test(val) || loading) return;
     const next = [...digits];
     next[idx] = val;
     setDigits(next);
@@ -37,7 +36,9 @@ export function MasterPasscodeGuard({ isDark, children }: { isDark: boolean; chi
     if (val && idx < 5) inputRefs.current[idx + 1]?.focus();
 
     if (next.every((d) => d !== "") && val) {
-      const ok = verifyAppPasscode(next.join(""));
+      setLoading(true);
+      const ok = await verifyAppPasscode(next.join(""));
+      setLoading(false);
       if (!ok) {
         setShake(true);
         setError(true);
@@ -58,7 +59,6 @@ export function MasterPasscodeGuard({ isDark, children }: { isDark: boolean; chi
 
   const filled = digits.filter((d) => d !== "").length;
 
-  // ====================== OVERLAY UI ======================
   return (
     <>
       {children}
@@ -83,6 +83,7 @@ export function MasterPasscodeGuard({ isDark, children }: { isDark: boolean; chi
           .passcode-digit:focus{border-color:#f5ff5e;background:rgba(245,255,94,0.05);box-shadow:0 0 0 4px rgba(245,255,94,0.1);}
           .passcode-digit.filled{border-color:rgba(255,255,255,0.18);background:rgba(255,255,255,0.07);}
           .passcode-digit.error{border-color:#ff3d6b!important;background:rgba(255,61,107,0.06)!important;box-shadow:0 0 0 4px rgba(255,61,107,0.12)!important;}
+          .passcode-digit:disabled{opacity:0.5;cursor:not-allowed;}
         `}</style>
 
         <div
@@ -148,13 +149,12 @@ export function MasterPasscodeGuard({ isDark, children }: { isDark: boolean; chi
             {digits.map((d, i) => (
               <input
                 key={i}
-                ref={(el) => {
-                  inputRefs.current[i] = el;
-                }}
+                ref={(el) => { inputRefs.current[i] = el; }}
                 type="password"
                 inputMode="numeric"
                 maxLength={1}
                 value={d}
+                disabled={loading}
                 onChange={(e) => handleDigit(e.target.value, i)}
                 onKeyDown={(e) => handleKey(e, i)}
                 className={`passcode-digit${d ? " filled" : ""}${error ? " error" : ""}`}
@@ -177,7 +177,23 @@ export function MasterPasscodeGuard({ isDark, children }: { isDark: boolean; chi
             ))}
           </div>
 
-          {error && (
+          {loading && (
+            <div
+              style={{
+                padding: "8px 20px",
+                borderRadius: 99,
+                background: "rgba(245,255,94,0.1)",
+                border: "1px solid rgba(245,255,94,0.2)",
+                fontSize: 13,
+                color: "#f5ff5e",
+                fontWeight: 700,
+              }}
+            >
+              Verifying...
+            </div>
+          )}
+
+          {error && !loading && (
             <div
               style={{
                 padding: "8px 20px",
@@ -192,7 +208,7 @@ export function MasterPasscodeGuard({ isDark, children }: { isDark: boolean; chi
               ✕ Incorrect passcode
             </div>
           )}
-          {!error && filled === 0 && (
+          {!error && !loading && filled === 0 && (
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.18)" }}>Default: 123456</div>
           )}
         </div>

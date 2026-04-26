@@ -9,8 +9,9 @@ function toDbMode(mode: string): string {
 }
 
 export async function GET(req: NextRequest) {
-  const mode = toDbMode(req.nextUrl.searchParams.get("mode") ?? "banks");
-  
+  const rawMode = req.nextUrl.searchParams.get("mode") ?? "banks";
+  const mode = toDbMode(rawMode);
+
   try {
     if (mode === "web3") {
       const row = await db.cryptoDashboardGoal.findFirst();
