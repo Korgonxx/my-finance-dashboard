@@ -2,236 +2,157 @@
 @tailwind components;
 @tailwind utilities;
 
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+/* Ledger — Pastel Finance Dashboard */
+@layer base {
+  :root {
+    --background: 152 50% 86%;
+    --foreground: 220 18% 14%;
+
+    --surface: 40 38% 97%;
+    --surface-foreground: 220 18% 14%;
+
+    --card: 40 38% 97%;
+    --card-foreground: 220 18% 14%;
+
+    --popover: 40 38% 98%;
+    --popover-foreground: 220 18% 14%;
+
+    --primary: 220 18% 12%;
+    --primary-foreground: 40 38% 97%;
+
+    --secondary: 40 30% 92%;
+    --secondary-foreground: 220 18% 14%;
+
+    --muted: 40 24% 90%;
+    --muted-foreground: 220 10% 42%;
+
+    --accent: 152 60% 78%;
+    --accent-foreground: 220 18% 14%;
+
+    --destructive: 0 78% 60%;
+    --destructive-foreground: 40 38% 97%;
+
+    --success: 152 56% 42%;
+    --warning: 38 92% 56%;
+
+    --border: 40 22% 88%;
+    --input: 40 22% 88%;
+    --ring: 220 18% 14%;
+
+    --radius: 1.25rem;
+
+    /* Pastel tile palette */
+    --tile-pink: 6 82% 86%;
+    --tile-pink-fg: 0 60% 28%;
+    --tile-yellow: 42 96% 80%;
+    --tile-yellow-fg: 28 60% 24%;
+    --tile-lavender: 252 70% 88%;
+    --tile-lavender-fg: 252 40% 26%;
+    --tile-mint: 152 56% 80%;
+    --tile-mint-fg: 152 50% 18%;
+    --tile-peach: 22 92% 84%;
+    --tile-peach-fg: 18 60% 26%;
+    --tile-blue: 210 80% 86%;
+    --tile-blue-fg: 220 50% 22%;
+
+    --shadow-card: 0 1px 0 0 hsl(40 22% 88%), 0 24px 48px -28px hsl(220 30% 18% / 0.18);
+    --shadow-pill: 0 6px 20px -8px hsl(220 30% 18% / 0.25);
+
+    --sidebar-background: 40 38% 97%;
+    --sidebar-foreground: 220 12% 36%;
+    --sidebar-primary: 220 18% 12%;
+    --sidebar-primary-foreground: 40 38% 97%;
+    --sidebar-accent: 40 30% 92%;
+    --sidebar-accent-foreground: 220 18% 14%;
+    --sidebar-border: 40 22% 88%;
+    --sidebar-ring: 220 18% 14%;
+  }
+
+  .dark {
+    --background: 220 18% 8%;
+    --foreground: 40 38% 96%;
+    --surface: 220 18% 12%;
+    --card: 220 18% 12%;
+    --card-foreground: 40 38% 96%;
+    --primary: 40 38% 96%;
+    --primary-foreground: 220 18% 12%;
+    --secondary: 220 14% 18%;
+    --secondary-foreground: 40 38% 96%;
+    --muted: 220 14% 18%;
+    --muted-foreground: 220 8% 65%;
+    --accent: 152 40% 40%;
+    --accent-foreground: 40 38% 96%;
+    --border: 220 14% 20%;
+    --input: 220 14% 20%;
+    --ring: 40 38% 96%;
+    --surface-foreground: 40 38% 96%;
+    --shadow-card: 0 1px 0 0 hsl(220 14% 20%), 0 24px 48px -28px hsl(0 0% 0% / 0.4);
+
+    --tile-pink: 6 50% 28%;
+    --tile-pink-fg: 6 82% 86%;
+    --tile-yellow: 42 60% 24%;
+    --tile-yellow-fg: 42 96% 80%;
+    --tile-lavender: 252 40% 26%;
+    --tile-lavender-fg: 252 70% 88%;
+    --tile-mint: 152 40% 18%;
+    --tile-mint-fg: 152 56% 80%;
+    --tile-peach: 18 50% 22%;
+    --tile-peach-fg: 22 92% 84%;
+    --tile-blue: 220 40% 20%;
+    --tile-blue-fg: 210 80% 86%;
+  }
 }
 
-html {
-  scroll-behavior: smooth;
+@layer base {
+  * { @apply border-border; }
+  html, body { @apply min-h-screen; }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02","cv03","cv04","cv11","ss01";
+    font-family: var(--font-inter, "Inter"), ui-sans-serif, system-ui, sans-serif;
+  }
+  .font-display {
+    font-family: var(--font-display, "Space Grotesk"), var(--font-inter, "Inter"), ui-sans-serif, system-ui, sans-serif;
+  }
 }
 
-body {
-  background: #09090B;
-  color: #fafafa;
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+@layer components {
+  .surface {
+    background: hsl(var(--surface));
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-card);
+  }
+  .pill {
+    @apply inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition;
+  }
+  .pill-dark {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    box-shadow: var(--shadow-pill);
+  }
+  .pill-light {
+    background: hsl(var(--surface));
+    color: hsl(var(--foreground));
+    border: 1px solid hsl(var(--border));
+  }
 }
 
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb {
-  background: rgba(128,128,128,0.25);
-  border-radius: 99px;
-}
+::-webkit-scrollbar-thumb { background: hsl(40 18% 78%); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(220 12% 50%); }
+.dark ::-webkit-scrollbar-thumb { background: hsl(220 14% 28%); }
 
-input[type=number]::-webkit-inner-spin-button { opacity: 0.4; }
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fade-in 0.4s cubic-bezier(0.4,0,0.2,1); }
 
-/* Custom scrollbar for the new UI */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(128,128,128,0.2);
-  border-radius: 99px;
-}
-
-/* Hide scrollbar for category pills */
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
-}
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-/* Safe area for mobile bottom nav */
-.pb-safe {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-/* ===== ANIMATIONS ===== */
-
-/* Fade in */
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-/* Zoom + fade */
-@keyframes zoomIn95 {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-/* Slide up + fade */
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* Slide from top */
-@keyframes slideInFromTop4 {
-  from { opacity: 0; transform: translateY(-16px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* Slide from bottom */
-@keyframes slideInFromBottom {
-  from { opacity: 0; transform: translateY(16px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* Scale bounce */
-@keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.9); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-/* Shimmer loading */
-@keyframes shimmer {
-  from { background-position: -200% 0; }
-  to { background-position: 200% 0; }
-}
-
-/* Pulse glow */
-@keyframes pulseGlow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(212, 254, 68, 0.3); }
-  50% { box-shadow: 0 0 20px 4px rgba(212, 254, 68, 0.15); }
-}
-
-/* Float */
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
-}
-
-/* Stagger children */
-@keyframes staggerFadeUp {
-  from { opacity: 0; transform: translateY(16px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* Base animation class */
-.animate-in {
-  animation-duration: 300ms;
-  animation-fill-mode: both;
-  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
-}
-.fade-in { animation-name: fadeIn; }
-.zoom-in-95 { animation-name: zoomIn95; }
-.slide-up { animation-name: slideUp; }
-.slide-in-from-top-4 { animation-name: slideInFromTop4; }
-.slide-in-from-bottom { animation-name: slideInFromBottom; }
-.scale-in { animation-name: scaleIn; }
-.duration-200 { animation-duration: 200ms; }
-.duration-300 { animation-duration: 300ms; }
-.duration-500 { animation-duration: 500ms; }
-
-/* Card hover lift */
-.card-hover {
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
-}
-.card-hover:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
-}
-
-/* Stat card hover glow */
-.stat-card {
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.stat-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
-}
-
-/* Button press effect */
-.btn-press {
-  transition: transform 0.1s ease, background-color 0.15s ease;
-}
-.btn-press:active {
-  transform: scale(0.96);
-}
-
-/* Entry row hover */
-.entry-row {
-  transition: all 0.15s ease;
-}
-.entry-row:hover {
-  background-color: rgba(255, 255, 255, 0.03);
-  transform: translateX(2px);
-}
-
-/* Modal backdrop */
-.modal-backdrop {
-  animation: fadeIn 200ms ease forwards;
-}
-.modal-content {
-  animation: scaleIn 300ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-/* Stagger children - use with CSS custom property --stagger */
-.stagger-child {
-  opacity: 0;
-  animation: staggerFadeUp 400ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  animation-delay: calc(var(--stagger, 0) * 60ms);
-}
-
-/* Skeleton loading shimmer */
-.skeleton {
-  background: linear-gradient(90deg, #1a1a1e 25%, #252528 50%, #1a1a1e 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-  border-radius: 8px;
-}
-
-/* Pulse glow for CTA */
-.pulse-glow {
-  animation: pulseGlow 2s infinite;
-}
-
-/* Floating animation */
-.float-animation {
-  animation: float 3s ease-in-out infinite;
-}
-
-/* Sidebar link transition */
-.nav-link {
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.nav-link:hover {
-  transform: translateX(2px);
-}
-
-/* Card entrance for grids */
-.card-enter {
-  opacity: 0;
-  animation: slideUp 400ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-.card-enter:nth-child(1) { animation-delay: 0ms; }
-.card-enter:nth-child(2) { animation-delay: 60ms; }
-.card-enter:nth-child(3) { animation-delay: 120ms; }
-.card-enter:nth-child(4) { animation-delay: 180ms; }
-.card-enter:nth-child(5) { animation-delay: 240ms; }
-.card-enter:nth-child(6) { animation-delay: 300ms; }
-
-/* Smooth tab transition */
-.tab-content {
-  animation: fadeIn 250ms ease forwards;
-}
-
-/* Notification badge bounce */
-@keyframes badgeBounce {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.2); }
-}
-.badge-bounce {
-  animation: badgeBounce 0.3s ease;
+@keyframes shake {
+  10%, 90% { transform: translateX(-2px); }
+  20%, 80% { transform: translateX(3px); }
+  30%, 50%, 70% { transform: translateX(-6px); }
+  40%, 60% { transform: translateX(6px); }
 }

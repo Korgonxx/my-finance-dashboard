@@ -1,256 +1,230 @@
 "use client";
 import { useEntries } from "../../lib/hooks/useEntries";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   LineChart, Line, BarChart, Bar, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis,
+  PieChart, Pie, Cell,
 } from "recharts";
-import {
-  TrendingUp, BarChart2, Activity, Target, ArrowUpRight, ArrowDownRight
-} from "lucide-react";
+import { TrendingUp, BarChart2, Activity, Target, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { useWeb3 } from "../context/Web3Context";
-import { useAppSettings } from "../context/AppSettingsContext";
-import { MasterPasscodeGuard } from "../components/MasterPasscodeGuard";
-import { Sidebar, THEME } from "../components/Sidebar";
-import { PageTransition } from "../components/PageTransition";
 
+const BRAND = "#C8FF00";
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const PIE_COLORS = [BRAND, "#FF6B6B", "#818CF8", "#34D399", "#F59E0B", "#06B6D4"];
 
 export default function PerformancePage() {
-  // FIX: Use Web3Context mode directly instead of duplicating state
-  const { isWeb3, mode, setMode } = useWeb3();
-  const { isDark, setIsDark } = useAppSettings();
-  const [chartType, setChartType] = useState<"bar" | "line" | "radar">("bar");
+  const { isWeb3, mode } = useWeb3();
+  const [chartType, setChartType] = useState<"bar"|"area"|"line">("bar");
 
-  const T = isDark ? THEME.dark : THEME.light;
-
-  // FIX: Pass isWeb3 from context — updates automatically when mode changes
   const { web2Entries, web3Entries } = useEntries(isWeb3);
   const entries = isWeb3 ? web3Entries : web2Entries;
 
-  const perfMode = mode; // alias for readability
-
   const perfData = MONTHS.map(month => {
     const me = entries.filter(e => MONTHS[new Date(e.date).getMonth()] === month);
-    const earned = me.reduce((s, e) => s + e.earned, 0);
-    const saved  = me.reduce((s, e) => s + e.saved, 0);
-    const given  = me.reduce((s, e) => s + e.given, 0);
-    const roi    = earned > 0 ? parseFloat(((saved / earned) * 100).toFixed(1)) : 0;
+    const earned = me.reduce((s,e) => s+e.earned, 0);
+    const saved  = me.reduce((s,e) => s+e.saved, 0);
+    const given  = me.reduce((s,e) => s+e.given, 0);
+    const roi    = earned > 0 ? parseFloat(((saved/earned)*100).toFixed(1)) : 0;
     return { month, earned, saved, given, roi };
   });
 
   const activeData = perfData.filter(d => d.earned > 0 || d.saved > 0);
-
-  const totalEarned = entries.reduce((s, e) => s + e.earned, 0);
-  const totalSaved  = entries.reduce((s, e) => s + e.saved, 0);
-  const totalGiven  = entries.reduce((s, e) => s + e.given, 0);
-  const avgRoi = activeData.length > 0
-    ? (activeData.reduce((s, d) => s + d.roi, 0) / activeData.length).toFixed(1)
-    : "0.0";
-  const bestMonth = activeData.reduce((best, d) => d.roi > (best?.roi ?? -Infinity) ? d : best, activeData[0]);
+  const totalEarned = entries.reduce((s,e) => s+e.earned, 0);
+  const totalSaved  = entries.reduce((s,e) => s+e.saved, 0);
+  const totalGiven  = entries.reduce((s,e) => s+e.given, 0);
+  const avgRoi = activeData.length > 0 ? (activeData.reduce((s,d) => s+d.roi,0)/activeData.length).toFixed(1) : "0.0";
+  const bestMonth = activeData.reduce((b,d) => d.roi>(b?.roi??-Infinity)?d:b, activeData[0]);
   const netIncome = totalEarned - totalGiven;
 
-  const catMap: Record<string, number> = {};
-  entries.forEach(e => { catMap[e.givenTo || "Other"] = (catMap[e.givenTo || "Other"] || 0) + e.earned; });
-  const catColors = [T.yellow, T.green, T.blue, T.purple, T.red];
-  const catData = Object.entries(catMap).map(([name, value], i) => ({
-    name, value, color: catColors[i % catColors.length]
-  }));
+  const catMap: Record<string,number> = {};
+  entries.forEach(e => { catMap[e.givenTo||"Other"] = (catMap[e.givenTo||"Other"]||0)+e.given; });
+  const catData = Object.entries(catMap).slice(0,6).map(([name, value],i) => ({ name, value, color: PIE_COLORS[i%PIE_COLORS.length] }));
 
-  const fmt = (n: number) =>
-    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
+  const fmt = (n: number) => n >= 1000 ? `$${(n/1000).toFixed(1)}k` : `$${n.toFixed(0)}`;
+
+  const ChartComponent = chartType === 'area' ? AreaChart : chartType === 'line' ? LineChart : BarChart;
+
+  const customTooltipStyle = { background:'#161618', borderRadius:12, border:'1px solid rgba(255,255,255,0.08)', color:'#fff', padding:'10px 14px' };
 
   return (
-    <MasterPasscodeGuard isDark={isDark}>
-      <PageTransition>
-        <style>{`
-          .bento-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; }
-          .bento-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px rgba(0,0,0,0.08); }
-        `}</style>
+    <div className="bg-[#080809] min-h-screen text-white font-sans">
+      {/* Header */}
+      <div className="border-b border-white/5 px-4 md:px-8 py-5">
+        <h1 className="text-lg font-bold text-white">Performance Analytics</h1>
+        <p className="text-xs text-white/25 mt-0.5">{mode === 'banks' ? 'Banking' : 'Crypto'} · {entries.length} transactions</p>
+      </div>
 
-        <div style={{ display: "flex", minHeight: "100vh", background: T.bg, fontFamily: "'Outfit', sans-serif", color: T.textPri }}>
-          <Sidebar isDark={isDark} setIsDark={setIsDark} />
+      <div className="p-4 md:p-8 space-y-6 pb-24 md:pb-8">
 
-          <main style={{ marginLeft: 80, flex: 1, padding: "2.5rem 3rem", maxWidth: 1400, margin: "0 auto", width: "calc(100% - 80px)" }}>
-
-            {/* Header */}
-            <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "3rem" }}>
-              <div>
-                <h1 style={{ fontSize: 42, fontWeight: 800, letterSpacing: "-0.04em", marginBottom: 8 }}>
-                  Performance
-                </h1>
-                {/* FIX: Mode buttons now use Web3Context setMode to keep global state in sync */}
-                <div style={{ display: "flex", gap: 12 }}>
-                  {(["banks", "crypto"] as const).map(m => (
-                    <button
-                      key={m}
-                      onClick={() => setMode(m)}
-                      style={{
-                        padding: "8px 20px", borderRadius: 99, border: "none", fontSize: 13, fontWeight: 700,
-                        background: perfMode === m ? T.textPri : T.pill,
-                        color: perfMode === m ? T.bg : T.textSec,
-                        cursor: "pointer", transition: "all 0.2s"
-                      }}>
-                      {m.toUpperCase()}
-                    </button>
-                  ))}
+        {/* KPI row */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label:'Total Earned', value: fmt(totalEarned), sub:`+${totalEarned>0?((totalSaved/totalEarned)*100).toFixed(0):0}% saved`, color:'#34D399', icon: ArrowDownRight },
+            { label:'Total Spent',  value: fmt(totalGiven),  sub: totalEarned>0?`${((totalGiven/totalEarned)*100).toFixed(0)}% of income`:'—', color:'#FF6B6B', icon: ArrowUpRight },
+            { label:'Net Income',   value: fmt(netIncome),   sub: netIncome>=0?'Positive balance':'Negative balance', color: netIncome>=0?BRAND:'#FF6B6B', icon: TrendingUp },
+            { label:'Avg ROI',      value: `${avgRoi}%`,     sub: bestMonth?`Best: ${bestMonth.month}`:'No data yet', color:'#818CF8', icon: Target },
+          ].map((s,i) => (
+            <div key={i} className="bg-[#0E0E11] border border-white/5 rounded-2xl p-5 hover:border-white/10 transition-all">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-semibold text-white/30 uppercase tracking-wider">{s.label}</p>
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background:`${s.color}15` }}>
+                  <s.icon size={14} style={{ color:s.color }}/>
                 </div>
               </div>
-              <div style={{ display: "flex", gap: 12 }}>
-                <div style={{ display: "flex", background: T.pill, borderRadius: 16, padding: 4 }}>
-                  {(["bar", "line", "radar"] as const).map(type => (
-                    <button
-                      key={type}
-                      onClick={() => setChartType(type)}
-                      style={{
-                        padding: "8px 16px", borderRadius: 12, border: "none", fontSize: 12, fontWeight: 700,
-                        background: chartType === type ? T.yellow : "transparent",
-                        color: chartType === type ? "#000" : T.textSec,
-                        cursor: "pointer", transition: "all 0.2s"
-                      }}>
-                      {type.toUpperCase()}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </header>
+              <p className="text-2xl font-bold mb-1" style={{ color:s.color }}>{s.value}</p>
+              <p className="text-xs text-white/25">{s.sub}</p>
+            </div>
+          ))}
+        </div>
 
-            {/* Bento Grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: "1.5rem", gridAutoRows: "minmax(160px, auto)" }}>
-
-              {/* Metrics */}
-              {[
-                { label: "Total Earned", value: fmt(totalEarned), icon: TrendingUp, color: T.yellow, sub: `${entries.length} entries` },
-                { label: "Savings Rate", value: `${totalEarned > 0 ? ((totalSaved / totalEarned) * 100).toFixed(1) : "0"}%`, icon: Target, color: T.green, sub: fmt(totalSaved) },
-                { label: "Avg ROI", value: `${avgRoi}%`, icon: BarChart2, color: T.blue, sub: bestMonth ? `Best: ${bestMonth.month}` : "N/A" },
-                { label: "Net Margin", value: `${totalEarned > 0 ? ((netIncome / totalEarned) * 100).toFixed(1) : "0"}%`, icon: Activity, color: netIncome >= 0 ? T.green : T.red, sub: fmt(netIncome) }
-              ].map((m, i) => (
-                <div key={i} className="bento-card" style={{
-                  gridColumn: "span 3", background: T.card, borderRadius: 32, padding: "1.5rem",
-                  border: `1px solid ${T.border}`, display: "flex", flexDirection: "column", justifyContent: "space-between"
-                }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ width: 40, height: 40, borderRadius: 12, background: `${m.color}20`, display: "flex", alignItems: "center", justifyContent: "center", color: m.color }}>
-                      <m.icon size={20} />
-                    </div>
-                    <ArrowUpRight size={16} color={T.textMut} />
-                  </div>
-                  <div style={{ marginTop: "1rem" }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: T.textSec, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>{m.label}</div>
-                    <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em" }}>{m.value}</div>
-                    <div style={{ fontSize: 12, color: T.textMut, marginTop: 4 }}>{m.sub}</div>
-                  </div>
-                </div>
+        {/* Main chart */}
+        <div className="bg-[#0E0E11] border border-white/5 rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-5">
+            <p className="text-sm font-bold text-white">Monthly Overview</p>
+            <div className="flex gap-1 bg-white/4 rounded-lg p-1">
+              {(['bar','area','line'] as const).map(t => (
+                <button key={t} onClick={() => setChartType(t)}
+                  className="px-3 py-1.5 rounded-md text-xs font-semibold capitalize transition-all"
+                  style={{ background: chartType===t ? BRAND : 'transparent', color: chartType===t ? '#000' : 'rgba(255,255,255,0.3)' }}>
+                  {t}
+                </button>
               ))}
+            </div>
+          </div>
+          <div className="h-[280px]">
+            <ResponsiveContainer width="100%" height="100%">
+              {chartType === 'area' ? (
+                <AreaChart data={perfData} margin={{top:10,right:0,left:-20,bottom:0}}>
+                  <defs>
+                    <linearGradient id="earnGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={BRAND} stopOpacity={0.3}/><stop offset="95%" stopColor={BRAND} stopOpacity={0}/></linearGradient>
+                    <linearGradient id="givenGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#FF6B6B" stopOpacity={0.3}/><stop offset="95%" stopColor="#FF6B6B" stopOpacity={0}/></linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="2 2" stroke="rgba(255,255,255,0.04)" vertical={false}/>
+                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fontSize:11,fill:'rgba(255,255,255,0.25)',fontWeight:600}} dy={10}/>
+                  <YAxis axisLine={false} tickLine={false} tick={{fontSize:11,fill:'rgba(255,255,255,0.25)'}} tickFormatter={fmt}/>
+                  <Tooltip contentStyle={customTooltipStyle}/>
+                  <Area type="monotone" dataKey="earned" stroke={BRAND} fill="url(#earnGrad)" strokeWidth={2} dot={false}/>
+                  <Area type="monotone" dataKey="given" stroke="#FF6B6B" fill="url(#givenGrad)" strokeWidth={2} dot={false}/>
+                </AreaChart>
+              ) : chartType === 'line' ? (
+                <LineChart data={perfData} margin={{top:10,right:0,left:-20,bottom:0}}>
+                  <CartesianGrid strokeDasharray="2 2" stroke="rgba(255,255,255,0.04)" vertical={false}/>
+                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fontSize:11,fill:'rgba(255,255,255,0.25)',fontWeight:600}} dy={10}/>
+                  <YAxis axisLine={false} tickLine={false} tick={{fontSize:11,fill:'rgba(255,255,255,0.25)'}} tickFormatter={fmt}/>
+                  <Tooltip contentStyle={customTooltipStyle}/>
+                  <Line type="monotone" dataKey="earned" stroke={BRAND} strokeWidth={2.5} dot={{ fill:BRAND, r:4 }} activeDot={{ r:6 }}/>
+                  <Line type="monotone" dataKey="given" stroke="#FF6B6B" strokeWidth={2.5} dot={{ fill:'#FF6B6B', r:4 }} activeDot={{ r:6 }}/>
+                  <Line type="monotone" dataKey="saved" stroke="#818CF8" strokeWidth={2} strokeDasharray="4 2" dot={false}/>
+                </LineChart>
+              ) : (
+                <BarChart data={perfData} margin={{top:10,right:0,left:-20,bottom:0}} barSize={20}>
+                  <CartesianGrid strokeDasharray="2 2" stroke="rgba(255,255,255,0.04)" vertical={false}/>
+                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fontSize:11,fill:'rgba(255,255,255,0.25)',fontWeight:600}} dy={10}/>
+                  <YAxis axisLine={false} tickLine={false} tick={{fontSize:11,fill:'rgba(255,255,255,0.25)'}} tickFormatter={fmt}/>
+                  <Tooltip contentStyle={customTooltipStyle}/>
+                  <Bar dataKey="earned" fill={BRAND} radius={[6,6,0,0]}/>
+                  <Bar dataKey="given" fill="rgba(255,107,107,0.7)" radius={[6,6,0,0]}/>
+                </BarChart>
+              )}
+            </ResponsiveContainer>
+          </div>
+          <div className="flex items-center gap-5 mt-3">
+            <div className="flex items-center gap-1.5"><span className="w-3 h-2 rounded-sm inline-block" style={{background:BRAND}}/><span className="text-xs text-white/30">Income</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-3 h-2 rounded-sm inline-block bg-[#FF6B6B]/70"/><span className="text-xs text-white/30">Expenses</span></div>
+            {chartType==='line' && <div className="flex items-center gap-1.5"><span className="w-3 h-2 rounded-sm inline-block bg-[#818CF8]"/><span className="text-xs text-white/30">Saved</span></div>}
+          </div>
+        </div>
 
-              {/* Main Chart Card */}
-              <div className="bento-card" style={{
-                gridColumn: "span 8", gridRow: "span 3", background: T.card, borderRadius: 32,
-                padding: "2.5rem", border: `1px solid ${T.border}`
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2.5rem" }}>
-                  <div>
-                    <h3 style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.02em" }}>Growth Analytics</h3>
-                    <p style={{ fontSize: 13, color: T.textSec }}>
-                      {chartType === "bar" ? "Monthly financial distribution" : "Performance trends over time"}
-                    </p>
-                  </div>
-                  <div style={{ display: "flex", gap: 12 }}>
-                    {[{ c: T.yellow, l: "Earned" }, { c: T.green, l: "Saved" }, { c: T.red, l: "Given" }].map(x => (
-                      <div key={x.l} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <div style={{ width: 8, height: 8, borderRadius: 3, background: x.c }} />
-                        <span style={{ fontSize: 11, fontWeight: 700, color: T.textSec }}>{x.l}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div style={{ height: 380 }}>
+        {/* ROI + Breakdown row */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* ROI bar */}
+          <div className="bg-[#0E0E11] border border-white/5 rounded-2xl p-5">
+            <p className="text-sm font-bold text-white mb-5">Savings ROI by Month</p>
+            <div className="h-[200px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={perfData} margin={{top:5,right:0,left:-30,bottom:0}} barSize={14}>
+                  <CartesianGrid strokeDasharray="2 2" stroke="rgba(255,255,255,0.04)" vertical={false}/>
+                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fontSize:10,fill:'rgba(255,255,255,0.25)',fontWeight:600}} dy={8}/>
+                  <YAxis axisLine={false} tickLine={false} tick={{fontSize:10,fill:'rgba(255,255,255,0.25)'}} tickFormatter={v=>`${v}%`}/>
+                  <Tooltip contentStyle={customTooltipStyle} formatter={(v:any) => [`${v}%`, 'ROI']}/>
+                  <Bar dataKey="roi" radius={[4,4,0,0]}>
+                    {perfData.map((d,i) => <Cell key={i} fill={d.roi>0?BRAND:'rgba(255,107,107,0.5)'}/>)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Category breakdown */}
+          <div className="bg-[#0E0E11] border border-white/5 rounded-2xl p-5">
+            <p className="text-sm font-bold text-white mb-5">Spending by Category</p>
+            {catData.length === 0 ? (
+              <div className="h-[200px] flex items-center justify-center text-white/20">
+                <p className="text-sm">No spending data yet</p>
+              </div>
+            ) : (
+              <div className="flex items-center gap-4">
+                <div className="w-40 h-40 flex-shrink-0">
                   <ResponsiveContainer width="100%" height="100%">
-                    {chartType === "bar" ? (
-                      <BarChart data={perfData} barCategoryGap="35%" barGap={6}>
-                        <CartesianGrid strokeDasharray="0" stroke={T.border} vertical={false} />
-                        <XAxis dataKey="month" tick={{ fill: T.textMut, fontSize: 11, fontWeight: 600 }} axisLine={false} tickLine={false} />
-                        <YAxis hide />
-                        <Tooltip cursor={{ fill: T.pill }} contentStyle={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16 }} />
-                        <Bar dataKey="earned" fill={T.yellow} radius={[8, 8, 8, 8]} />
-                        <Bar dataKey="saved" fill={T.green} radius={[8, 8, 8, 8]} />
-                        <Bar dataKey="given" fill={T.red} radius={[8, 8, 8, 8]} />
-                      </BarChart>
-                    ) : chartType === "line" ? (
-                      <AreaChart data={perfData}>
-                        <defs>
-                          <linearGradient id="colorEarned" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor={T.yellow} stopOpacity={0.3} />
-                            <stop offset="95%" stopColor={T.yellow} stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="0" stroke={T.border} vertical={false} />
-                        <XAxis dataKey="month" tick={{ fill: T.textMut, fontSize: 11, fontWeight: 600 }} axisLine={false} tickLine={false} />
-                        <YAxis hide />
-                        <Tooltip contentStyle={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16 }} />
-                        <Area type="monotone" dataKey="earned" stroke={T.yellow} strokeWidth={4} fillOpacity={1} fill="url(#colorEarned)" />
-                        <Area type="monotone" dataKey="saved" stroke={T.green} strokeWidth={4} fill="transparent" />
-                      </AreaChart>
-                    ) : (
-                      <RadarChart cx="50%" cy="50%" outerRadius="80%" data={perfData}>
-                        <PolarGrid stroke={T.border} />
-                        <PolarAngleAxis dataKey="month" tick={{ fill: T.textMut, fontSize: 11 }} />
-                        <Radar name="Earned" dataKey="earned" stroke={T.yellow} fill={T.yellow} fillOpacity={0.4} />
-                        <Radar name="Saved" dataKey="saved" stroke={T.green} fill={T.green} fillOpacity={0.4} />
-                      </RadarChart>
-                    )}
+                    <PieChart>
+                      <Pie data={catData} cx="50%" cy="50%" innerRadius={35} outerRadius={60} paddingAngle={3} dataKey="value" stroke="none">
+                        {catData.map((d,i) => <Cell key={i} fill={d.color}/>)}
+                      </Pie>
+                      <Tooltip contentStyle={customTooltipStyle} formatter={(v:any) => [`$${Number(v).toLocaleString()}`, '']}/>
+                    </PieChart>
                   </ResponsiveContainer>
                 </div>
-              </div>
-
-              {/* Category Breakdown Card */}
-              <div className="bento-card" style={{
-                gridColumn: "span 4", gridRow: "span 3", background: T.card, borderRadius: 32,
-                padding: "2.5rem", border: `1px solid ${T.border}`
-              }}>
-                <div style={{ marginBottom: "2rem" }}>
-                  <h3 style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.02em" }}>Categories</h3>
-                  <p style={{ fontSize: 13, color: T.textSec }}>Distribution of income sources</p>
+                <div className="flex-1 space-y-2.5 min-w-0">
+                  {catData.map((d,i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background:d.color }}/>
+                      <span className="text-xs text-white/50 truncate flex-1">{d.name}</span>
+                      <span className="text-xs font-bold text-white/70">{fmt(d.value)}</span>
+                    </div>
+                  ))}
                 </div>
-                {catData.length === 0 ? (
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 280, color: T.textMut }}>
-                    <Activity size={40} style={{ opacity: 0.2, marginBottom: 12 }} />
-                    <div style={{ fontSize: 14 }}>No data yet</div>
-                  </div>
-                ) : (
-                  <>
-                    <div style={{ height: 220, marginBottom: "2rem" }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie data={catData} innerRadius={60} outerRadius={80} paddingAngle={8} dataKey="value">
-                            {catData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
-                            ))}
-                          </Pie>
-                          <Tooltip contentStyle={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12 }} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      {catData.slice(0, 4).map((cat, i) => (
-                        <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <div style={{ width: 10, height: 10, borderRadius: 3, background: cat.color }} />
-                            <span style={{ fontSize: 14, fontWeight: 600, color: T.textSec }}>{cat.name}</span>
-                          </div>
-                          <span style={{ fontSize: 14, fontWeight: 800 }}>{fmt(cat.value)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
               </div>
-
-            </div>
-          </main>
+            )}
+          </div>
         </div>
-      </PageTransition>
-    </MasterPasscodeGuard>
+
+        {/* Monthly table */}
+        <div className="bg-[#0E0E11] border border-white/5 rounded-2xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-white/5">
+            <p className="text-sm font-bold text-white">Monthly Breakdown</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/5">
+                  {['Month','Income','Expenses','Saved','ROI'].map(h => (
+                    <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-white/30 uppercase tracking-wider">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {perfData.filter(d => d.earned > 0 || d.given > 0 || d.saved > 0).map((d, i) => (
+                  <tr key={d.month} className={`border-b border-white/4 hover:bg-white/2 transition-all ${i%2===0?'':'bg-white/[0.01]'}`}>
+                    <td className="px-5 py-3.5 font-semibold text-white/70">{d.month}</td>
+                    <td className="px-5 py-3.5 font-bold" style={{ color:BRAND }}>{fmt(d.earned)}</td>
+                    <td className="px-5 py-3.5 font-bold text-[#FF6B6B]">{fmt(d.given)}</td>
+                    <td className="px-5 py-3.5 font-bold text-[#818CF8]">{fmt(d.saved)}</td>
+                    <td className="px-5 py-3.5">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-lg ${d.roi>0?'text-emerald-400 bg-emerald-400/10':'text-white/30 bg-white/5'}`}>
+                        {d.roi}%
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+                {activeData.length === 0 && (
+                  <tr><td colSpan={5} className="px-5 py-10 text-center text-white/20 text-sm">No performance data yet</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

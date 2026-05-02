@@ -1,2990 +1,1382 @@
 "use client";
-import { useExchangeRates } from "./lib/useExchangeRates";
-import { apiFetch, setApiKey, clearApiKey } from "./lib/apiClient";
-
-import React, { useState, useMemo, useEffect } from 'react';
+import React, {
+  useState, useMemo, useEffect, useRef, useCallback,
+} from "react";
+import { apiFetch, setApiKey } from "./lib/apiClient";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, AreaChart, Area, CartesianGrid
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer,
 } from "recharts";
 import {
-  Bell, Home, Search, LayoutGrid, PieChart, Wallet, CreditCard,
-  ArrowUpRight, ArrowDownRight, Plus, Monitor, Edit2, Trash2, X, User,
-  MoreHorizontal, Briefcase, Zap, Shield, HelpCircle, Settings, ChevronRight, Calendar,
-  Sun, Moon, Camera, Mail, Smartphone, Key, MapPin, Globe, CheckCircle2, Lock, Menu,
-  TrendingUp, TrendingDown, RefreshCw, Snowflake, Eye, EyeOff, ExternalLink, Activity, ArrowRightLeft, Download
+  Home, Wallet, CreditCard, Target, BarChart3, Settings, Cloud, Lock,
+  Bell, Plus, Search, ArrowUpRight, MoreHorizontal, Star, Wifi,
+  Copy, Check, Upload, Download, KeyRound, ShieldCheck, ShieldAlert,
+  Eye, EyeOff, Trash2, X, ChevronRight, TrendingUp, Send, Inbox,
+  Menu,
 } from "lucide-react";
 import Image from "next/image";
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { useWeb3 } from "./context/Web3Context";
+import { useAppSettings } from "./context/AppSettingsContext";
 
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
+// ─── Types ────────────────────────────────────────────────────────────────────
+type Tile = "pink" | "yellow" | "lavender" | "mint" | "peach" | "blue";
+type CurrencyCode = "USD" | "EUR" | "GBP";
+type ThemeMode = "light" | "dark" | "system";
+type Period = "Daily" | "Weekly" | "Monthly" | "Yearly";
+type EntryType = "income" | "expense" | "transfer" | "send" | "receive";
+
+interface Entry {
+  id: string; type: EntryType; amount: number; currency: CurrencyCode;
+  category: string; walletId: string; note: string; date: string;
 }
+interface Wallet { id: string; name: string; bank: string; currency: CurrencyCode; balance: number; tile: Tile; address?: string; }
+interface Card { id: string; label: string; brand: "Visa" | "Mastercard" | "Amex"; last4: string; walletId: string; tile: Tile; holder?: string; expiry?: string; }
+interface Goal { id: string; name: string; target: number; current: number; deadline: string; tile: Tile; }
+interface ActivityItem { id: string; action: string; detail: string; at: string; }
+interface Notification { id: string; title: string; body: string; at: string; read: boolean; }
+interface SeriesPoint { d: string; income: number; spent: number; balance: number; }
 
-type Mode = "banks" | "crypto";
-
-type Entry = {
-  id: string;
-  date: string;
-  project: string;
-  earned: number;
-  saved: number;
-  given: number;
-  givenTo: string;
-  mode: Mode;
-  walletId?: string;
+// ─── Design tokens ────────────────────────────────────────────────────────────
+const TILE: Record<Tile, { bg: string; fg: string; chip: string }> = {
+  pink:     { bg: "bg-tile-pink",     fg: "text-[hsl(var(--tile-pink-fg))]",     chip: "bg-[hsl(var(--tile-pink-fg)_/_0.08)] text-[hsl(var(--tile-pink-fg))]" },
+  yellow:   { bg: "bg-tile-yellow",   fg: "text-[hsl(var(--tile-yellow-fg))]",   chip: "bg-[hsl(var(--tile-yellow-fg)_/_0.08)] text-[hsl(var(--tile-yellow-fg))]" },
+  lavender: { bg: "bg-tile-lavender", fg: "text-[hsl(var(--tile-lavender-fg))]", chip: "bg-[hsl(var(--tile-lavender-fg)_/_0.08)] text-[hsl(var(--tile-lavender-fg))]" },
+  mint:     { bg: "bg-tile-mint",     fg: "text-[hsl(var(--tile-mint-fg))]",     chip: "bg-[hsl(var(--tile-mint-fg)_/_0.08)] text-[hsl(var(--tile-mint-fg))]" },
+  peach:    { bg: "bg-tile-peach",    fg: "text-[hsl(var(--tile-peach-fg))]",    chip: "bg-[hsl(var(--tile-peach-fg)_/_0.08)] text-[hsl(var(--tile-peach-fg))]" },
+  blue:     { bg: "bg-tile-blue",     fg: "text-[hsl(var(--tile-blue-fg))]",     chip: "bg-[hsl(var(--tile-blue-fg)_/_0.08)] text-[hsl(var(--tile-blue-fg))]" },
 };
+const TILES: Tile[] = ["pink", "yellow", "lavender", "mint", "peach", "blue"];
+const CATEGORIES = ["All","Housing","Food","Transport","Shopping","Entertainment","Income"];
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const FX: Record<CurrencyCode, number> = { USD: 1, EUR: 1.07, GBP: 1.27 };
 
-import { useAppSettings } from './context/AppSettingsContext';
-// Korgon Brand Colors
-const BRAND = "#D4FE44";
-const SURFACE = "#131316";
-const BORDER = "#222226";
+const SEED_MONTHLY: SeriesPoint[] = [
+  { d:"Nov", income:7400, spent:4500, balance:26110 },
+  { d:"Dec", income:7800, spent:4680, balance:28420 },
+  { d:"Jan", income:5200, spent:3200, balance:30420 },
+  { d:"Feb", income:5400, spent:3650, balance:32170 },
+  { d:"Mar", income:5600, spent:3100, balance:34670 },
+  { d:"Apr", income:6800, spent:4200, balance:37270 },
+];
+const SEED_DAILY: SeriesPoint[] = [
+  { d:"Mon", income:1200, spent:420, balance:36050 },
+  { d:"Tue", income:800,  spent:610, balance:36240 },
+  { d:"Wed", income:0,    spent:380, balance:35860 },
+  { d:"Thu", income:2400, spent:720, balance:37540 },
+  { d:"Fri", income:600,  spent:980, balance:37160 },
+  { d:"Sat", income:0,    spent:540, balance:36620 },
+  { d:"Sun", income:1800, spent:220, balance:38200 },
+];
+const SEED_WEEKLY: SeriesPoint[] = [
+  { d:"W1", income:3200, spent:1450, balance:33820 },
+  { d:"W2", income:2800, spent:1820, balance:34800 },
+  { d:"W3", income:4100, spent:2240, balance:36660 },
+  { d:"W4", income:3700, spent:1960, balance:38400 },
+];
+const SEED_YEARLY: SeriesPoint[] = [
+  { d:"2022", income:62000, spent:41000, balance:18200 },
+  { d:"2023", income:71000, spent:46500, balance:22500 },
+  { d:"2024", income:84000, spent:52400, balance:28800 },
+  { d:"2025", income:96000, spent:58200, balance:32100 },
+  { d:"2026", income:38000, spent:23400, balance:37270 },
+];
 
-const COLORS = [BRAND, "#3B82F6", "#A855F7", "#F97316"];
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const fmt = (n: number, c: CurrencyCode = "USD") =>
+  new Intl.NumberFormat("en-US", { style:"currency", currency:c, maximumFractionDigits: n%1===0?0:2 }).format(n);
 
-// Entries are fetched from API
+function Avatar({ src, alt, size = 48 }: { src: string; alt: string; size?: number }) {
+  if (src.startsWith("data:")) return <img src={src} alt={alt} width={size} height={size} className="w-full h-full object-cover" />;
+  return <Image src={src} alt={alt} width={size} height={size} className="object-cover w-full h-full" referrerPolicy="no-referrer" />;
+}
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-// --- Entry Modal Component with real form fields ---
-function EntryModal({ onClose, onSave, mode, bankCards, wallets }: { 
-  onClose: () => void; 
-  onSave: (entry: Omit<Entry, 'id'>) => void;
-  mode: Mode;
-  bankCards: Array<{ id: string; name: string; last4: string }>;
-  wallets: Array<{ id: string; name: string; address: string }>;
-}) {
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const { rates, convert, formatCurrency } = useExchangeRates();
-  const [project, setProject] = useState("");
-  const [earned, setEarned] = useState("");
-  const [saved, setSaved] = useState("");
-  const [given, setGiven] = useState("");
-  const [givenTo, setGivenTo] = useState("");
-  const [categories, setCategories] = useState<Array<{id: string; name: string; icon: string; color: string; imageUrl: string | null}>>([]);
-  const [showNewCat, setShowNewCat] = useState(false);
-  const [newCatName, setNewCatName] = useState("");
-  const [newCatIcon, setNewCatIcon] = useState("📁");
-  const [newCatImage, setNewCatImage] = useState<string | null>(null);
-
-  useEffect(() => {
-    apiFetch("/api/banks-categories").then(r => r.json()).then(setCategories).catch(() => {});
-  }, []);
-
-  const addCategory = async () => {
-    if (!newCatName.trim()) return;
-    try {
-      const res = await apiFetch("/api/banks-categories", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newCatName.trim(), icon: newCatIcon, imageUrl: newCatImage }),
-      });
-      if (res.ok) {
-        const cat = await res.json();
-        setCategories(prev => [...prev, cat].sort((a, b) => a.name.localeCompare(b.name)));
-        setGivenTo(cat.name);
-        setShowNewCat(false);
-        setNewCatName("");
-        setNewCatImage(null);
-      }
-    } catch {}
-  };
-
-  const [walletId, setWalletId] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-
-  const items = mode === 'banks' 
-    ? bankCards.map(c => ({ id: c.id, label: `${c.name} (**** ${c.last4})` }))
-    : wallets.map(w => ({ id: w.id, label: `${w.name} (${w.address.slice(0,6)}...${w.address.slice(-4)})` }));
-
-  const handleSubmit = async () => {
-    setSubmitting(true);
-    try {
-      await onSave({
-        date,
-        project,
-        earned: parseFloat(earned) || 0,
-        saved: parseFloat(saved) || 0,
-        given: parseFloat(given) || 0,
-        givenTo,
-        mode,
-        walletId: walletId || undefined,
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
+// ─── Chart tooltip ────────────────────────────────────────────────────────────
+function ChartTip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm modal-backdrop">
-      <div className="bg-[#131316] border border-[#222226] max-w-md w-full rounded-3xl p-8 shadow-2xl relative modal-content">
-        <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-zinc-400 hover:text-zinc-50 hover:bg-white/10 transition-colors">
-          <X size={18} />
-        </button>
-        <h2 className="text-2xl font-semibold mb-2 text-zinc-50">New Transaction</h2>
-        <p className="text-sm text-zinc-400 mb-8">Record your incoming and outgoing finances.</p>
-        
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label htmlFor="entryDate" className="text-xs font-medium text-zinc-400">Date</label>
-              <input
-                id="entryDate"
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="entryCategory" className="text-xs font-medium text-zinc-400">Category</label>
-              {showNewCat ? (
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <select value={newCatIcon} onChange={e => setNewCatIcon(e.target.value)} className="w-14 bg-[#09090B] border border-[#222226] rounded-xl px-2 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]">
-                      {["📁","💰","🍔","🚗","🛍️","📄","🎬","💊","📚","💻","📈","📊","🎮","✈️","🏠","⚡","🎯","🔥","💎","🌐"].map(e => <option key={e} value={e}>{e}</option>)}
-                    </select>
-                    <input type="text" value={newCatName} onChange={e => setNewCatName(e.target.value)} onKeyDown={e => e.key === "Enter" && addCategory()} placeholder="Category name" className="flex-1 bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]" />
-                    <button onClick={addCategory} className="px-3 py-2.5 bg-[#D4FE44] text-black rounded-xl text-sm font-bold">✓</button>
-                    <button onClick={() => { setShowNewCat(false); setNewCatImage(null); }} className="px-3 py-2.5 bg-white/5 text-zinc-400 rounded-xl text-sm">✕</button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <label className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg cursor-pointer transition-colors">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-400"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-                      <span className="text-xs text-zinc-400">Custom icon</span>
-                      <input type="file" accept="image/*" className="hidden" onChange={e => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          if (file.size > 500 * 1024) { alert('Image must be under 500KB'); return; }
-                          const reader = new FileReader();
-                          reader.onload = () => setNewCatImage(reader.result as string);
-                          reader.readAsDataURL(file);
-                        }
-                      }} />
-                    </label>
-                    {newCatImage && (
-                      <div className="flex items-center gap-1.5">
-                        <img src={newCatImage} alt="" className="w-6 h-6 rounded object-cover" />
-                        <button onClick={() => setNewCatImage(null)} className="text-xs text-zinc-500 hover:text-red-400">remove</button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="flex gap-2">
-                  <select id="entryCategory" value={givenTo} onChange={e => e.target.value === "__new__" ? setShowNewCat(true) : setGivenTo(e.target.value)} className="flex-1 bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]">
-                    <option value="">Select category...</option>
-                    {categories.map(c => <option key={c.id} value={c.name}>{c.icon} {c.name}</option>)}
-                    <option value="__new__">+ New Category</option>
-                  </select>
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <label htmlFor="entryProject" className="text-xs font-medium text-zinc-400">Project / Description</label>
-            <input
-              id="entryProject"
-              type="text"
-              value={project}
-              onChange={(e) => setProject(e.target.value)}
-              placeholder="e.g. Client project, ETH staking"
-              className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
-            />
-          </div>
-          {items.length > 0 && (
-          <div className="space-y-1.5">
-            <label htmlFor="entryWallet" className="text-xs font-medium text-zinc-400">{mode === 'banks' ? 'Card' : 'Wallet'}</label>
-            <select id="entryWallet" value={walletId} onChange={e => setWalletId(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors">
-              <option value="">Select {mode === 'banks' ? 'card' : 'wallet'}...</option>
-              {items.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
-            </select>
-          </div>
-          )}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-1.5">
-              <label htmlFor="entryEarned" className="text-xs font-medium text-zinc-400">Earned</label>
-              <input
-                id="entryEarned"
-                type="number"
-                value={earned}
-                onChange={(e) => setEarned(e.target.value)}
-                placeholder="0"
-                className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="entrySaved" className="text-xs font-medium text-zinc-400">Saved</label>
-              <input
-                id="entrySaved"
-                type="number"
-                value={saved}
-                onChange={(e) => setSaved(e.target.value)}
-                placeholder="0"
-                className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="entryGiven" className="text-xs font-medium text-zinc-400">Given</label>
-              <input
-                id="entryGiven"
-                type="number"
-                value={given}
-                onChange={(e) => setGiven(e.target.value)}
-                placeholder="0"
-                className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
-              />
-            </div>
-          </div>
-          <div className="flex gap-3 pt-4">
-            <button onClick={onClose} className="flex-1 py-3.5 bg-white/5 hover:bg-white/10 transition-colors text-zinc-300 rounded-2xl font-medium">Cancel</button>
-            <button
-              onClick={handleSubmit}
-              disabled={submitting || !project}
-              className={cn(
-                "flex-[2] py-3.5 rounded-2xl font-semibold transition-colors shadow-[0_0_20px_rgba(212,254,68,0.2)] flex items-center justify-center gap-2",
-                submitting || !project
-                  ? "bg-[#D4FE44]/70 text-[#0A0A0A]/70 cursor-not-allowed"
-                  : "bg-[#D4FE44] text-[#0A0A0A] hover:bg-[#bceb29]"
-              )}
-            >
-              {submitting ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-[#0A0A0A]/50 border-t-[#0A0A0A] rounded-full animate-spin"></div>
-                  Saving...
-                </>
-              ) : "Add Transaction"}
-            </button>
-          </div>
+    <div className="surface px-3 py-2 text-xs shadow-lg">
+      <div className="mb-1 font-semibold">{label}</div>
+      {payload.map((p: any) => (
+        <div key={p.dataKey} className="flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full" style={{ background: p.color }} />
+          <span className="text-muted-foreground">{p.name}:</span>
+          <span className="font-semibold">{fmt(p.value)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Modal ────────────────────────────────────────────────────────────────────
+function Modal({ onClose, title, children }: { onClose:()=>void; title:string; children:React.ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-foreground/20 backdrop-blur-sm">
+      <div className="surface w-full sm:max-w-[460px] rounded-t-[28px] sm:rounded-[28px] overflow-hidden">
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
+          <h2 className="font-display text-xl font-semibold">{title}</h2>
+          <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-full hover:bg-secondary transition text-muted-foreground hover:text-foreground">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="p-6">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmDelete({ title, onConfirm, onClose }: { title:string; onConfirm:()=>void; onClose:()=>void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/20 backdrop-blur-sm">
+      <div className="surface max-w-sm w-full p-6 text-center">
+        <div className="grid h-14 w-14 place-items-center rounded-2xl bg-destructive/10 mx-auto mb-4"><Trash2 className="h-6 w-6 text-destructive" /></div>
+        <h3 className="font-display text-lg font-semibold mb-1">Delete?</h3>
+        <p className="text-sm text-muted-foreground mb-6">{title}</p>
+        <div className="flex gap-3">
+          <button onClick={onClose} className="pill pill-light flex-1 justify-center">Cancel</button>
+          <button onClick={onConfirm} className="pill flex-1 justify-center bg-destructive text-destructive-foreground">Delete</button>
         </div>
       </div>
     </div>
   );
 }
 
-// --- Edit Modal Component ---
-function EditModal({ entry, onClose, onSave, mode, bankCards, wallets }: {
-  entry: Entry;
-  onClose: () => void;
-  onSave: (entry: Entry) => void;
-  mode: Mode;
-  bankCards: Array<{ id: string; name: string; last4: string }>;
-  wallets: Array<{ id: string; name: string; address: string }>;
-}) {
-  const [date, setDate] = useState(entry.date);
-  const [project, setProject] = useState(entry.project);
-  const [earned, setEarned] = useState(String(entry.earned));
-  const [saved, setSaved] = useState(String(entry.saved));
-  const [given, setGiven] = useState(String(entry.given));
-  const [givenTo, setGivenTo] = useState(entry.givenTo);
-  const [categories, setCategories] = useState<Array<{id: string; name: string; icon: string; color: string; imageUrl: string | null}>>([]);
-  const [showNewCat, setShowNewCat] = useState(false);
-  const [newCatName, setNewCatName] = useState("");
-  const [newCatIcon, setNewCatIcon] = useState("📁");
-  const [newCatImage, setNewCatImage] = useState<string | null>(null);
-
-  useEffect(() => {
-    apiFetch("/api/banks-categories").then(r => r.json()).then(setCategories).catch(() => {});
-  }, []);
-
-  const addCategory = async () => {
-    if (!newCatName.trim()) return;
-    try {
-      const res = await apiFetch("/api/banks-categories", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newCatName.trim(), icon: newCatIcon, imageUrl: newCatImage }),
-      });
-      if (res.ok) {
-        const cat = await res.json();
-        setCategories(prev => [...prev, cat].sort((a, b) => a.name.localeCompare(b.name)));
-        setGivenTo(cat.name);
-        setShowNewCat(false);
-        setNewCatName("");
-        setNewCatImage(null);
-      }
-    } catch {}
-  };
-
-  const [walletId, setWalletId] = useState(entry.walletId || "");
-  const [submitting, setSubmitting] = useState(false);
-
-  const items = mode === 'banks'
-    ? bankCards.map(c => ({ id: c.id, label: `${c.name} (**** ${c.last4})` }))
-    : wallets.map(w => ({ id: w.id, label: `${w.name} (${w.address.slice(0,6)}...${w.address.slice(-4)})` }));
-
-  const handleSubmit = async () => {
-    setSubmitting(true);
-    try {
-      await onSave({
-        ...entry,
-        date,
-        project,
-        earned: parseFloat(earned) || 0,
-        saved: parseFloat(saved) || 0,
-        given: parseFloat(given) || 0,
-        givenTo,
-        mode,
-        walletId: walletId || undefined,
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
+function Field({ label, children }: { label:string; children:React.ReactNode }) {
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm modal-backdrop">
-      <div className="bg-[#131316] border border-[#222226] max-w-md w-full rounded-3xl p-8 shadow-2xl relative modal-content">
-        <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-zinc-400 hover:text-zinc-50 hover:bg-white/10 transition-colors">
-          <X size={18} />
-        </button>
-        <h2 className="text-2xl font-semibold mb-2 text-zinc-50">Edit Transaction</h2>
-        <p className="text-sm text-zinc-400 mb-8">Update your transaction details.</p>
+    <div className="space-y-1.5">
+      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{label}</label>
+      {children}
+    </div>
+  );
+}
+function FInput(p: React.InputHTMLAttributes<HTMLInputElement>) {
+  return <input {...p} className={`h-11 w-full rounded-2xl border border-input bg-secondary/60 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 ${p.className||""}`} />;
+}
+function FSelect({ children, ...p }: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return <select {...p} className="h-11 w-full rounded-2xl border border-input bg-secondary/60 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 appearance-none">{children}</select>;
+}
 
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label htmlFor="editDate" className="text-xs font-medium text-zinc-400">Date</label>
-              <input
-                id="editDate"
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="editCategory" className="text-xs font-medium text-zinc-400">Category</label>
-              {showNewCat ? (
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <select value={newCatIcon} onChange={e => setNewCatIcon(e.target.value)} className="w-14 bg-[#09090B] border border-[#222226] rounded-xl px-2 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]">
-                      {["📁","💰","🍔","🚗","🛍️","📄","🎬","💊","📚","💻","📈","📊","🎮","✈️","🏠","⚡","🎯","🔥","💎","🌐"].map(e => <option key={e} value={e}>{e}</option>)}
-                    </select>
-                    <input type="text" value={newCatName} onChange={e => setNewCatName(e.target.value)} onKeyDown={e => e.key === "Enter" && addCategory()} placeholder="Category name" className="flex-1 bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]" />
-                    <button onClick={addCategory} className="px-3 py-2.5 bg-[#D4FE44] text-black rounded-xl text-sm font-bold">✓</button>
-                    <button onClick={() => { setShowNewCat(false); setNewCatImage(null); }} className="px-3 py-2.5 bg-white/5 text-zinc-400 rounded-xl text-sm">✕</button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <label className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg cursor-pointer transition-colors">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-400"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-                      <span className="text-xs text-zinc-400">Custom icon</span>
-                      <input type="file" accept="image/*" className="hidden" onChange={e => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          if (file.size > 500 * 1024) { alert('Image must be under 500KB'); return; }
-                          const reader = new FileReader();
-                          reader.onload = () => setNewCatImage(reader.result as string);
-                          reader.readAsDataURL(file);
-                        }
-                      }} />
-                    </label>
-                    {newCatImage && (
-                      <div className="flex items-center gap-1.5">
-                        <img src={newCatImage} alt="" className="w-6 h-6 rounded object-cover" />
-                        <button onClick={() => setNewCatImage(null)} className="text-xs text-zinc-500 hover:text-red-400">remove</button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="flex gap-2">
-                  <select id="editCategory" value={givenTo} onChange={e => e.target.value === "__new__" ? setShowNewCat(true) : setGivenTo(e.target.value)} className="flex-1 bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]">
-                    <option value="">Select category...</option>
-                    {categories.map(c => <option key={c.id} value={c.name}>{c.icon} {c.name}</option>)}
-                    <option value="__new__">+ New Category</option>
-                  </select>
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <label htmlFor="editProject" className="text-xs font-medium text-zinc-400">Project / Description</label>
-            <input
-              id="editProject"
-              type="text"
-              value={project}
-              onChange={(e) => setProject(e.target.value)}
-              placeholder="e.g. Client project, ETH staking"
-              className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
-            />
-          </div>
-          {items.length > 0 && (
-          <div className="space-y-1.5">
-            <label htmlFor="editWallet" className="text-xs font-medium text-zinc-400">{mode === 'banks' ? 'Card' : 'Wallet'}</label>
-            <select id="editWallet" value={walletId} onChange={e => setWalletId(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors">
-              <option value="">Select {mode === 'banks' ? 'card' : 'wallet'}...</option>
-              {items.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
-            </select>
-          </div>
-          )}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-1.5">
-              <label htmlFor="editEarned" className="text-xs font-medium text-zinc-400">Earned</label>
-              <input
-                id="editEarned"
-                type="number"
-                value={earned}
-                onChange={(e) => setEarned(e.target.value)}
-                placeholder="0"
-                className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="editSaved" className="text-xs font-medium text-zinc-400">Saved</label>
-              <input
-                id="editSaved"
-                type="number"
-                value={saved}
-                onChange={(e) => setSaved(e.target.value)}
-                placeholder="0"
-                className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="editGiven" className="text-xs font-medium text-zinc-400">Given</label>
-              <input
-                id="editGiven"
-                type="number"
-                value={given}
-                onChange={(e) => setGiven(e.target.value)}
-                placeholder="0"
-                className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
-              />
-            </div>
-          </div>
-          <div className="flex gap-3 pt-4">
-            <button onClick={onClose} className="flex-1 py-3.5 bg-white/5 hover:bg-white/10 transition-colors text-zinc-300 rounded-2xl font-medium">Cancel</button>
-            <button
-              onClick={handleSubmit}
-              disabled={submitting || !project}
-              className={cn(
-                "flex-[2] py-3.5 rounded-2xl font-semibold transition-colors shadow-[0_0_20px_rgba(212,254,68,0.2)] flex items-center justify-center gap-2",
-                submitting || !project
-                  ? "bg-[#D4FE44]/70 text-[#0A0A0A]/70 cursor-not-allowed"
-                  : "bg-[#D4FE44] text-[#0A0A0A] hover:bg-[#bceb29]"
-              )}
-            >
-              {submitting ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-[#0A0A0A]/50 border-t-[#0A0A0A] rounded-full animate-spin"></div>
-                  Saving...
-                </>
-              ) : "Save Changes"}
-            </button>
-          </div>
+// ─── Passcode lock screen ─────────────────────────────────────────────────────
+function PasscodeLock({ storedPasscode, onUnlock }: { storedPasscode: string; onUnlock: ()=>void }) {
+  const [value, setValue] = useState("");
+  const [shake, setShake] = useState(false);
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => { ref.current?.focus(); }, []);
+  const tryUnlock = (next: string) => {
+    if (next === storedPasscode) { sessionStorage.setItem("ledger.unlocked","1"); onUnlock(); }
+    else { setShake(true); setValue(""); setTimeout(() => setShake(false), 450); }
+  };
+  return (
+    <div onClick={() => ref.current?.focus()} className="fixed inset-0 z-50 grid place-items-center bg-background/80 backdrop-blur-xl p-6">
+      <div className={shake ? "animate-[shake_0.4s_ease-in-out]" : ""} style={{ display:"flex", flexDirection:"column", alignItems:"center", textAlign:"center" }}>
+        <div className="grid h-12 w-12 place-items-center rounded-full bg-secondary text-foreground ring-1 ring-border">
+          <Lock className="h-5 w-5" />
         </div>
+        <h1 className="mt-4 font-display text-lg font-semibold">Locked</h1>
+        <p className="mt-1 text-xs text-muted-foreground">Type your passcode</p>
+        <div className="mt-6 flex items-center gap-3">
+          {Array.from({ length: Math.max(storedPasscode.length, 6) }).map((_,i) => (
+            <span key={i} className={`h-2.5 w-2.5 rounded-full transition-all ${i < value.length ? "scale-110 bg-primary" : "bg-muted ring-1 ring-inset ring-border"}`} />
+          ))}
+        </div>
+        <input ref={ref} type="password" inputMode="numeric" value={value}
+          onChange={e => { const v = e.target.value.replace(/\D/g,"").slice(0, 8); setValue(v); if (v.length >= storedPasscode.length) setTimeout(() => tryUnlock(v), 60); }}
+          className="sr-only" />
+        <p className="mt-5 text-[11px] text-muted-foreground">Type your passcode to unlock</p>
       </div>
+      <style>{`@keyframes shake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(3px)}30%,50%,70%{transform:translateX(-6px)}40%,60%{transform:translateX(6px)}}`}</style>
     </div>
   );
 }
 
-function TransferModal({ onClose, onTransfer }: { onClose: () => void, onTransfer: (amount: number, fromCard: string, toCard: string) => void }) {
-  const [amount, setAmount] = useState("");
-  const [fromCard, setFromCard] = useState("card1");
-  const [toCard, setToCard] = useState("card2");
-  const [isTransferring, setIsTransferring] = useState(false);
+// ─── Sidebar ──────────────────────────────────────────────────────────────────
+const NAV = [
+  { label:"Home", icon:Home }, { label:"Wallets", icon:Wallet },
+  { label:"Cards", icon:CreditCard }, { label:"Goals", icon:Target },
+  { label:"Performance", icon:BarChart3 },
+];
+const NAV_BOTTOM = [{ label:"Sync", icon:Cloud }, { label:"Settings", icon:Settings }];
 
-  const cards = [
-    { id: "card1", name: "korgon Premium", last4: "4209" },
-    { id: "card2", name: "Virtual Card", last4: "8831" },
-  ];
-
-  const handleTransfer = async () => {
-    setIsTransferring(true);
-    try {
-      await onTransfer(Number(amount), fromCard, toCard);
-    } finally {
-      setIsTransferring(false);
-      onClose();
-    }
-  };
-
+function Sidebar({ active, setActive, avatarUrl, mobileOpen, setMobileOpen }: {
+  active:string; setActive:(t:string)=>void; avatarUrl:string; mobileOpen:boolean; setMobileOpen:(v:boolean)=>void;
+}) {
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm modal-backdrop">
-      <div className="bg-[#131316] border border-[#222226] max-w-md w-full rounded-3xl p-8 shadow-2xl relative modal-content">
-        <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-zinc-400 hover:text-zinc-50 hover:bg-white/10 transition-colors">
-          <X size={18} />
-        </button>
-        <h2 className="text-2xl font-bold mb-2 text-zinc-50 border-b-2 border-[#D4FE44] inline-block pb-1">Transfer Funds</h2>
-        <p className="text-sm text-zinc-400 mb-8 mt-2">Transfer between your bank cards.</p>
-        
-        <div className="space-y-5">
-          <div className="space-y-1.5">
-            <label htmlFor="transferFrom" className="text-xs font-medium text-zinc-400">From Card</label>
-            <select id="transferFrom" value={fromCard} onChange={e => setFromCard(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors">
-              {cards.map(c => <option key={c.id} value={c.id}>{c.name} (**** {c.last4})</option>)}
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <label htmlFor="transferTo" className="text-xs font-medium text-zinc-400">To Card</label>
-            <select id="transferTo" value={toCard} onChange={e => setToCard(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors">
-              {cards.filter(c => c.id !== fromCard).map(c => <option key={c.id} value={c.id}>{c.name} (**** {c.last4})</option>)}
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <label htmlFor="transferAmount" className="text-xs font-medium text-zinc-400">Amount</label>
-            <div className="relative">
-               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 font-bold">$</span>
-               <input 
-                 id="transferAmount"
-                 type="number" 
-                 value={amount}
-                 onChange={(e) => setAmount(e.target.value)}
-                 placeholder="0.00" 
-                 className="w-full bg-[#09090B] border border-[#222226] rounded-xl pl-8 pr-4 py-3 text-lg font-bold text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors" 
-               />
-            </div>
-          </div>
-          <div className="flex gap-3 pt-4">
-            <button onClick={onClose} className="flex-1 py-3.5 bg-white/5 hover:bg-white/10 transition-colors text-zinc-300 rounded-2xl font-semibold">Cancel</button>
-            <button 
-              onClick={handleTransfer} 
-              disabled={isTransferring || !amount || fromCard === toCard}
-              className={cn("flex-[2] py-3.5 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-[0_5px_20px_rgba(212,254,68,0.15)]", 
-                isTransferring || !amount || fromCard === toCard ? "bg-[#D4FE44]/70 text-[#0A0A0A]/70 cursor-not-allowed" : "bg-[#D4FE44] text-[#0A0A0A] hover:bg-[#bceb29] hover:-translate-y-0.5"
-              )}
-            >
-              {isTransferring ? (
-                 <>
-                   <div className="w-4 h-4 border-2 border-[#0A0A0A]/50 border-t-[#0A0A0A] rounded-full animate-spin"></div>
-                   Processing...
-                 </>
-              ) : "Transfer"}
-            </button>
-          </div>
+    <>
+      {mobileOpen && <div className="fixed inset-0 bg-foreground/30 z-40 md:hidden" onClick={() => setMobileOpen(false)} />}
+      <aside className={`fixed md:sticky top-0 md:top-4 z-50 md:z-auto h-screen md:h-[calc(100vh-2rem)] w-[72px] shrink-0 flex flex-col items-center gap-3 rounded-none md:rounded-[28px] border-r md:border border-border bg-[hsl(var(--surface))] py-5 shadow-[var(--shadow-card)] transition-transform md:translate-x-0 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}>
+        <div className="grid h-10 w-10 place-items-center rounded-2xl bg-primary text-primary-foreground">
+          <Lock className="h-4 w-4" strokeWidth={2.5} />
         </div>
-      </div>
-    </div>
+        <nav className="mt-2 flex flex-1 flex-col items-center gap-2">
+          {NAV.map(({ label, icon:Icon }) => {
+            const a = active === label;
+            return (
+              <button key={label} title={label} onClick={() => { setActive(label); setMobileOpen(false); }}
+                className={`group relative grid h-11 w-11 place-items-center rounded-2xl transition ${a ? "bg-primary text-primary-foreground shadow-[var(--shadow-pill)]" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}>
+                <Icon className="h-[18px] w-[18px]" />
+                <span className="pointer-events-none absolute left-14 whitespace-nowrap rounded-xl bg-primary px-2 py-1 text-xs font-semibold text-primary-foreground opacity-0 group-hover:opacity-100 transition-opacity hidden md:block z-50">{label}</span>
+              </button>
+            );
+          })}
+        </nav>
+        <div className="flex flex-col items-center gap-2">
+          {NAV_BOTTOM.map(({ label, icon:Icon }) => {
+            const a = active === label;
+            return (
+              <button key={label} title={label} onClick={() => { setActive(label); setMobileOpen(false); }}
+                className={`grid h-11 w-11 place-items-center rounded-2xl transition ${a ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}>
+                <Icon className="h-[18px] w-[18px]" />
+              </button>
+            );
+          })}
+          <button title="Settings" onClick={() => { setActive("Settings"); setMobileOpen(false); }} className="mt-1 h-9 w-9 overflow-hidden rounded-full ring-2 ring-[hsl(var(--surface))] hover:ring-primary transition-all">
+            <Avatar src={avatarUrl} alt="Profile" size={36} />
+          </button>
+        </div>
+      </aside>
+    </>
   );
 }
 
-function TransferToWeb2Modal({ onClose, onTransfer, bankCards, wallets, bankSymbol, bankCurrency, toBankDisplay }: { 
-  onClose: () => void; 
-  onTransfer: (amount: number, cardId: string, walletId: string) => void;
-  bankCards: Array<{ id: string; name: string; last4: string; balance: number }>;
-  wallets: Array<{ id: string; name: string; address: string; balance: number }>;
-  bankSymbol: string;
-  bankCurrency: string;
-  toBankDisplay: (amount: number) => string;
+// ─── Profile Panel (right sidebar) ───────────────────────────────────────────
+function ProfilePanel({ entries, wallets, notifications, onMarkRead, onNav, avatarUrl, userName, period, setPeriod }: {
+  entries:Entry[]; wallets:Wallet[]; notifications:Notification[]; onMarkRead:()=>void;
+  onNav:(t:string)=>void; avatarUrl:string; userName:string; period:Period; setPeriod:(p:Period)=>void;
 }) {
-  const [amount, setAmount] = useState("");
-  const [cardId, setCardId] = useState(bankCards[0]?.id || "");
-  const [walletId, setWalletId] = useState(wallets[0]?.id || "");
-  const [isTransferring, setIsTransferring] = useState(false);
+  const unread = notifications.filter(n => !n.read).length;
+  const [notifOpen, setNotifOpen] = useState(false);
 
-  const handleTransfer = async () => {
-    setIsTransferring(true);
-    try {
-      await onTransfer(Number(amount), cardId, walletId);
-    } finally {
-      setIsTransferring(false);
-      onClose();
-    }
+  const getSeries = (p: Period): SeriesPoint[] => {
+    if (p === "Daily") return SEED_DAILY;
+    if (p === "Weekly") return SEED_WEEKLY;
+    if (p === "Yearly") return SEED_YEARLY;
+    return SEED_MONTHLY;
   };
+  const data = getSeries(period);
+  const total = data.reduce((a,d) => a + d.income, 0);
 
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm modal-backdrop">
-      <div className="bg-[#131316] border border-[#222226] max-w-md w-full rounded-3xl p-8 shadow-2xl relative modal-content">
-        <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-zinc-400 hover:text-zinc-50 hover:bg-white/10 transition-colors">
-          <X size={18} />
-        </button>
-        <h2 className="text-2xl font-bold mb-2 text-zinc-50 border-b-2 border-emerald-400 inline-block pb-1">Transfer to Bank</h2>
-        <p className="text-sm text-zinc-400 mb-8 mt-2">Off-ramp crypto to your connected bank account.</p>
-        
-        <div className="space-y-5">
-          {wallets.length > 0 && (
-          <div className="space-y-1.5">
-            <label htmlFor="tweb2Wallet" className="text-xs font-medium text-zinc-400">From Wallet</label>
-            <select id="tweb2Wallet" value={walletId} onChange={e => setWalletId(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none focus:border-emerald-400 transition-colors">
-              {wallets.map(w => <option key={w.id} value={w.id}>{w.name} ({w.address.slice(0,6)}...{w.address.slice(-4)}) — ${w.balance.toFixed(2)}</option>)}
-            </select>
-          </div>
-          )}
-          {bankCards.length > 0 && (
-          <div className="space-y-1.5">
-            <label htmlFor="tweb2Card" className="text-xs font-medium text-zinc-400">To Card</label>
-            <select id="tweb2Card" value={cardId} onChange={e => setCardId(e.target.value)} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none focus:border-emerald-400 transition-colors">
-              {bankCards.map(c => <option key={c.id} value={c.id}>{c.name} (**** {c.last4}) — {bankSymbol}{toBankDisplay(c.balance)}</option>)}
-            </select>
-          </div>
-          )}
-          <div className="space-y-1.5">
-            <label htmlFor="tweb2Amount" className="text-xs font-medium text-zinc-400">Amount to Transfer (USD)</label>
-            <div className="relative">
-               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 font-bold">$</span>
-               <input 
-                 id="tweb2Amount"
-                 type="number" 
-                 value={amount}
-                 onChange={(e) => setAmount(e.target.value)}
-                 placeholder="0.00" 
-                 className="w-full bg-[#09090B] border border-[#222226] rounded-xl pl-8 pr-4 py-3 text-lg font-bold text-zinc-100 outline-none focus:border-emerald-400 transition-colors" 
-               />
-            </div>
-            {amount && Number(amount) > 0 && (
-              <p className="text-xs text-zinc-500 mt-1">≈ {bankSymbol}{toBankDisplay(Number(amount))} {bankCurrency}</p>
+    <aside className="sticky top-4 hidden h-fit w-[300px] shrink-0 flex-col gap-4 self-start lg:flex">
+      {/* Profile card */}
+      <div className="surface relative overflow-hidden p-5">
+        <div className="flex items-center justify-between">
+          <div className="relative">
+            <button onClick={() => setNotifOpen(!notifOpen)} className="relative grid h-9 w-9 place-items-center rounded-full border border-border bg-[hsl(var(--surface))] hover:bg-secondary transition">
+              <Bell className="h-4 w-4" />
+              {unread > 0 && <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">{unread}</span>}
+            </button>
+            {notifOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setNotifOpen(false)} />
+                <div className="absolute left-0 top-11 z-40 w-72 surface shadow-[var(--shadow-card)] overflow-hidden rounded-[20px]">
+                  <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                    <div><p className="font-display text-sm font-semibold">Notifications</p><p className="text-xs text-muted-foreground">{unread} unread</p></div>
+                    <button onClick={onMarkRead} className="text-xs font-semibold text-primary hover:underline">Mark all read</button>
+                  </div>
+                  <ul className="max-h-64 overflow-y-auto">
+                    {notifications.map(n => (
+                      <li key={n.id} className="flex items-start gap-3 border-b border-border/60 px-4 py-3 last:border-0">
+                        <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${n.read ? "bg-muted-foreground/30" : "bg-primary"}`} />
+                        <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{n.title}</p><p className="truncate text-xs text-muted-foreground">{n.body}</p></div>
+                        <span className="text-[10px] text-muted-foreground">{n.at}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </>
             )}
           </div>
-          <div className="flex gap-3 pt-4">
-            <button onClick={onClose} className="flex-1 py-3.5 bg-white/5 hover:bg-white/10 transition-colors text-zinc-300 rounded-2xl font-semibold">Cancel</button>
-            <button 
-              onClick={handleTransfer} 
-              disabled={isTransferring || !amount || Number(amount) <= 0 || !cardId || !walletId}
-              className={cn("flex-[2] py-3.5 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-[0_5px_20px_rgba(52,211,153,0.15)]", 
-                isTransferring || !amount || Number(amount) <= 0 || !cardId || !walletId ? "bg-emerald-400/70 text-[#0A0A0A]/70 cursor-not-allowed" : "bg-emerald-400 text-[#0A0A0A] hover:bg-emerald-300 hover:-translate-y-0.5"
-              )}
-            >
-              {isTransferring ? (
-                 <>
-                   <div className="w-4 h-4 border-2 border-[#0A0A0A]/50 border-t-[#0A0A0A] rounded-full animate-spin"></div>
-                   Processing...
-                 </>
-              ) : "Confirm Transfer"}
-            </button>
+          <button onClick={() => onNav("Settings")} className="grid h-9 w-9 place-items-center rounded-full border border-border bg-[hsl(var(--surface))] hover:bg-secondary transition"><Settings className="h-4 w-4" /></button>
+        </div>
+        <div className="mt-3 flex flex-col items-center text-center">
+          <div className="relative h-20 w-20 rounded-full overflow-hidden bg-tile-lavender ring-4 ring-[hsl(var(--surface))]">
+            <Avatar src={avatarUrl} alt="Profile" size={80} />
           </div>
+          <h3 className="mt-3 font-display text-lg font-semibold">{userName}</h3>
+          <p className="text-xs text-muted-foreground">Premium · {wallets.length} accounts</p>
+        </div>
+        <button onClick={() => onNav("Wallets")} className="mt-4 flex w-full items-center justify-between rounded-2xl bg-secondary px-4 py-3 text-sm hover:bg-muted transition">
+          <div className="flex items-center gap-2">
+            <span className="grid h-7 w-7 place-items-center rounded-full bg-primary text-primary-foreground text-[11px] font-semibold">{wallets.length}</span>
+            <span className="font-medium">Linked accounts</span>
+          </div>
+          <div className="flex items-center gap-1">
+            {TILES.slice(0,2).map(t => <span key={t} className={`h-5 w-5 rounded-full ${TILE[t].bg} ring-2 ring-secondary`} />)}
+            <ChevronRight className="ml-1 h-3.5 w-3.5 text-muted-foreground" />
+          </div>
+        </button>
+      </div>
+
+      {/* Activity chart */}
+      <div className="surface p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Activity</span>
+          <select value={period} onChange={e => setPeriod(e.target.value as Period)} className="rounded-full border border-border px-3 py-1 text-xs font-medium bg-transparent focus:outline-none cursor-pointer hover:bg-secondary transition">
+            {(["Daily","Weekly","Monthly","Yearly"] as Period[]).map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
+        <div className="flex items-end justify-between">
+          <div>
+            <p className="font-display text-2xl font-semibold tracking-tight">${(total/1000).toFixed(1)}k</p>
+            <p className="text-xs text-muted-foreground">{period.toLowerCase()} view</p>
+          </div>
+          <span className="rounded-full bg-tile-mint px-2.5 py-1 text-xs font-semibold text-[hsl(var(--tile-mint-fg))]">+{entries.filter(e=>e.type==="income"||e.type==="receive").length} in</span>
+        </div>
+        <div className="mt-3 h-28">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top:8, right:0, left:-28, bottom:0 }}>
+              <XAxis dataKey="d" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
+              <Tooltip cursor={{ fill:"hsl(var(--muted) / 0.4)" }} contentStyle={{ background:"hsl(var(--surface))", border:"1px solid hsl(var(--border))", borderRadius:12, fontSize:12 }} />
+              <Bar dataKey="income" fill="hsl(var(--tile-lavender))" radius={[8,8,8,8]} />
+              <Bar dataKey="spent" fill="hsl(var(--tile-pink))" radius={[8,8,8,8]} />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </div>
-    </div>
+    </aside>
   );
 }
 
-// --- Custom Chart Tooltip ---
-const CustomTooltip = ({ active, payload, label, selectedYear, currencySymbol, convertAmount }: any) => {
-  if (active && payload && payload.length) {
-    const sym = currencySymbol || '$';
-    const fmt = convertAmount || ((v: number) => v.toLocaleString());
-    return (
-      <div className="bg-[#131316] border border-[#222226] p-4 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.5)]">
-        <p className="font-bold text-zinc-100 mb-2">{label} {selectedYear}</p>
-        <div className="space-y-1">
-          <p className="text-sm font-semibold text-[#D4FE44]">
-            Income: {sym}{fmt(payload[0]?.value || 0)}
-          </p>
-          <p className="text-sm font-semibold text-zinc-300">
-            Expenses: {sym}{fmt(payload[1]?.value || 0)}
-          </p>
+// ─── New Entry Modal ──────────────────────────────────────────────────────────
+function NewEntryModal({ onClose, onSave, wallets }: { onClose:()=>void; onSave:(e:Omit<Entry,"id">)=>Promise<void>; wallets:Wallet[]; }) {
+  const [type, setType] = useState<"income"|"expense">("expense");
+  const [amount, setAmount] = useState(""); const [cat, setCat] = useState("Food");
+  const [walletId, setWalletId] = useState(wallets[0]?.id||""); const [note, setNote] = useState("");
+  const [date, setDate] = useState(new Date().toISOString().slice(0,10)); const [sub, setSub] = useState(false);
+  const submit = async () => { const a=parseFloat(amount); if(!a||!note.trim()) return; setSub(true); try { await onSave({type,amount:a,currency:"USD",category:cat,walletId,note:note.trim(),date}); } finally { setSub(false); } };
+  return (
+    <Modal onClose={onClose} title="New entry">
+      <div className="space-y-4">
+        <div className="flex gap-2">
+          {(["expense","income"] as const).map(t => <button key={t} onClick={()=>setType(t)} className={`pill flex-1 justify-center capitalize ${type===t?"pill-dark":"pill-light"}`}>{t}</button>)}
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Amount (USD)"><FInput type="number" step="0.01" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="0.00" /></Field>
+          <Field label="Date"><FInput type="date" value={date} onChange={e=>setDate(e.target.value)} /></Field>
+        </div>
+        <Field label="Category"><FSelect value={cat} onChange={e=>setCat(e.target.value)}>{CATEGORIES.filter(c=>c!=="All").map(c=><option key={c}>{c}</option>)}</FSelect></Field>
+        <Field label="Wallet"><FSelect value={walletId} onChange={e=>setWalletId(e.target.value)}>{wallets.map(w=><option key={w.id} value={w.id}>{w.name} · {w.bank}</option>)}</FSelect></Field>
+        <Field label="Note"><FInput value={note} onChange={e=>setNote(e.target.value)} placeholder="e.g. Trader Joe's groceries" /></Field>
+        <div className="flex gap-3 pt-2">
+          <button onClick={onClose} className="pill pill-light flex-1 justify-center">Cancel</button>
+          <button onClick={submit} disabled={sub||!amount||!note} className="pill pill-dark flex-[2] justify-center disabled:opacity-50">{sub?"Saving…":"Add entry"}</button>
         </div>
       </div>
-    );
-  }
-  return null;
+    </Modal>
+  );
+}
+
+// ─── Send / Receive Modals ────────────────────────────────────────────────────
+const CRYPTO_CURRENCIES = ["BTC","ETH","SOL","USDT","USDC","BNB","XRP","MATIC","AVAX","DOT"];
+const FIAT_CURRENCIES   = ["USD","EUR","GBP","INR","JPY","CAD","AUD","CHF","SGD","AED"];
+const ALL_CURRENCIES    = [...FIAT_CURRENCIES, ...CRYPTO_CURRENCIES];
+
+// Static approx rates vs USD (good enough for display preview)
+const RATE_VS_USD: Record<string, number> = {
+  USD:1, EUR:0.93, GBP:0.79, INR:83.2, JPY:154.3, CAD:1.37, AUD:1.54, CHF:0.90, SGD:1.35, AED:3.67,
+  BTC:0.0000159, ETH:0.000292, SOL:0.00612, USDT:1, USDC:1, BNB:0.00199, XRP:1.59, MATIC:1.47, AVAX:0.0309, DOT:0.133,
 };
 
-// --- Main Dashboard component ---
-export default function FinanceDashboard() {
-  const { changeAppPasscode: changeContextPasscode } = useAppSettings();
-  const [entries, setEntries] = useState<Entry[]>([]);
-  const [loadingEntries, setLoadingEntries] = useState(true);
-  const [mode, setMode] = useState<Mode>("banks");
-  const [filter, setFilter] = useState("All");
-  const [showAdd, setShowAdd] = useState(false);
-  const [showTransfer, setShowTransfer] = useState(false);
-  const [showTransferToWeb2, setShowTransferToWeb2] = useState(false);
-  const [deletingTransactionId, setDeletingTransactionId] = useState<string | null>(null);
-  const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
-  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
-  const [selectedYear, setSelectedYear] = useState<number>(2026);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [showSearch, setShowSearch] = useState(false);
-  const [activeTab, setActiveTab] = useState("Dashboard");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [web2Goal, setWeb2Goal] = useState({ amount: 10000, currency: "USD" });
-  const [web3Goal, setWeb3Goal] = useState({ amount: 5, currency: "ETH" });
-  const { convert } = useExchangeRates();
-  const [dbCategories, setDbCategories] = useState<Array<{id: string; name: string; icon: string; color: string; imageUrl: string | null}>>([]);
-  const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
-  const [newCatImageSettings, setNewCatImageSettings] = useState<string | null>(null);
-  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
-  const [editCatImage, setEditCatImage] = useState<string | null>(null);
-  useEffect(() => {
-    apiFetch("/api/banks-categories").then(r => r.json()).then(setDbCategories).catch(() => {});
-  }, []);
-  const bankCurrency = web2Goal.currency || 'USD';
-  const bankSymbol = bankCurrency === 'INR' ? '₹' : bankCurrency === 'EUR' ? '€' : bankCurrency === 'GBP' ? '£' : '$';
-  const toBankDisplay = (usdAmount: number) => {
-    if (bankCurrency === 'INR') return convert(usdAmount, 'INR').toLocaleString('en-IN', {minimumFractionDigits: 0, maximumFractionDigits: 0});
-    if (bankCurrency === 'EUR') return convert(usdAmount, 'EUR').toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    if (bankCurrency === 'GBP') return convert(usdAmount, 'GBP').toLocaleString('en-GB', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    return usdAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-  };
-  
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  
-  // Restore API key from session storage on mount
-  useEffect(() => {
-    const savedKey = typeof window !== "undefined" ? sessionStorage.getItem("fv_api_key") : null;
-    if (savedKey) {
-      setApiKey(savedKey);
-      setIsAuthenticated(true);
-    }
-  }, []);
-  const [appPasscode, setAppPasscode] = useState(""); // kept in memory for encryption
-  const [passcode, setPasscode] = useState("");
-  const [wrongPasscode, setWrongPasscode] = useState(false);
-  const [profilePic, setProfilePic] = useState<string>("https://picsum.photos/seed/avatar5/150/150");
-  const [firstName, setFirstName] = useState("Korgon");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState([
-    { id: 1, title: 'New login from Mac OS', time: '2 mins ago', read: false },
-    { id: 2, title: 'Transfer of $200.00 clear', time: '1 hour ago', read: false },
-    { id: 3, title: 'Your weekly report is ready', time: '1 day ago', read: true }
-  ]);
-  const unreadCount = notifications.filter(n => !n.read).length;
-  
-  const [securityCurrentPass, setSecurityCurrentPass] = useState("");
-  const [securityNewPass, setSecurityNewPass] = useState("");
-  const [securityPassMessage, setSecurityPassMessage] = useState({ text: "", type: "" });
-  
-  // Wallet state
-  type Wallet = { id: string; name: string; address: string; network: string; balance: number; createdAt: string; isEncrypted?: boolean; encryptedData?: any; };
-  const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [loadingWallets, setLoadingWallets] = useState(true);
-  const [showAddWallet, setShowAddWallet] = useState(false);
-  const [walletForm, setWalletForm] = useState({ name: '', address: '', network: 'Ethereum', balance: '', encrypt: false });
-  const [walletError, setWalletError] = useState('');
-  const [encryptPasscode, setEncryptPasscode] = useState('');
-  const [deletingWalletId, setDeletingWalletId] = useState<string | null>(null);
-  const [decryptingWalletId, setDecryptingWalletId] = useState<string | null>(null);
-  const [decryptPasscode, setDecryptPasscode] = useState('');
-  
-  // Fetch wallets from API
-  async function fetchWallets() {
-    try {
-      const res = await apiFetch('/api/wallets');
-      if (res.ok) { const data = await res.json(); setWallets(data); }
-    } catch {}
-    setLoadingWallets(false);
-  }
-  useEffect(() => { fetchWallets(); }, []);
-  
-  // Bank cards state
-  type BankCard = { id: string; name: string; last4: string; holder: string; expiry: string; type: 'physical' | 'virtual'; balance: number };
-  const [bankCards, setBankCards] = useState<BankCard[]>([]);
-  const [showAddCard, setShowAddCard] = useState(false);
-  const [cardForm, setCardForm] = useState({ name: '', last4: '', expiry: '', type: 'virtual' as 'physical' | 'virtual' });
-  const [cardError, setCardError] = useState('');
-  // Fetch cards from API on mount
-  async function fetchCards() {
-    try {
-      const res = await apiFetch('/api/cards');
-      if (res.ok) {
-        const data = await res.json();
-        setBankCards(data);
-      }
-    } catch {}
-  }
-  useEffect(() => { fetchCards(); }, []);
-  const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
-  
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+function fmtConverted(amount: number, from: string, to: string): string {
+  if (!amount || from === to) return "";
+  const inUSD   = amount / (RATE_VS_USD[from] ?? 1);
+  const inTo    = inUSD  * (RATE_VS_USD[to]   ?? 1);
+  const isCrypto = CRYPTO_CURRENCIES.includes(to);
+  return isCrypto ? `≈ ${inTo.toFixed(6)} ${to}` : `≈ ${inTo.toLocaleString("en-US", { maximumFractionDigits: 2 })} ${to}`;
+}
 
-  // Activity feed state
-  type Activity = { id: string; type: string; action: string; amount: number; date: string; mode: string };
-  const [activities, setActivities] = useState<Activity[]>([]);
-  async function fetchActivity() {
-    try {
-      const res = await apiFetch('/api/activity');
-      if (res.ok) setActivities(await res.json());
-    } catch {}
-  }
-  useEffect(() => { fetchActivity(); }, []);
+type SendDestType = "wallet" | "card";
 
-  async function deleteActivity(id: string, type: string) {
-    try {
-      await apiFetch(`/api/activity?id=${id}&type=${type}`, { method: 'DELETE' });
-      setActivities(prev => prev.filter(a => a.id !== id));
-    } catch {}
-  }
+function SendModal({ onClose, onSave, wallets, cards }: {
+  onClose: ()=>void;
+  onSave:  (e: Omit<Entry,"id">)=>Promise<void>;
+  wallets: Wallet[];
+  cards:   Card[];
+}) {
+  const [amount,   setAmount]   = useState("");
+  const [currency, setCurrency] = useState<string>("USD");
+  const [destType, setDestType] = useState<SendDestType>("wallet");
+  const [destId,   setDestId]   = useState(wallets[0]?.id ?? cards[0]?.id ?? "");
+  const [fromId,   setFromId]   = useState(wallets[0]?.id ?? "");
+  const [note,     setNote]     = useState("");
+  const [cat,      setCat]      = useState("Transfer");
+  const [date,     setDate]     = useState(new Date().toISOString().slice(0,10));
+  const [sub,      setSub]      = useState(false);
 
-  const handleProfileImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          setProfilePic(reader.result);
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
+  // When destType changes, reset destId to first valid option
+  const destOptions = destType === "wallet"
+    ? wallets.map(w => ({ id: w.id, label: `${w.name} · ${w.bank}`, sub: fmt(w.balance, w.currency) }))
+    : cards.map(c  => ({ id: c.id, label: `${c.label} ···${c.last4}`,  sub: c.brand }));
 
-  const handleSaveChanges = async () => {
-    setIsSaving(true);
+  const fromWallet  = wallets.find(w => w.id === fromId);
+  const converted   = fmtConverted(parseFloat(amount) || 0, currency, fromWallet?.currency ?? "USD");
+
+  const submit = async () => {
+    if (!amount || !destId) return;
+    setSub(true);
     try {
-      await apiFetch('/api/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          firstName,
-          lastName,
-          email,
-          avatarUrl: profilePic,
-          theme,
-          banksGoal: web2Goal.amount,
-          cryptoGoal: web3Goal.amount,
-        }),
+      await onSave({
+        type: "send",
+        amount: parseFloat(amount) || 0,
+        currency: (FIAT_CURRENCIES.includes(currency) ? currency : "USD") as CurrencyCode,
+        category: cat,
+        walletId: fromId,
+        note: note || `Sent to ${destOptions.find(d=>d.id===destId)?.label ?? destId}`,
+        date,
       });
-    } catch (err) {
-      console.error('[saveSettings] failed:', err);
-    }
-    setTimeout(() => setIsSaving(false), 500);
+    } finally { setSub(false); }
   };
 
-  const handleExportCSV = () => {
-    const headers = ["ID", "Date", "Project / Payee", "Category", "Amount Earned", "Amount Spent", "Savings"];
-    const csvRows = [headers.join(",")];
-    
-    filteredEntries.forEach(entry => {
-      const row = [
-        entry.id,
-        entry.date,
-        `"${entry.project.replace(/"/g, '""')}"`,
-        `"${entry.givenTo.replace(/"/g, '""')}"`,
-        entry.earned,
-        entry.given,
-        entry.saved
-      ];
-      csvRows.push(row.join(","));
-    });
+  const isCryptoSend = CRYPTO_CURRENCIES.includes(currency);
 
-    const csvData = csvRows.join("\n");
-    const blob = new Blob([csvData], { type: "text/csv;charset=utf-8;" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.setAttribute("href", url);
-    a.setAttribute("download", `korgon_export_${mode}_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-  };
-  
-  const filteredEntries = useMemo(() => {
-    let res = entries.filter(e => e.mode === mode && new Date(e.date).getFullYear() === selectedYear);
-    if (filter !== "All") {
-      const filterName = filter.replace(/^[\p{Emoji}\s]+/u, "").trim().toLowerCase();
-      res = res.filter(e => e.givenTo.toLowerCase() === filterName);
-    }
-    if (selectedMonth) res = res.filter(e => MONTHS[new Date(e.date).getMonth()] === selectedMonth);
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      res = res.filter(e => e.project.toLowerCase().includes(q) || e.givenTo.toLowerCase().includes(q));
-    }
-    return res.sort((a: any, b: any) => {
-      const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
-      if (dateDiff !== 0) return dateDiff;
-      // Same date → sort by createdAt (newest first)
-      if (a.createdAt && b.createdAt) return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      return 0;
-    });
-  }, [entries, mode, filter, selectedMonth, selectedYear, searchQuery]);
+  return (
+    <Modal onClose={onClose} title="Send Money">
+      <div className="space-y-4">
 
-  const categories = mode === "banks"
-    ? ["All", ...dbCategories.map(c => c.icon + " " + c.name)]
-    : ["All", ...Array.from(new Set(entries.filter(e => e.mode === mode).map(e => e.givenTo.toLowerCase())))].map(c => c === "All" ? c : c.charAt(0).toUpperCase() + c.slice(1));
-
-  const monthlyData = useMemo(() => {
-    return MONTHS.map(month => {
-      const me = entries.filter(e => e.mode === mode && MONTHS[new Date(e.date).getMonth()] === month && new Date(e.date).getFullYear() === selectedYear);
-      return {
-        month,
-        earned: me.reduce((s, e) => s + e.earned, 0),
-        saved: me.reduce((s, e) => s + e.saved, 0),
-        given: me.reduce((s, e) => s + e.given, 0),
-      };
-    });
-  }, [entries, mode, selectedYear]);
-
-  // Compute month-over-month percentage changes for stat cards
-  const { incomeChange, expenseChange } = useMemo(() => {
-    const currentMonth = new Date().getMonth();
-    const lastMonth = currentMonth > 0 ? currentMonth - 1 : 0;
-    const thisMonthData = monthlyData[currentMonth];
-    const lastMonthData = monthlyData[lastMonth];
-    if (!thisMonthData || !lastMonthData) return { incomeChange: null, expenseChange: null };
-    const ic = lastMonthData.earned > 0
-      ? ((thisMonthData.earned - lastMonthData.earned) / lastMonthData.earned) * 100
-      : thisMonthData.earned > 0 ? 100 : null;
-    const ec = lastMonthData.given > 0
-      ? ((thisMonthData.given - lastMonthData.given) / lastMonthData.given) * 100
-      : thisMonthData.given > 0 ? 100 : null;
-    return { incomeChange: ic, expenseChange: ec };
-  }, [monthlyData]);
-
-  // Verify passcode via server API (bcrypt comparison)
-  useEffect(() => {
-    if (!isAuthenticated && passcode.length === 6) {
-      setWrongPasscode(false);
-      fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'verify-passcode', passcode }),
-      })
-        .then(res => res.json())
-        .then(data => {
-          if (data.success) {
-            setIsAuthenticated(true);
-            setAppPasscode(passcode);
-            setApiKey("korgon-finance-2026");
-            setPasscode("");
-          } else {
-            setWrongPasscode(true);
-          }
-        })
-        .catch(() => setWrongPasscode(true));
-    }
-    if (passcode.length < 6) setWrongPasscode(false);
-  }, [passcode, isAuthenticated]);
-
-  // Load all settings from API (cross-device sync)
-  useEffect(() => {
-    async function loadSettings() {
-      try {
-        const res = await apiFetch('/api/settings');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.firstName) setFirstName(data.firstName);
-          if (data.lastName !== undefined) setLastName(data.lastName);
-          if (data.email) setEmail(data.email);
-          if (data.avatarUrl) setProfilePic(data.avatarUrl);
-          if (data.theme === 'dark' || data.theme === 'light') setTheme(data.theme);
-          if (data.banksGoal !== undefined) setWeb2Goal({ amount: data.banksGoal, currency: 'USD' });
-          if (data.cryptoGoal !== undefined) setWeb3Goal({ amount: data.cryptoGoal, currency: 'ETH' });
-        }
-      } catch (err) {
-        console.error('[settings] load failed:', err);
-      }
-    }
-    loadSettings();
-  }, []);
-
-  // Save individual settings to API (debounced)
-  function saveSetting(field: string, value: unknown) {
-    fetch('/api/settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ [field]: value }),
-    }).catch(() => {});
-  }
-
-  // Fetch entries from API on mount and mode change
-  useEffect(() => {
-    let cancelled = false;
-    async function fetchEntries() {
-      setLoadingEntries(true);
-      try {
-        const res = await apiFetch(`/api/entries?mode=${mode}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        if (!cancelled) setEntries(data);
-      } catch (err) {
-        console.error("[fetchEntries] failed:", err);
-        if (!cancelled) setEntries([]);
-      } finally {
-        if (!cancelled) setLoadingEntries(false);
-      }
-    }
-    fetchEntries();
-    return () => { cancelled = true; };
-  }, [mode]);
-
-  // Fetch goal from API on mount and mode change
-  useEffect(() => {
-    let cancelled = false;
-    async function fetchGoal() {
-      try {
-        const res = await apiFetch(`/api/goal?mode=${mode}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        if (!cancelled && data.amount) {
-          if (mode === "banks") {
-            setWeb2Goal({ amount: data.amount, currency: data.currency || "USD" });
-          } else {
-            setWeb3Goal({ amount: data.amount, currency: data.currency || "ETH" });
-          }
-        }
-      } catch (err) {
-        console.error("[fetchGoal] failed:", err);
-      }
-    }
-    fetchGoal();
-    return () => { cancelled = true; };
-  }, [mode]);
-
-  const totalEarned = entries.filter(e => e.mode === mode).reduce((s,e) => s+e.earned, 0);
-  const totalGiven = entries.filter(e => e.mode === mode).reduce((s,e) => s+e.given, 0);
-  const totalSaved = entries.filter(e => e.mode === mode).reduce((s,e) => s+e.saved, 0);
-  const netIncome = totalEarned - totalGiven;
-
-  if (!isAuthenticated) {
-    return (
-      <div className={cn("bg-[#09090B] text-zinc-50 min-h-screen w-full flex font-sans overflow-hidden", theme === 'light' ? 'theme-light' : 'theme-dark')}>
-        <style>{`
-          .theme-light {
-            --bg-main: #F5F5F8;
-            --bg-card: #FFFFFF;
-            --bg-hover: #F1F1F5;
-            --border-color: #E2E8F0;
-            --text-main: #18181A;
-            --text-muted: #71717A;
-            --primary: #83B72D;
-            --primary-bright: #D7FE03;
-            --bg-white-5: rgba(0,0,0,0.03);
-            --bg-white-10: rgba(0,0,0,0.06);
-          }
-          .theme-light .bg-\\[\\#09090B\\] { background-color: var(--bg-main) !important; }
-          .theme-light .bg-\\[\\#131316\\] { background-color: var(--bg-card) !important; box-shadow: 0 4px 15px rgba(0,0,0,0.03) !important; }
-          .theme-light .text-zinc-50, .theme-light .text-zinc-100 { color: var(--text-main) !important; }
-          .theme-light .text-zinc-400, .theme-light .text-zinc-500 { color: var(--text-muted) !important; }
-          .theme-light .border-\\[\\#222226\\] { border-color: var(--border-color) !important; }
-          .theme-light button.theme-toggle:hover { background-color: var(--bg-white-5) !important; color: var(--text-main) !important; }
-          
-          .theme-light .auth-left-pane {
-            background-color: #0A0A0A !important;
-          }
-          .theme-light .auth-left-pane .text-zinc-400 {
-            color: #A1A1AA !important;
-          }
-          .theme-light .auth-left-pane .text-zinc-500 {
-            color: #71717A !important;
-          }
-        `}</style>
-        
-        {/* Left Side: Branding / Visual (Hidden on mobile) */}
-        <div className="auth-left-pane hidden lg:flex lg:w-1/2 relative bg-zinc-950 flex-col justify-between p-12 border-r border-[#222226]">
-           {/* Abstract shapes / glow */}
-           <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[#D4FE44]/10 rounded-full blur-[100px] pointer-events-none"></div>
-           <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-emerald-500/10 rounded-full blur-[80px] pointer-events-none"></div>
-           
-           <div className="relative z-10 w-full max-w-lg mx-auto mt-12">
-             <div className="h-16"></div>
-             
-             <h1 className="text-5xl font-extrabold leading-[1.1] tracking-tight text-white mb-6">
-               Welcome back
-             </h1>
-             <p className="text-lg text-zinc-400 max-w-md">
-               Sign in to access your dashboard.
-             </p>
-           </div>
-           
-           <div className="relative z-10 text-zinc-500 text-sm font-medium max-w-lg mx-auto w-full">
-           </div>
+        {/* Amount + currency hero */}
+        <div className="rounded-2xl bg-tile-pink p-5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--tile-pink-fg))] opacity-70 mb-3 text-center">You send</p>
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <input
+              type="number" value={amount} onChange={e=>setAmount(e.target.value)}
+              placeholder="0.00" autoFocus
+              className="bg-transparent font-display text-4xl font-semibold w-36 text-center outline-none placeholder:opacity-20 text-[hsl(var(--tile-pink-fg))]"
+            />
+            {/* Currency picker inline */}
+            <select
+              value={currency} onChange={e=>setCurrency(e.target.value)}
+              className="rounded-2xl border border-[hsl(var(--tile-pink-fg)_/_0.25)] bg-[hsl(var(--surface)/0.7)] px-3 py-2 text-sm font-bold text-[hsl(var(--tile-pink-fg))] outline-none cursor-pointer focus:ring-2 focus:ring-[hsl(var(--tile-pink-fg)/0.4)]"
+            >
+              <optgroup label="Fiat">{FIAT_CURRENCIES.map(c=><option key={c} value={c}>{c}</option>)}</optgroup>
+              <optgroup label="Crypto">{CRYPTO_CURRENCIES.map(c=><option key={c} value={c}>{c}</option>)}</optgroup>
+            </select>
+          </div>
+          {converted && (
+            <p className="text-center text-xs font-semibold text-[hsl(var(--tile-pink-fg))] opacity-60">{converted}</p>
+          )}
+          {isCryptoSend && (
+            <p className="mt-1 text-center text-[10px] text-[hsl(var(--tile-pink-fg))] opacity-50">Crypto send — network fees may apply</p>
+          )}
         </div>
 
-        {/* Right Side: Authentication */}
-        <div className="w-full lg:w-1/2 flex flex-col relative bg-[#09090B]">
-          
-          <div className="absolute top-6 right-6 md:top-8 md:right-8 z-50">
-            <button 
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className="theme-toggle w-11 h-11 bg-[#131316] border border-[#222226] rounded-xl flex items-center justify-center text-zinc-400 hover:text-zinc-50 hover:bg-white/5 transition-colors"
-            >
-              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-            </button>
+        {/* From wallet */}
+        <Field label="From wallet">
+          <FSelect value={fromId} onChange={e=>setFromId(e.target.value)}>
+            {wallets.map(w=><option key={w.id} value={w.id}>{w.name} · {w.bank} ({fmt(w.balance, w.currency)})</option>)}
+          </FSelect>
+        </Field>
+
+        {/* Destination type toggle */}
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Send to</p>
+          <div className="flex gap-2 mb-2">
+            {(["wallet","card"] as SendDestType[]).map(t => (
+              <button key={t} onClick={()=>{ setDestType(t); setDestId(t==="wallet"?wallets[0]?.id??""  :cards[0]?.id??""); }}
+                className={`pill flex-1 justify-center capitalize ${destType===t?"pill-dark":"pill-light"}`}>
+                {t === "wallet" ? <Wallet className="h-3.5 w-3.5"/> : <CreditCard className="h-3.5 w-3.5"/>}
+                {t}
+              </button>
+            ))}
           </div>
+          {destOptions.length > 0 ? (
+            <FSelect value={destId} onChange={e=>setDestId(e.target.value)}>
+              {destOptions.map(d=>(
+                <option key={d.id} value={d.id}>{d.label} — {d.sub}</option>
+              ))}
+            </FSelect>
+          ) : (
+            <p className="text-xs text-muted-foreground bg-secondary rounded-xl px-4 py-3">
+              No {destType}s yet — add one first.
+            </p>
+          )}
+        </div>
 
-          <div className="flex-1 flex flex-col items-center justify-center w-full max-w-md mx-auto p-6 md:p-8 animate-in fade-in zoom-in-95 duration-500">
-              
-              {/* Mobile header - no branding */}
+        <Field label="Note (optional)">
+          <FInput value={note} onChange={e=>setNote(e.target.value)} placeholder="What's this for?" />
+        </Field>
 
-              <div className="w-16 h-16 mb-8 rounded-[1.2rem] bg-[#131316] border border-[#222226] flex items-center justify-center text-zinc-300 shadow-sm relative overflow-hidden group">
-                 <Lock size={26} strokeWidth={2.5} />
-              </div>
-              
-              <h2 className="text-2xl sm:text-3xl font-bold text-zinc-100 mb-2 tracking-tight text-center">Passcode</h2>
-              <p className="text-zinc-500 font-medium text-sm text-center mb-8 sm:mb-10">To protect your account, please verify your identity.</p>
-              
-              <div className="w-full max-w-[280px]">
-                <input
-                  type="password"
-                  maxLength={6}
-                  placeholder="Enter passcode..."
-                  value={passcode}
-                  onChange={(e) => setPasscode(e.target.value)}
-                  className="w-full px-5 py-4 bg-[#131316] border border-[#222226] rounded-xl text-center text-2xl tracking-[0.5em] text-zinc-100 focus:outline-none focus:border-[#D4FE44] focus:ring-1 focus:ring-[#D4FE44]/50 transition-all font-mono placeholder:tracking-normal placeholder:text-base placeholder:text-zinc-600"
-                  autoFocus
-                />
-              </div>
-              
-              <div className="h-10 mt-8 flex items-center justify-center w-full">
-                 {wrongPasscode && (
-                   <div className="flex items-center gap-2 text-red-500 font-medium text-sm">
-                     Incorrect Passcode
-                   </div>
-                 )}
-              </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Category">
+            <FSelect value={cat} onChange={e=>setCat(e.target.value)}>
+              {["Transfer","Housing","Food","Transport","Shopping","Entertainment","Other"].map(c=><option key={c}>{c}</option>)}
+            </FSelect>
+          </Field>
+          <Field label="Date">
+            <FInput type="date" value={date} onChange={e=>setDate(e.target.value)} />
+          </Field>
+        </div>
+
+        <div className="flex gap-3 pt-2">
+          <button onClick={onClose} className="pill pill-light flex-1 justify-center">Cancel</button>
+          <button onClick={submit} disabled={sub||!amount||!destId}
+            className="pill pill-dark flex-[2] justify-center disabled:opacity-50">
+            <Send className="h-4 w-4"/>
+            {sub ? "Sending…" : `Send ${amount||"0"} ${currency}`}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function ReceiveModal({ onClose, onSave, wallets }: { onClose:()=>void; onSave:(e:Omit<Entry,"id">)=>Promise<void>; wallets:Wallet[]; }) {
+  const [amount,setAmount]=useState(""); const [note,setNote]=useState(""); const [cat,setCat]=useState("Income");
+  const [walletId,setWalletId]=useState(wallets[0]?.id||""); const [date,setDate]=useState(new Date().toISOString().slice(0,10)); const [sub,setSub]=useState(false);
+  const submit = async () => { if(!amount||!note) return; setSub(true); try { await onSave({type:"receive",amount:parseFloat(amount)||0,currency:"USD",category:cat,walletId,note,date}); } finally { setSub(false); } };
+  return (
+    <Modal onClose={onClose} title="Receive Money">
+      <div className="space-y-4">
+        <div className="rounded-2xl bg-tile-mint p-5 text-center">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--tile-mint-fg))] opacity-70 mb-2">Amount</p>
+          <div className="flex items-center justify-center gap-1">
+            <span className="font-display text-3xl font-semibold opacity-50">$</span>
+            <input type="number" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="0.00" autoFocus className="bg-transparent font-display text-4xl font-semibold w-36 text-center outline-none placeholder:opacity-20" />
+          </div>
+        </div>
+        <Field label="From / Sender"><FInput value={note} onChange={e=>setNote(e.target.value)} placeholder="Who sent this?" /></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="To"><FSelect value={walletId} onChange={e=>setWalletId(e.target.value)}>{wallets.map(w=><option key={w.id} value={w.id}>{w.name}</option>)}</FSelect></Field>
+          <Field label="Date"><FInput type="date" value={date} onChange={e=>setDate(e.target.value)} /></Field>
+        </div>
+        <Field label="Category"><FSelect value={cat} onChange={e=>setCat(e.target.value)}>{CATEGORIES.filter(c=>c!=="All").map(c=><option key={c}>{c}</option>)}</FSelect></Field>
+        <div className="flex gap-3 pt-2">
+          <button onClick={onClose} className="pill pill-light flex-1 justify-center">Cancel</button>
+          <button onClick={submit} disabled={sub||!amount||!note} className="pill pill-dark flex-[2] justify-center disabled:opacity-50"><Inbox className="h-4 w-4"/>{sub?"Saving…":"Record"}</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═════════════════════════════════════════════════════════════════════════════
+export default function FinanceDashboard() {
+  const { changeAppPasscode: changeCtxPasscode } = useAppSettings();
+  const { mode } = useWeb3();
+
+  // ── Auth ──
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [appPasscode, setAppPasscode] = useState("");
+  const [loginPasscode, setLoginPasscode] = useState("");
+  const [wrongPass, setWrongPass] = useState(false);
+  const loginRef = useRef<HTMLInputElement>(null);
+
+  // ── Passcode lock ──
+  const [storedPasscode, setStoredPasscode] = useState<string|null>(null);
+  const [unlocked, setUnlocked] = useState(false);
+
+  // ── UI ──
+  const [activeTab, setActiveTab] = useState("Home");
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [period, setPeriod] = useState<Period>("Monthly");
+  const [catFilter, setCatFilter] = useState("All");
+
+  // ── Modals ──
+  const [showNewEntry, setShowNewEntry] = useState(false);
+  const [showSend, setShowSend] = useState(false);
+  const [showReceive, setShowReceive] = useState(false);
+  const [showAddWallet, setShowAddWallet] = useState(false);
+  const [showAddCard, setShowAddCard] = useState(false);
+  const [showNewGoal, setShowNewGoal] = useState(false);
+  const [deletingId, setDeletingId] = useState<{id:string;kind:string}|null>(null);
+  const [formError, setFormError] = useState("");
+
+  // ── Data ──
+  const [entries, setEntries] = useState<Entry[]>([]);
+  const [wallets, setWallets] = useState<Wallet[]>([]);
+  const [cards, setCards] = useState<Card[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [activityLog, setActivityLog] = useState<ActivityItem[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([
+    { id:"n1", title:"Salary received", body:"Acme Corp · +$6,800", at:"2m ago", read:false },
+    { id:"n2", title:"Budget alert", body:"Food spending at 82%", at:"1h ago", read:false },
+    { id:"n3", title:"Cloud sync complete", body:"12 changes pushed", at:"3h ago", read:true },
+  ]);
+
+  // ── Profile ──
+  const [firstName, setFirstName] = useState("Alex");
+  const [lastName, setLastName] = useState("Korgon");
+  const [email, setEmail] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState("https://picsum.photos/seed/avatar5/150/150");
+  const [currency, setCurrencyState] = useState<CurrencyCode>("USD");
+  const [theme, setThemeState] = useState<ThemeMode>("light");
+  const [isSaving, setIsSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Sync page ──
+  const [syncId, setSyncId] = useState("LDG-7Q4X-2NAV-91KE");
+  const [syncCopied, setSyncCopied] = useState(false);
+  const [newPass, setNewPass] = useState(""); const [confirmPass, setConfirmPass] = useState(""); const [showPassInput, setShowPassInput] = useState(false);
+
+  // ── Forms ──
+  const [wForm, setWForm] = useState({ name:"", bank:"", balance:"", currency:"USD" as CurrencyCode, tile:"mint" as Tile });
+  const [cForm, setCForm] = useState({ label:"", brand:"Visa" as Card["brand"], last4:"", walletId:"", tile:"pink" as Tile });
+  const [gForm, setGForm] = useState({ name:"", target:"", current:"0", deadline:new Date(Date.now()+1000*60*60*24*90).toISOString().slice(0,10), tile:"mint" as Tile });
+
+  // ── Init ──
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem("fv_api_key")) { setApiKey(sessionStorage.getItem("fv_api_key")!); setIsAuthenticated(true); }
+      const lp = localStorage.getItem("ledger.passcode"); if (lp) setStoredPasscode(lp);
+      if (sessionStorage.getItem("ledger.unlocked")==="1") setUnlocked(true);
+      const lc = localStorage.getItem("ledger.currency") as CurrencyCode|null; if (lc) setCurrencyState(lc);
+      const lt = localStorage.getItem("ledger.theme") as ThemeMode|null; if (lt) setThemeState(lt);
+      const si = localStorage.getItem("ledger.syncId"); if (si) setSyncId(si);
+    } catch {}
+  }, []);
+
+  // ── Theme ──
+  useEffect(() => {
+    const root = document.documentElement;
+    const dark = theme==="dark" || (theme==="system" && window.matchMedia("(prefers-color-scheme:dark)").matches);
+    root.classList.toggle("dark", dark);
+    try { localStorage.setItem("ledger.theme", theme); } catch {}
+  }, [theme]);
+
+  const setTheme = (t: ThemeMode) => setThemeState(t);
+  const setCurrency = (c: CurrencyCode) => { setCurrencyState(c); try { localStorage.setItem("ledger.currency", c); } catch {} };
+
+  // ── Login passcode ──
+  useEffect(() => { loginRef.current?.focus(); }, [isAuthenticated]);
+  useEffect(() => {
+    if (!isAuthenticated && loginPasscode.length === 6) {
+      setWrongPass(false);
+      fetch("/api/settings", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({action:"verify-passcode",passcode:loginPasscode}) })
+        .then(r=>r.json()).then(d => {
+          if (d.success) { setIsAuthenticated(true); setAppPasscode(loginPasscode); setApiKey("korgon-finance-2026"); try { sessionStorage.setItem("fv_api_key","korgon-finance-2026"); } catch {} setLoginPasscode(""); }
+          else { setWrongPass(true); setLoginPasscode(""); }
+        }).catch(() => { setWrongPass(true); setLoginPasscode(""); });
+    }
+    if (loginPasscode.length < 6) setWrongPass(false);
+  }, [loginPasscode, isAuthenticated]);
+
+  // ── Load settings + data ──
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    apiFetch("/api/settings").then(r=>r.ok?r.json():null).then(d => {
+      if (!d) return;
+      if (d.firstName) setFirstName(d.firstName);
+      if (d.lastName!==undefined) setLastName(d.lastName);
+      if (d.email) setEmail(d.email);
+      if (d.avatarUrl) setAvatarUrl(d.avatarUrl);
+    }).catch(()=>{});
+
+    apiFetch(`/api/entries?mode=${mode}`).then(r=>r.ok?r.json():[]).then((d:any[]) => {
+      setEntries(d.map(e => ({ id:e.id, type:(e.txType||e.type||"expense") as EntryType, amount:(e.earned||0)+(e.given||0), currency:"USD", category:e.givenTo||"Other", walletId:e.walletId||"", note:e.project||"", date:e.date })));
+    }).catch(()=>{});
+
+    apiFetch("/api/wallets").then(r=>r.ok?r.json():[]).then((d:any[]) => {
+      setWallets(d.map((w,i) => ({ id:w.id, name:w.name, bank:w.network||w.bank||"Bank", currency:"USD", balance:w.balance||0, tile:TILES[i%TILES.length], address:w.address })));
+    }).catch(()=>{});
+
+    apiFetch("/api/cards").then(r=>r.ok?r.json():[]).then((d:any[]) => {
+      setCards(d.map((c,i) => ({ id:c.id, label:c.name, brand:"Visa" as Card["brand"], last4:c.last4, walletId:"", tile:TILES[i%TILES.length], holder:c.holder, expiry:c.expiry })));
+    }).catch(()=>{});
+
+    apiFetch("/api/goal?mode=banks").then(r=>r.ok?r.json():null).then(d => {
+      if (d?.amount) setGoals([{ id:"g1", name:"Financial Goal", target:d.amount, current:0, deadline:new Date(Date.now()+1000*60*60*24*180).toISOString().slice(0,10), tile:"mint" }]);
+    }).catch(()=>{});
+
+    apiFetch("/api/activity").then(r=>r.ok?r.json():[]).then((d:any[]) => {
+      setActivityLog(d.slice(0,8).map(a => ({ id:a.id, action:a.action, detail:`$${a.amount}`, at:new Date(a.date).toLocaleDateString("en-US",{month:"short",day:"numeric"}) })));
+    }).catch(()=>{});
+  }, [isAuthenticated, mode]);
+
+  // ── Add entry ──
+  const addEntry = useCallback(async (e: Omit<Entry,"id">) => {
+    const ne: Entry = { ...e, id:`e${Date.now()}` };
+    setEntries(p => [ne,...p]);
+    setShowNewEntry(false); setShowSend(false); setShowReceive(false);
+    try {
+      const payload = { id:ne.id, date:ne.date, project:ne.note, earned:ne.type==="income"||ne.type==="receive"?ne.amount:0, saved:0, given:ne.type==="expense"||ne.type==="send"?ne.amount:0, givenTo:ne.category, mode, walletId:ne.walletId||undefined, txType:ne.type };
+      await apiFetch("/api/entries",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    } catch {}
+    setActivityLog(p => [{ id:`a${Date.now()}`, action:"Entry added", detail:`${ne.note} · ${ne.type==="expense"||ne.type==="send"?"−":"+"}$${ne.amount}`, at:"just now" }, ...p]);
+  }, [mode]);
+
+  // ── Wallet / card / goal add ──
+  const addWallet = async () => {
+    setFormError(""); if (!wForm.name.trim()) { setFormError("Name required."); return; }
+    try {
+      const r = await apiFetch("/api/wallets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:wForm.name.trim(),address:"",network:wForm.bank||"Bank",balance:parseFloat(wForm.balance)||0})});
+      if (r.ok) { const d=await r.json(); setWallets(p=>[...p,{id:d.id,name:d.name,bank:d.network||wForm.bank,currency:wForm.currency,balance:d.balance,tile:wForm.tile}]); setShowAddWallet(false); setWForm({name:"",bank:"",balance:"",currency:"USD",tile:"mint"}); setActivityLog(p=>[{id:`a${Date.now()}`,action:"Wallet added",detail:wForm.name,at:"just now"},...p]); }
+      else setFormError("Failed to add.");
+    } catch { setFormError("Network error."); }
+  };
+
+  const addCard = async () => {
+    setFormError(""); if (!cForm.label.trim()||!/^\d{4}$/.test(cForm.last4)) { setFormError("Label and 4-digit number required."); return; }
+    try {
+      const r = await apiFetch("/api/cards",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:cForm.label.trim(),last4:cForm.last4,holder:`${firstName} ${lastName}`,expiry:"12/28",type:"virtual",balance:0})});
+      if (r.ok) { const d=await r.json(); setCards(p=>[...p,{id:d.id,label:d.name,brand:cForm.brand,last4:d.last4,walletId:cForm.walletId,tile:cForm.tile,holder:d.holder,expiry:d.expiry}]); setShowAddCard(false); setCForm({label:"",brand:"Visa",last4:"",walletId:"",tile:"pink"}); setActivityLog(p=>[{id:`a${Date.now()}`,action:"Card added",detail:`${cForm.brand} •• ${cForm.last4}`,at:"just now"},...p]); }
+      else setFormError("Failed to add.");
+    } catch { setFormError("Network error."); }
+  };
+
+  const addGoal = async () => {
+    setFormError(""); const t=parseFloat(gForm.target); if(!gForm.name.trim()||!t){setFormError("Name and target required.");return;}
+    const ng:Goal={id:`g${Date.now()}`,name:gForm.name.trim(),target:t,current:parseFloat(gForm.current)||0,deadline:gForm.deadline,tile:gForm.tile};
+    setGoals(p=>[...p,ng]); try{await apiFetch("/api/goal",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"banks",amount:t,currency:"USD"})});}catch{}
+    setShowNewGoal(false); setGForm({name:"",target:"",current:"0",deadline:new Date(Date.now()+1000*60*60*24*90).toISOString().slice(0,10),tile:"mint"});
+    setActivityLog(p=>[{id:`a${Date.now()}`,action:"Goal created",detail:`${gForm.name} · target $${t}`,at:"just now"},...p]);
+  };
+
+  const confirmDelete = async () => {
+    if (!deletingId) return;
+    const {id,kind}=deletingId; setDeletingId(null);
+    if (kind==="entry") { setEntries(p=>p.filter(e=>e.id!==id)); try{await apiFetch(`/api/entries/${id}`,{method:"DELETE"});}catch{} }
+    if (kind==="wallet") { setWallets(p=>p.filter(w=>w.id!==id)); try{await apiFetch(`/api/wallets/${id}`,{method:"DELETE"});}catch{} }
+    if (kind==="card") { setCards(p=>p.filter(c=>c.id!==id)); try{await apiFetch(`/api/cards/${id}`,{method:"DELETE"});}catch{} }
+    if (kind==="goal") { setGoals(p=>p.filter(g=>g.id!==id)); }
+  };
+
+  const handleSaveProfile = async () => {
+    setIsSaving(true);
+    try { await apiFetch("/api/settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({firstName,lastName,email,avatarUrl,theme,banksGoal:goals[0]?.target})}); } catch {}
+    setTimeout(()=>setIsSaving(false),500);
+  };
+
+  const handleProfileImg = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f=e.target.files?.[0]; if(f){const r=new FileReader();r.onloadend=()=>{if(typeof r.result==="string")setAvatarUrl(r.result);};r.readAsDataURL(f);}
+  };
+
+  // ── Passcode strength ──
+  const passStrength = useMemo(() => {
+    let s=0; if(newPass.length>=6)s++; if(newPass.length>=10)s++;
+    if(/[A-Z]/.test(newPass)&&/[a-z]/.test(newPass))s++; if(/[0-9]/.test(newPass)&&/[^A-Za-z0-9]/.test(newPass))s++;
+    const score=Math.min(4,s) as 0|1|2|3|4;
+    return {score,label:["Too weak","Weak","Fair","Strong","Excellent"][score],tone:["bg-destructive","bg-destructive","bg-warning","bg-success","bg-success"][score]};
+  },[newPass]);
+
+  // ── Computed ──
+  const filteredEntries = useMemo(() => {
+    let r=entries; if(catFilter!=="All")r=r.filter(e=>e.category===catFilter);
+    return r.sort((a,b)=>new Date(b.date).getTime()-new Date(a.date).getTime());
+  },[entries,catFilter]);
+
+  const totalBalance = wallets.reduce((s,w)=>s+w.balance,0);
+  const totalIn = entries.filter(e=>e.type==="income"||e.type==="receive").reduce((s,e)=>s+e.amount,0);
+  const totalOut = entries.filter(e=>e.type==="expense"||e.type==="send").reduce((s,e)=>s+e.amount,0);
+
+  // ══════════════════════════════════════════════════════════
+  // LOGIN SCREEN
+  // ══════════════════════════════════════════════════════════
+  if (!isAuthenticated) {
+    return (
+      <div suppressHydrationWarning className="min-h-screen bg-background grid place-items-center p-6">
+        <div className="flex flex-col items-center text-center">
+          <div className="grid h-12 w-12 place-items-center rounded-full bg-secondary text-foreground ring-1 ring-border shadow-[var(--shadow-card)]">
+            <Lock className="h-5 w-5" />
+          </div>
+          <h1 className="mt-4 font-display text-xl font-semibold">Welcome back</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Enter your 6-digit passcode</p>
+          <div className="mt-6 flex items-center gap-3">
+            {[0,1,2,3,4,5].map(i => (
+              <span key={i} className={`h-2.5 w-2.5 rounded-full transition-all ${i<loginPasscode.length?"scale-110 bg-primary":"bg-muted ring-1 ring-inset ring-border"}`} />
+            ))}
+          </div>
+          <input type="password" maxLength={6} value={loginPasscode} onChange={e=>setLoginPasscode(e.target.value.replace(/\D/g,""))} ref={loginRef}
+            className="mt-4 h-12 w-48 rounded-2xl border border-input bg-secondary/60 text-center font-mono text-xl tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary/30" />
+          <div className="h-7 mt-3 flex items-center">
+            {wrongPass && <p className="text-sm text-destructive font-medium">Incorrect passcode</p>}
           </div>
         </div>
       </div>
     );
   }
 
+  if (storedPasscode && !unlocked) {
+    return <PasscodeLock storedPasscode={storedPasscode} onUnlock={()=>setUnlocked(true)} />;
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // MAIN APP
+  // ══════════════════════════════════════════════════════════
   return (
-    <div className={cn("bg-[#09090B] text-zinc-50 min-h-screen w-full flex overflow-hidden font-sans", theme === 'light' ? 'theme-light' : 'theme-dark')}>
-      <style>{`
-        .theme-light {
-          --bg-main: #F5F5F8;
-          --bg-card: #FFFFFF;
-          --bg-hover: #F1F1F5;
-          --border-color: #E2E8F0;
-          --text-main: #18181A;
-          --text-muted: #71717A;
-          --primary: #83B72D;
-          --primary-bright: #D7FE03;
-          --bg-white-5: rgba(0,0,0,0.03);
-          --bg-white-10: rgba(0,0,0,0.06);
-        }
+    <div suppressHydrationWarning className="min-h-screen bg-background p-0 md:p-3 lg:p-4">
+      <div className="mx-auto flex w-full max-w-[1500px] gap-4">
 
-        .theme-light .bg-\\[\\#09090B\\] { background-color: var(--bg-main) !important; }
-        .theme-light .bg-\\[\\#131316\\] { background-color: var(--bg-card) !important; box-shadow: 0 4px 15px rgba(0,0,0,0.03) !important; }
-        .theme-light .bg-zinc-950\\/80 { background-color: rgba(245, 245, 248, 0.8) !important; }
-        .theme-light .bg-\\[\\#1C1C21\\] { background-color: var(--bg-hover) !important; }
-        .theme-light .text-zinc-50, .theme-light .text-zinc-100 { color: var(--text-main) !important; }
-        .theme-light .text-zinc-400, .theme-light .text-zinc-500 { color: var(--text-muted) !important; }
-        .theme-light .border-\\[\\#222226\\], .theme-light .border-\\[\\#2A2A30\\] { border-color: var(--border-color) !important; }
-        .theme-light .bg-white\\/5 { background-color: var(--bg-white-5) !important; border-color: var(--border-color) !important; }
-        .theme-light .bg-white\\/10 { background-color: var(--bg-white-10) !important; border-color: var(--border-color) !important; color: var(--text-main) !important; }
-        .theme-light .text-\\[\\#D4FE44\\] { color: var(--primary) !important; }
-        .theme-light .bg-\\[\\#D4FE44\\] { background-color: var(--primary-bright) !important; color: #0A0A0A !important; border-color: var(--primary) !important; }
-        .theme-light .bg-\\[\\#D4FE44\\]\\/10 { background-color: rgba(131, 183, 45, 0.1) !important; border-color: rgba(131, 183, 45, 0.3) !important; color: var(--primary) !important; }
-        
-        .theme-light nav button.text-zinc-400:hover { color: var(--text-main) !important; background-color: var(--bg-white-5) !important; }
-        .theme-light input { color: var(--text-main) !important; }
-        .theme-light input::placeholder { color: var(--text-muted) !important; }
-        .theme-light .recharts-cartesian-grid-line { stroke: var(--border-color) !important; }
-        
-        /* Stop overriding the dark card specifically requested by design */
-        .theme-light .force-dark-card { background-color: #0A0A0A !important; color: white !important;}
-        .theme-light .force-dark-card .text-zinc-300 { color: #A1A1AA !important; }
-        .theme-light .force-dark-card .text-zinc-100 { color: white !important; }
+        <Sidebar active={activeTab} setActive={setActiveTab} avatarUrl={avatarUrl} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
 
-        /* Hide number input spinners */
-        input[type="number"]::-webkit-inner-spin-button,
-        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-        input[type="number"] { -moz-appearance: textfield; }
-      `}</style>
-      
-      {/* SIDEBAR NAVIGATION */}
-      <aside className={`${sidebarCollapsed ? 'w-[70px]' : 'w-[260px]'} border-r border-[#222226] bg-[#09090B] hidden md:flex flex-col flex-shrink-0 z-10 transition-all duration-300`}>
-        <div className={`${sidebarCollapsed ? 'p-4 justify-center' : 'p-8'} flex items-center gap-3`}>
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center relative shadow-[0_0_15px_rgba(212,254,68,0.2)]">
-            <Image src="/favicon.svg" alt="korgon logo" fill className="object-contain" />
-          </div>
-          {!sidebarCollapsed && <span className="text-xl font-bold tracking-tight">korgon</span>}
-          <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className={`${sidebarCollapsed ? 'ml-0' : 'ml-auto'} w-8 h-8 rounded-lg flex items-center justify-center text-zinc-500 hover:text-zinc-300 hover:bg-white/5 transition-colors`}>
-            {sidebarCollapsed ? <ChevronRight size={16} /> : <Menu size={16} />}
-          </button>
-        </div>
-
-        <nav className={`flex-1 ${sidebarCollapsed ? 'px-2' : 'px-4'} space-y-1 overflow-y-auto custom-scrollbar pt-2`}>
-          {!sidebarCollapsed && <p className="px-4 text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-4">Main Menu</p>}
-          <button onClick={() => setActiveTab('Dashboard')} title="Dashboard" className={cn("flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full", activeTab === 'Dashboard' ? "bg-white/5 text-zinc-50 border border-white/5" : "text-zinc-400 hover:text-zinc-50 hover:bg-white/5")}>
-            <Home size={20} className={activeTab === 'Dashboard' ? "text-[#D4FE44]" : ""} />
-            {!sidebarCollapsed && <span className="font-medium">Dashboard</span>}
-          </button>
-          <button onClick={() => setActiveTab('Analytics')} title="Analytics" className={cn("flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full", activeTab === 'Analytics' ? "bg-white/5 text-zinc-50 border border-white/5" : "text-zinc-400 hover:text-zinc-50 hover:bg-white/5")}>
-            <PieChart size={20} />
-            {!sidebarCollapsed && <span className="font-medium">Analytics</span>}
-          </button>
-          <button onClick={() => setActiveTab('Cards')} title={mode === 'banks' ? 'My Cards' : 'My Wallets'} className={cn("flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full", activeTab === 'Cards' ? "bg-white/5 text-zinc-50 border border-white/5" : "text-zinc-400 hover:text-zinc-50 hover:bg-white/5")}>
-            <CreditCard size={20} />
-            {!sidebarCollapsed && <span className="font-medium">{mode === 'banks' ? 'My Cards' : 'My Wallets'}</span>}
-          </button>
-          <button onClick={() => setActiveTab('Security')} title="Security" className={cn("flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full", activeTab === 'Security' ? "bg-white/5 text-zinc-50 border border-white/5" : "text-zinc-400 hover:text-zinc-50 hover:bg-white/5")}>
-            <Shield size={20} />
-            {!sidebarCollapsed && <span className="font-medium">Security</span>}
-          </button>
-
-          {!sidebarCollapsed && <p className="px-4 text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-4 mt-8">General</p>}
-          <button onClick={() => setActiveTab('Settings')} title="Settings" className={cn("flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full", activeTab === 'Settings' ? "bg-white/5 text-zinc-50 border border-white/5" : "text-zinc-400 hover:text-zinc-50 hover:bg-white/5")}>
-            <Settings size={20} />
-            {!sidebarCollapsed && <span className="font-medium">Settings</span>}
-          </button>
-          
-        </nav>
-
-        </aside>
-
-      {/* MAIN CONTENT */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden bg-[#09090B] pb-16 md:pb-0">
-        {/* HEADER */}
-        <header className="h-auto md:h-24 py-4 md:py-0 flex flex-col-reverse md:flex-row items-start md:items-center justify-between px-4 md:px-8 bg-zinc-950/80 backdrop-blur-xl border-b border-[#222226] sticky top-0 z-20 gap-4 md:gap-0">
-          <div>
-            <h1 className="text-xl md:text-2xl font-bold text-zinc-50">Hello, {firstName}</h1>
-            <p className="text-sm text-zinc-400">Welcome to your financial dashboard</p>
+        <main className="min-w-0 flex-1">
+          {/* Mobile topbar */}
+          <div className="md:hidden flex items-center justify-between p-4 border-b border-border bg-[hsl(var(--surface))]">
+            <button onClick={()=>setMobileOpen(true)} className="grid h-9 w-9 place-items-center rounded-xl border border-border"><Menu className="h-4 w-4"/></button>
+            <span className="font-display font-semibold text-sm">{activeTab}</span>
+            <button onClick={()=>setShowNewEntry(true)} className="grid h-9 w-9 place-items-center rounded-xl bg-primary text-primary-foreground"><Plus className="h-4 w-4"/></button>
           </div>
 
-          <div className="flex items-center justify-between w-full md:w-auto gap-4">
-            {/* Context Switcher (Overview / Crypto) */}
-            <div className="bg-[#131316] p-1 rounded-xl flex border border-[#222226] flex-1 md:flex-initial">
-              <button 
-                onClick={() => setMode('banks')} 
-                className={cn("flex-1 md:flex-none px-4 md:px-5 py-2 rounded-lg text-sm font-semibold transition-all", mode === 'banks' ? "bg-white/10 text-zinc-50 shadow-md" : "text-zinc-400 hover:text-zinc-200")}
-              >
-                Banking
-              </button>
-              <button 
-                onClick={() => setMode('crypto')} 
-                className={cn("flex-1 md:flex-none px-4 md:px-5 py-2 rounded-lg text-sm font-semibold transition-all", mode === 'crypto' ? "bg-white/10 text-zinc-50 shadow-md" : "text-zinc-400 hover:text-zinc-200")}
-              >
-                Crypto
-              </button>
-            </div>
+          <div className="surface min-h-[calc(100vh-2rem)] p-5 md:p-8 animate-fade-in" key={activeTab}>
 
-            <div className="relative flex items-center gap-2">
-              <button 
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                className="w-11 h-11 bg-[#131316] border border-[#222226] rounded-xl flex items-center justify-center text-zinc-400 hover:text-zinc-50 hover:bg-white/5 transition-colors relative flex-shrink-0"
-              >
-                {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-              </button>
-
-              <button 
-                onClick={() => setShowNotifications(!showNotifications)}
-                className="w-11 h-11 bg-[#131316] border border-[#222226] rounded-xl flex items-center justify-center text-zinc-400 hover:text-zinc-50 hover:bg-white/5 transition-colors relative flex-shrink-0"
-              >
-                <Bell size={18} />
-                {unreadCount > 0 && (
-                  <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-[#D4FE44] rounded-full"></span>
-                )}
-              </button>
-              
-              {/* Notification Dropdown Overlay */}
-              {showNotifications && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowNotifications(false)}></div>
-                  <div className="absolute right-0 top-14 w-80 bg-[#131316]/95 backdrop-blur-xl border border-[#222226] rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.8)] z-50 overflow-hidden animate-in fade-in slide-in-from-top-4 duration-200">
-                    <div className="flex justify-between items-center p-4 border-b border-[#222226]">
-                      <h3 className="font-bold text-zinc-100 text-sm">Notifications</h3>
-                      <button 
-                        className="text-xs text-[#D4FE44] hover:underline cursor-pointer"
-                        onClick={() => setNotifications(notifications.map(n => ({...n, read: true})))}
-                      >
-                        Mark all as read
-                      </button>
+            {/* ═══ HOME ═══ */}
+            {activeTab==="Home" && (
+              <div className="space-y-8">
+                <header className="flex flex-wrap items-end justify-between gap-6">
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Welcome back</p>
+                    <h1 className="mt-1 font-display text-4xl md:text-5xl font-semibold leading-[1.05] tracking-tight">
+                      Invest in your<br />finances.
+                    </h1>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="relative hidden sm:block">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <input placeholder="Search…" className="h-11 w-64 rounded-full border border-border bg-secondary/60 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
                     </div>
-                    <div className="max-h-80 overflow-y-auto custom-scrollbar">
-                      {notifications.length > 0 ? notifications.map(notif => (
-                        <div 
-                          key={notif.id} 
-                          onClick={() => {
-                            if (!notif.read) {
-                              setNotifications(notifications.map(n => n.id === notif.id ? {...n, read: true} : n));
-                            }
-                          }}
-                          className={cn("p-4 border-b border-[#222226]/50 transition-colors cursor-pointer", notif.read ? "opacity-60 hover:bg-white/5" : "bg-[#D4FE44]/5 hover:bg-[#D4FE44]/10")}
-                        >
-                          <div className="flex justify-between items-start mb-1">
-                             <p className={cn("text-sm", notif.read ? "text-zinc-300 font-medium" : "text-zinc-100 font-bold")}>{notif.title}</p>
-                             {!notif.read && <span className="w-2 h-2 rounded-full bg-[#D4FE44] mt-1.5 flex-shrink-0 shadow-[0_0_10px_rgba(212,254,68,0.5)]"></span>}
-                          </div>
-                          <p className="text-xs text-zinc-500">{notif.time}</p>
-                        </div>
-                      )) : (
-                        <div className="p-8 text-center text-zinc-500 text-sm">No notifications</div>
-                      )}
-                    </div>
+                    <button onClick={()=>setShowSend(true)} className="pill pill-light gap-2"><Send className="h-3.5 w-3.5 text-[hsl(var(--tile-pink-fg))]"/>Send</button>
+                    <button onClick={()=>setShowReceive(true)} className="pill pill-light gap-2"><Inbox className="h-3.5 w-3.5 text-[hsl(var(--tile-mint-fg))]"/>Receive</button>
+                    <button onClick={()=>setShowNewEntry(true)} className="pill pill-dark"><Plus className="h-4 w-4"/>New entry</button>
                   </div>
-                </>
-              )}
-            </div>
-          </div>
-        </header>
+                </header>
 
-        
-        {activeTab === 'Dashboard' && (
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 tab-content">
-          
-          {loadingEntries ? (
-            <div className="space-y-6 animate-in fade-in">
-              {/* Skeleton stat cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
-                {[1,2,3,4].map(i => (
-                  <div key={i} className="bg-[#131316] p-6 rounded-3xl border border-[#222226]">
-                    <div className="skeleton h-4 w-24 mb-4"></div>
-                    <div className="skeleton h-8 w-32 mb-2"></div>
-                    <div className="skeleton h-3 w-20"></div>
-                  </div>
-                ))}
-              </div>
-              {/* Skeleton chart */}
-              <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 md:gap-8">
-                <div className="xl:col-span-2 bg-[#131316] border border-[#222226] rounded-3xl p-6 h-[320px]">
-                  <div className="skeleton h-5 w-40 mb-6"></div>
-                  <div className="skeleton h-full w-full rounded-xl"></div>
-                </div>
-                <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 h-[320px]">
-                  <div className="skeleton h-5 w-32 mb-6"></div>
-                  {[1,2,3,4].map(i => <div key={i} className="skeleton h-14 w-full rounded-xl mb-3"></div>)}
-                </div>
-              </div>
-            </div>
-          ) : (<>
-          {/* TOP STATS */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
-            <div className="bg-[#131316] p-6 rounded-3xl border border-[#222226] shadow-sm flex flex-col justify-between group stat-card card-enter">
-              <div className="flex justify-between items-start mb-6">
-                <div>
-                  <p className="text-sm font-medium text-zinc-400 mb-1">Total Income</p>
-                  <div className="h-9 flex items-center">
-                    <h3 className="text-3xl font-bold text-zinc-50 leading-none">{bankSymbol}{toBankDisplay(totalEarned)}</h3>
-                  </div>
-                </div>
-                <div className="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
-                  <ArrowUpRight size={20} />
-                </div>
-              </div>
-              <div className="flex items-center gap-2 text-sm h-5">
-                {incomeChange !== null && (
-                  <span className={cn("font-semibold px-2 py-1 rounded-md leading-none", incomeChange >= 0 ? "text-emerald-400 bg-emerald-500/10" : "text-red-400 bg-red-500/10")}>{incomeChange >= 0 ? '+' : ''}{incomeChange.toFixed(1)}%</span>
-                )}
-                <span className="text-zinc-400">vs last month</span>
-              </div>
-            </div>
-
-            <div className="bg-[#131316] p-6 rounded-3xl border border-[#222226] shadow-sm flex flex-col justify-between stat-card card-enter">
-              <div className="flex justify-between items-start mb-6">
-                <div>
-                  <p className="text-sm font-medium text-zinc-400 mb-1">Total Expenses</p>
-                  <div className="h-9 flex items-center">
-                    <h3 className="text-3xl font-bold text-zinc-50 leading-none">{bankSymbol}{toBankDisplay(totalGiven)}</h3>
-                  </div>
-                </div>
-                <div className="w-10 h-10 rounded-full bg-red-500/10 text-red-400 flex items-center justify-center">
-                  <ArrowDownRight size={20} />
-                </div>
-              </div>
-              <div className="flex items-center gap-2 text-sm h-5">
-                {expenseChange !== null && (
-                  <span className={cn("font-semibold px-2 py-1 rounded-md leading-none", expenseChange >= 0 ? "text-red-400 bg-red-500/10" : "text-emerald-400 bg-emerald-500/10")}>{expenseChange >= 0 ? '+' : ''}{expenseChange.toFixed(1)}%</span>
-                )}
-                <span className="text-zinc-400">vs last month</span>
-              </div>
-            </div>
-
-            <div className="bg-[#131316] p-6 rounded-3xl border border-[#222226] shadow-sm flex flex-col justify-between stat-card card-enter">
-              <div className="flex justify-between items-start mb-6">
-                <div>
-                  <p className="text-sm font-medium text-zinc-400 mb-1">Net Savings</p>
-                  <div className="h-9 flex items-center">
-                    <h3 className="text-3xl font-bold text-zinc-50 leading-none">{bankSymbol}{toBankDisplay(totalSaved)}</h3>
-                  </div>
-                </div>
-                <div className="w-10 h-10 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center">
-                  <Briefcase size={20} />
-                </div>
-              </div>
-              <div className="flex items-center gap-2 text-sm h-5">
-                <span className="text-zinc-400 font-semibold leading-none">{totalSaved > 0 ? 'On track' : 'Needs attention'}</span>
-              </div>
-            </div>
-
-            {/* GOAL CARD */}
-            <div className="bg-[#131316] p-6 rounded-3xl border border-[#222226] shadow-sm flex flex-col justify-between stat-card card-enter">
-              <div className="flex justify-between items-start mb-6">
-                <div>
-                  <p className="text-sm font-medium text-zinc-400 mb-1">{mode === 'banks' ? 'Financial Goal' : 'Crypto Goal'}</p>
-                    <div className="flex-1">
-                      {mode === 'banks' ? (
-                        <div className="flex items-center gap-1">
-                          <span className="text-3xl font-bold text-zinc-50 leading-none">
-                            {web2Goal.currency === 'USD' ? '$' : web2Goal.currency === 'EUR' ? '€' : web2Goal.currency === 'GBP' ? '£' : web2Goal.currency === 'INR' ? '₹' : '$'}
-                          </span>
-                          <input 
-                            type="number" 
-                            value={web2Goal.amount} 
-                            onChange={(e) => {
-                              const newGoal = {...web2Goal, amount: Number(e.target.value)};
-                              setWeb2Goal(newGoal);
-                              apiFetch("/api/goal", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ mode: "banks", amount: newGoal.amount, currency: newGoal.currency }),
-                              }).catch(err => console.error("[saveGoal web2] failed:", err));
-                            }}
-                            className="bg-transparent text-3xl font-bold text-zinc-50 w-28 outline-none border-b border-[#222226] focus:border-[#D4FE44] leading-none"
-                          />
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1">
-                          <span className="text-3xl font-bold text-zinc-50 leading-none">$</span>
-                          <input 
-                            type="number" 
-                            value={web3Goal.amount} 
-                            onChange={(e) => {
-                              const newGoal = {...web3Goal, amount: Number(e.target.value)};
-                              setWeb3Goal(newGoal);
-                              apiFetch("/api/goal", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ mode: "crypto", amount: newGoal.amount, currency: "USD" }),
-                              }).catch(err => console.error("[saveGoal web3] failed:", err));
-                            }}
-                            className="bg-transparent text-3xl font-bold text-zinc-50 w-28 outline-none border-b border-[#222226] focus:border-[#D4FE44] leading-none"
-                          />
-                        </div>
-                      )}
-                    </div>
-                    <div className="mt-1">
-                      {mode === 'banks' ? (
-                        <select 
-                          value={web2Goal.currency}
-                          onChange={(e) => {
-                            const newGoal = {...web2Goal, currency: e.target.value};
-                            setWeb2Goal(newGoal);
-                            apiFetch("/api/goal", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ mode: "banks", amount: newGoal.amount, currency: newGoal.currency }),
-                            }).catch(err => console.error("[saveGoal web2 currency] failed:", err));
-                          }}
-                          className="bg-transparent text-xs text-zinc-500 font-semibold outline-none cursor-pointer w-auto"
-                        >
-                          <option value="USD">USD (US Dollar)</option>
-                          <option value="EUR">EUR (Euro)</option>
-                          <option value="GBP">GBP (British Pound)</option>
-                          <option value="INR">INR (Indian Rupee)</option>
-                        </select>
-                      ) : null}
-                    </div>
-                 </div>
-                <div className="w-10 h-10 rounded-full bg-purple-500/10 text-purple-400 flex items-center justify-center">
-                  <Shield size={20} />
-                </div>
-              </div>
-              <div className="flex items-center gap-2 text-sm h-5">
-                <div className="w-full bg-[#222226] h-1.5 rounded-full overflow-hidden mt-1">
-                  <div className="bg-[#D4FE44] h-full" style={{width: `${Math.min((totalSaved / Math.max(mode === 'banks' ? web2Goal.amount : web3Goal.amount * 3000, 1)) * 100, 100)}%`}}></div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 md:gap-8">
-            
-            {/* CASH FLOW CHART */}
-            <div className="xl:col-span-2 flex flex-col relative h-[320px] md:h-[420px]">
-              <div className="flex justify-between items-end mb-6">
-                <div>
-                  <h2 className="text-lg font-bold text-zinc-100">Cash Flow Analytics</h2>
-                  <p className="text-sm text-zinc-400">Click a bar to filter transactions by month</p>
-                </div>
-                <div className="relative">
-                  <select 
-                    value={selectedYear}
-                    onChange={(e) => setSelectedYear(Number(e.target.value))}
-                    className="flex items-center gap-2 pl-9 pr-8 py-2 bg-[#131316] border border-[#222226] hover:bg-[#1C1C21] rounded-xl text-sm font-medium text-zinc-300 transition-colors appearance-none outline-none cursor-pointer"
-                  >
-                    {Array.from(new Set(entries.map(e => new Date(e.date).getFullYear()))).sort((a, b) => b - a).map(year => (
-                      <option key={year} value={year}>{year} Year</option>
-                    ))}
-                    {!entries.some(e => new Date(e.date).getFullYear() === selectedYear) && (
-                      <option value={selectedYear}>{selectedYear} Year</option>
-                    )}
-                  </select>
-                  <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
-                </div>
-              </div>
-
-              <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 flex-1 shadow-sm relative">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={monthlyData} barSize={24} onClick={(state: any) => {
-                    if (state && state.activePayload && state.activePayload.length > 0) {
-                      const clickedMonth = state.activePayload[0].payload.month;
-                      setSelectedMonth(prev => prev === clickedMonth ? null : clickedMonth);
-                    }
-                  }}>
-                    <XAxis 
-                      dataKey="month" 
-                      axisLine={false} 
-                      tickLine={false} 
-                      tick={{ fontSize: 12, fill: '#71717A', fontWeight: 500 }}
-                      dy={15}
-                    />
-                    <Tooltip 
-                      cursor={{ fill: 'rgba(255,255,255,0.03)', rx: 8 }} 
-                      content={<CustomTooltip selectedYear={selectedYear} currencySymbol={bankSymbol} convertAmount={toBankDisplay} />}
-                    />
-                    <Bar dataKey="earned" stackId="a" radius={[0,0,6,6]} style={{ cursor: 'pointer' }}>
-                      {monthlyData.map((data, index) => <Cell key={`cell-${index}`} fill={BRAND} opacity={selectedMonth && selectedMonth !== data.month ? 0.15 : 1} stroke={selectedMonth === data.month ? "#fff" : "transparent"} strokeWidth={selectedMonth === data.month ? 2 : 0} />)}
-                    </Bar>
-                    <Bar dataKey="given" stackId="a" radius={[6,6,0,0]} style={{ cursor: 'pointer' }}>
-                      {monthlyData.map((data, index) => <Cell key={`given-${index}`} fill="#3F3F46" opacity={selectedMonth && selectedMonth !== data.month ? 0.15 : 1} stroke={selectedMonth === data.month ? "#fff" : "transparent"} strokeWidth={selectedMonth === data.month ? 2 : 0} />)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* TRANSACTIONS LIST */}
-            <div className="flex flex-col h-[400px] md:h-[420px] mt-8 xl:mt-0">
-              <div className="flex justify-between items-end mb-6 h-10">
-                <h2 className="text-lg font-bold text-zinc-100 flex items-center gap-2">
-                  Transactions
-                  {selectedMonth && (
-                    <span className="text-[#D4FE44] font-medium text-sm flex items-center bg-[#D4FE44]/10 px-2.5 py-0.5 rounded-md border border-[#D4FE44]/20">
-                      {selectedMonth}
-                      <button onClick={(e) => { e.stopPropagation(); setSelectedMonth(null); }} className="ml-1 hover:text-white"><X size={12}/></button>
-                    </span>
-                  )}
-                </h2>
-                <div className="flex gap-2 relative">
-                  <div className={cn("absolute right-full mr-2 top-1/2 -translate-y-1/2 transition-all duration-300 overflow-hidden", showSearch ? "w-48 opacity-100" : "w-0 opacity-0 pointer-events-none")}>
-                    <input 
-                      type="text" 
-                      placeholder="Search..." 
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full bg-[#1C1C21] border border-[#222226] rounded-xl px-3 py-1.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors"
-                    />
-                  </div>
-                  <button onClick={() => setShowSearch(!showSearch)} className={cn("p-2 border rounded-xl transition-colors min-w-[34px]", showSearch ? "bg-white/10 border-white/10 text-zinc-200" : "bg-[#131316] border-[#222226] hover:bg-[#1C1C21] text-zinc-400 hover:text-zinc-200")}>
-                     <Search size={16} />
-                  </button>
-                  <button onClick={handleExportCSV} title="Export CSV" className="p-2 border border-[#222226] bg-[#131316] hover:bg-[#1C1C21] text-zinc-400 hover:text-zinc-200 rounded-xl transition-colors min-w-[34px]">
-                     <Download size={16} />
-                  </button>
-                  {mode === 'crypto' && (
-                    <button 
-                      onClick={() => setShowTransferToWeb2(true)} 
-                      title="Transfer to Bank"
-                      className="p-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 rounded-xl hover:scale-105 transition-all"
-                    >
-                       <ArrowRightLeft size={16} strokeWidth={2} />
-                    </button>
-                  )}
-                  <button onClick={() => setShowAdd(true)} className="p-2 bg-[#D4FE44] border border-[#D4FE44]/20 hover:bg-[#bceb29] rounded-xl text-black hover:scale-105 transition-all">
-                     <Plus size={16} strokeWidth={2.5} />
-                  </button>
-                </div>
-              </div>
-
-              <div className="bg-[#131316] border border-[#222226] rounded-3xl p-2 flex-1 shadow-sm overflow-hidden flex flex-col">
-                {/* Categories Row */}
-                <div className="flex gap-2 p-3 overflow-x-auto scrollbar-hide border-b border-[#222226]">
-                  {categories.map(cat => (
-                     <button 
-                       key={cat} 
-                       onClick={() => setFilter(cat)}
-                       className={cn(
-                         "px-4 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors",
-                         filter === cat ? "bg-white/10 text-zinc-50 border border-white/10" : "bg-transparent text-zinc-400 hover:bg-white/5"
-                       )}
-                     >
-                       {cat}
-                     </button>
-                  ))}
-                </div>
-
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1 mt-1">
-                  {filteredEntries.map(entry => {
-                    const isPositive = entry.earned > entry.given;
-                    const amount = isPositive ? entry.earned : entry.given;
+                {/* Category chips */}
+                <div className="-mx-1 flex flex-wrap items-center gap-2 px-1">
+                  {CATEGORIES.map(c => {
+                    const a = catFilter===c;
                     return (
-                      <div key={entry.id} className="flex items-center justify-between p-3 rounded-2xl hover:bg-white/5 transition-colors group cursor-pointer border border-transparent entry-row hover:border-white/5">
-                        <div className="flex items-center gap-4">
-                          <div className={cn(
-                            "w-11 h-11 rounded-xl flex items-center justify-center border",
-                            isPositive ? "bg-[#D4FE44]/10 text-[#D4FE44] border-[#D4FE44]/20" : "bg-zinc-800 text-zinc-400 border-[#222226]"
-                          )}>
-                             {isPositive ? <ArrowDownRight size={18} /> : <ArrowUpRight size={18} />}
+                      <button key={c} onClick={()=>setCatFilter(c)} className={`pill ${a?"pill-dark":"pill-light"}`}>
+                        {a && <span className="grid h-5 w-5 place-items-center rounded-full bg-[hsl(var(--surface))] text-[10px] font-bold text-primary">⌗</span>}
+                        {c}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Stat tiles */}
+                <section className="grid gap-4 sm:grid-cols-3">
+                  {[
+                    { label:"Total balance", value:fmt(totalBalance), sub:`across ${wallets.length} wallets`, tile:"mint" as Tile },
+                    { label:"Total income",   value:`+${fmt(totalIn)}`, sub:`${entries.filter(e=>e.type==="income"||e.type==="receive").length} entries`, tile:"lavender" as Tile },
+                    { label:"Total spent",    value:`−${fmt(totalOut)}`, sub:`${entries.filter(e=>e.type==="expense"||e.type==="send").length} entries`, tile:"pink" as Tile },
+                  ].map(s => {
+                    const t = TILE[s.tile];
+                    return (
+                      <div key={s.label} className={`rounded-[24px] p-5 ${t.bg} ${t.fg}`}>
+                        <p className="text-xs font-medium uppercase tracking-wider opacity-70">{s.label}</p>
+                        <p className="mt-2 font-display text-3xl font-semibold tracking-tight">{s.value}</p>
+                        <p className="mt-1 text-xs opacity-70">{s.sub}</p>
+                      </div>
+                    );
+                  })}
+                </section>
+
+                {/* Recent entries */}
+                <section>
+                  <div className="mb-4 flex items-center justify-between">
+                    <h2 className="text-sm font-medium text-muted-foreground">Recent entries</h2>
+                    <button onClick={()=>setActiveTab("Wallets")} className="flex items-center gap-1 text-xs font-semibold hover:underline">View all<ArrowUpRight className="h-3.5 w-3.5"/></button>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {filteredEntries.slice(0,4).map((e, i) => {
+                      const palette = (["pink","yellow","lavender","peach"] as Tile[])[i%4];
+                      const t = TILE[palette];
+                      const pos = e.type==="income"||e.type==="receive";
+                      return (
+                        <article key={e.id} className={`relative overflow-hidden rounded-[28px] p-5 ${t.bg} ${t.fg} group`}>
+                          <div className="flex items-center justify-between">
+                            <span className={`pill ${t.chip} px-3 py-1 text-xs`}>{e.category}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="flex items-center gap-1 rounded-full bg-[hsl(var(--surface)/0.7)] px-2.5 py-1 text-xs font-semibold backdrop-blur">
+                                {e.type==="send"?<Send className="h-3 w-3"/>:e.type==="receive"?<Inbox className="h-3 w-3"/>:<Star className="h-3 w-3 fill-current"/>}
+                                {pos?"+":"−"}{fmt(e.amount)}
+                              </span>
+                              <button onClick={()=>setDeletingId({id:e.id,kind:"entry"})} className="opacity-0 group-hover:opacity-100 transition grid h-6 w-6 place-items-center rounded-full bg-[hsl(var(--surface)/0.6)]"><X className="h-3 w-3"/></button>
+                            </div>
+                          </div>
+                          <h3 className="mt-6 font-display text-xl font-semibold leading-snug">{e.note}</h3>
+                          <p className="mt-1 text-xs opacity-70">{new Date(e.date).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</p>
+                          <div className="mt-6 flex items-center justify-between">
+                            <span className="text-xs opacity-70">{wallets.find(w=>w.id===e.walletId)?.name||""}</span>
+                            <div className="flex -space-x-1.5">
+                              <span className="h-6 w-6 rounded-full bg-[hsl(var(--surface))] ring-2 ring-current/10" />
+                              <span className="h-6 w-6 rounded-full bg-[hsl(var(--surface)/0.7)] ring-2 ring-current/10" />
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    })}
+                    {filteredEntries.length===0 && (
+                      <div className="md:col-span-2 rounded-[28px] bg-secondary/40 p-10 text-center text-muted-foreground">
+                        <p className="font-display text-lg font-medium">No entries yet</p>
+                        <p className="text-sm mt-1">Add your first entry to get started</p>
+                      </div>
+                    )}
+                  </div>
+                </section>
+
+                {/* Featured goal */}
+                {goals.length > 0 && (
+                  <section>
+                    <h2 className="mb-3 text-sm font-medium text-muted-foreground">Featured goal</h2>
+                    <div className="surface flex flex-wrap items-center gap-6 p-5">
+                      {(() => {
+                        const g=goals[0]; const t=TILE[g.tile]; const pct=Math.min(100,(g.current/g.target)*100);
+                        return (
+                          <>
+                            <div className={`grid h-16 w-16 shrink-0 place-items-center rounded-2xl ${t.bg} ${t.fg} font-display text-2xl font-bold`}>{Math.round(pct)}%</div>
+                            <div className="min-w-0 flex-1">
+                              <h3 className="font-display text-lg font-semibold">{g.name}</h3>
+                              <p className="text-xs text-muted-foreground">{fmt(g.current)} of {fmt(g.target)} · by {new Date(g.deadline).toLocaleDateString("en-US",{month:"short",year:"numeric"})}</p>
+                              <div className="mt-3 h-2 overflow-hidden rounded-full bg-secondary">
+                                <div className="h-full rounded-full bg-primary transition-all" style={{width:`${pct}%`}} />
+                              </div>
+                            </div>
+                            <button onClick={()=>setActiveTab("Goals")} className="pill pill-light"><MoreHorizontal className="h-4 w-4"/></button>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </section>
+                )}
+              </div>
+            )}
+
+            {/* ═══ WALLETS ═══ */}
+            {activeTab==="Wallets" && (
+              <div className="space-y-8">
+                <header className="flex flex-wrap items-end justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Your money</p>
+                    <h1 className="mt-1 font-display text-4xl font-semibold tracking-tight md:text-5xl">Wallets</h1>
+                  </div>
+                  <button onClick={()=>setShowAddWallet(true)} className="pill pill-dark"><Plus className="h-4 w-4"/>New wallet</button>
+                </header>
+                <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {wallets.map(w => {
+                    const t = TILE[w.tile];
+                    return (
+                      <article key={w.id} className={`rounded-[28px] p-6 ${t.bg} ${t.fg} group relative`}>
+                        <div className="flex items-center justify-between">
+                          <span className={`pill ${t.chip} px-3 py-1 text-xs`}><Wallet className="h-3 w-3"/>{w.bank}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="rounded-full bg-[hsl(var(--surface)/0.7)] px-2.5 py-1 text-[10px] font-semibold">{w.currency}</span>
+                            <button onClick={()=>setDeletingId({id:w.id,kind:"wallet"})} className="opacity-0 group-hover:opacity-100 transition grid h-6 w-6 place-items-center rounded-full bg-[hsl(var(--surface)/0.6)]"><X className="h-3 w-3"/></button>
+                          </div>
+                        </div>
+                        <h3 className="mt-6 font-display text-xl font-semibold">{w.name}</h3>
+                        <p className="mt-1 font-display text-3xl font-semibold tracking-tight">{fmt(w.balance,w.currency)}</p>
+                        <div className="mt-6 flex items-center gap-2 text-xs opacity-70">
+                          {w.address?<span className="font-mono">{w.address.slice(0,8)}…</span>:<span>•••• 0000</span>}
+                          <span>·</span><span>Updated just now</span>
+                        </div>
+                      </article>
+                    );
+                  })}
+                  <button onClick={()=>setShowAddWallet(true)} className="rounded-[28px] border-2 border-dashed border-border h-40 flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-primary hover:text-foreground transition">
+                    <Plus className="h-6 w-6"/><span className="text-sm font-medium">Add wallet</span>
+                  </button>
+                </section>
+                <section className="surface p-5">
+                  <h2 className="font-display text-lg font-semibold">All entries</h2>
+                  <p className="text-xs text-muted-foreground mb-4">Income, expenses and transfers across wallets</p>
+                  <ul className="divide-y divide-border">
+                    {entries.slice(0,20).map(e => {
+                      const pos=e.type==="income"||e.type==="receive";
+                      return (
+                        <li key={e.id} className="flex items-center gap-3 py-3.5">
+                          <div className={`grid h-10 w-10 place-items-center rounded-xl text-sm font-bold shrink-0 ${pos?"bg-tile-mint text-[hsl(var(--tile-mint-fg))]":"bg-tile-pink text-[hsl(var(--tile-pink-fg))]"}`}>
+                            {e.type==="send"?<Send className="h-4 w-4"/>:e.type==="receive"?<Inbox className="h-4 w-4"/>:e.note.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium">{e.note}</p>
+                            <p className="text-xs text-muted-foreground">{e.category} · {wallets.find(w=>w.id===e.walletId)?.name||""}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className={`text-sm font-semibold ${pos?"text-success":""}`}>{pos?"+":"−"}{fmt(e.amount,e.currency)}</p>
+                            <p className="text-[10px] text-muted-foreground">{new Date(e.date).toLocaleDateString("en-US",{month:"short",day:"numeric"})}</p>
+                          </div>
+                        </li>
+                      );
+                    })}
+                    {entries.length===0 && <li className="py-8 text-center text-muted-foreground text-sm">No entries yet</li>}
+                  </ul>
+                </section>
+              </div>
+            )}
+
+            {/* ═══ CARDS ═══ */}
+            {activeTab==="Cards" && (
+              <div className="space-y-8">
+                <header className="flex flex-wrap items-end justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Plastic &amp; virtual</p>
+                    <h1 className="mt-1 font-display text-4xl font-semibold tracking-tight md:text-5xl">Cards</h1>
+                  </div>
+                  <button onClick={()=>setShowAddCard(true)} className="pill pill-dark"><Plus className="h-4 w-4"/>Add card</button>
+                </header>
+                <section className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  {cards.map(c => {
+                    const t=TILE[c.tile]; const w=wallets.find(x=>x.id===c.walletId);
+                    return (
+                      <div key={c.id} className={`relative aspect-[1.6/1] overflow-hidden rounded-[28px] p-6 ${t.bg} ${t.fg} group`}>
+                        <div className="flex h-full flex-col justify-between">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <p className="text-[10px] uppercase tracking-[0.2em] opacity-70">{c.brand}</p>
+                              <p className="mt-1 font-display text-base font-semibold">{c.label}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Wifi className="h-5 w-5 rotate-90 opacity-70"/>
+                              <button onClick={()=>setDeletingId({id:c.id,kind:"card"})} className="opacity-0 group-hover:opacity-100 transition grid h-6 w-6 place-items-center rounded-full bg-[hsl(var(--surface)/0.6)]"><X className="h-3 w-3"/></button>
+                            </div>
                           </div>
                           <div>
-                            <h4 className="text-sm font-bold text-zinc-100">{entry.project}</h4>
-                            <p className="text-xs text-zinc-400 font-medium">
-                              {entry.date} • {entry.givenTo}
-                              {entry.walletId && (
-                                <span className="ml-1 text-[#D4FE44]/70">
-                                  • {mode === 'banks' 
-                                    ? (bankCards.find(c => c.id === entry.walletId)?.name || 'Card')
-                                    : (wallets.find(w => w.id === entry.walletId)?.name || 'Wallet')
-                                  }
-                                </span>
-                              )}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className={cn("text-sm font-bold", isPositive ? "text-[#D4FE44]" : "text-zinc-100")}>
-                            {isPositive ? "+" : "-"}{bankSymbol}{amount.toLocaleString()}
-                          </p>
-                          <div className="flex justify-end gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => setEditingEntry(entry)} className="text-zinc-400 hover:text-zinc-600"><Edit2 size={12} /></button>
-                            <button onClick={() => setDeletingTransactionId(entry.id)} className="text-zinc-400 hover:text-red-400"><Trash2 size={12} /></button>
+                            <p className="font-mono text-lg tracking-widest">•••• •••• •••• {c.last4}</p>
+                            <div className="mt-3 flex items-end justify-between">
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wider opacity-60">Linked to</p>
+                                <p className="text-xs font-semibold">{w?.name||`${firstName} ${lastName}`}</p>
+                              </div>
+                              {w && <p className="font-display text-lg font-semibold">{fmt(w.balance,w.currency)}</p>}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    )
+                    );
                   })}
-                  
-                  {filteredEntries.length === 0 && (
-                    <div className="h-full flex flex-col items-center justify-center text-zinc-400">
-                       <HelpCircle size={32} className="mb-2 opacity-50" />
-                       <span className="text-sm font-medium">No transactions found</span>
-                    </div>
-                  )}
-                </div>
+                  <button onClick={()=>setShowAddCard(true)} className="aspect-[1.6/1] rounded-[28px] border-2 border-dashed border-border flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-primary hover:text-foreground transition">
+                    <Plus className="h-6 w-6"/><span className="text-sm font-medium">Add card</span>
+                  </button>
+                </section>
               </div>
-            </div>
+            )}
 
-          </div>
-          </>)}
-        </div>
-        )}
-        
-        {activeTab === 'Analytics' && (
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 tab-content">
-            {mode === 'banks' ? (
-              /* ========== BANKS ANALYTICS ========== */
-              <div className="max-w-6xl mx-auto space-y-6 pb-20 md:pb-0">
-                <div className="mb-8">
-                  <h2 className="text-2xl font-bold text-zinc-100">Financial Analytics</h2>
-                  <p className="text-sm text-zinc-400">Track your income, spending, and savings performance.</p>
-                </div>
-
-                {/* Summary Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {[
-                    { label: 'Total Earned', value: totalEarned, color: 'text-emerald-400', icon: ArrowUpRight, prefix: bankSymbol },
-                    { label: 'Total Spent', value: totalGiven, color: 'text-red-400', icon: ArrowDownRight, prefix: bankSymbol },
-                    { label: 'Net Income', value: netIncome, color: netIncome >= 0 ? 'text-emerald-400' : 'text-red-400', icon: TrendingUp, prefix: bankSymbol },
-                    { label: 'Total Saved', value: totalSaved, color: 'text-[#D4FE44]', icon: Activity, prefix: bankSymbol },
-                  ].map((card, i) => (
-                    <div key={i} className="bg-[#131316] border border-[#222226] rounded-2xl p-5 stat-card card-enter">
-                      <div className="flex items-center gap-2 mb-3">
-                        <card.icon size={16} className={card.color} />
-                        <span className="text-xs text-zinc-500 font-medium">{card.label}</span>
-                      </div>
-                      <p className={cn("text-2xl font-bold", card.color)}>{card.prefix}{bankCurrency === 'INR' ? toBankDisplay(card.value) : card.value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Main Chart */}
-                <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm">
-                  <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-lg font-bold text-zinc-100">Income vs Expenses</h3>
-                    <div className="flex items-center gap-4 text-xs">
-                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#D4FE44]"></span> Earned</span>
-                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-400"></span> Spent</span>
-                    </div>
+            {/* ═══ GOALS ═══ */}
+            {activeTab==="Goals" && (
+              <div className="space-y-8">
+                <header className="flex flex-wrap items-end justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Save with intention</p>
+                    <h1 className="mt-1 font-display text-4xl font-semibold tracking-tight md:text-5xl">Goals</h1>
                   </div>
-                  <div className="h-[300px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={monthlyData} margin={{top: 10, right: 10, left: -20, bottom: 0}}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#222226" vertical={false} />
-                        <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#71717A' }} dy={10} />
-                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#71717A' }} tickFormatter={(val) => `${bankSymbol}${val}`} />
-                        <Tooltip contentStyle={{ backgroundColor: '#131316', borderRadius: 16, border: '1px solid rgba(255,255,255,0.1)', color: '#FAFAFA' }} />
-                        <Bar dataKey="earned" fill="#D4FE44" radius={[6,6,0,0]} maxBarSize={40} />
-                        <Bar dataKey="given" fill="#f87171" radius={[6,6,0,0]} maxBarSize={40} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
+                  <button onClick={()=>setShowNewGoal(true)} className="pill pill-dark"><Plus className="h-4 w-4"/>New goal</button>
+                </header>
+                <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {goals.map(g => {
+                    const t=TILE[g.tile]; const pct=Math.min(100,(g.current/g.target)*100);
+                    return (
+                      <article key={g.id} className={`rounded-[28px] p-6 ${t.bg} ${t.fg} group relative`}>
+                        <div className="flex items-center justify-between">
+                          <span className={`pill ${t.chip} px-3 py-1 text-xs`}><Target className="h-3 w-3"/>Goal</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-display text-2xl font-bold">{Math.round(pct)}%</span>
+                            <button onClick={()=>setDeletingId({id:g.id,kind:"goal"})} className="opacity-0 group-hover:opacity-100 transition grid h-6 w-6 place-items-center rounded-full bg-[hsl(var(--surface)/0.6)]"><X className="h-3 w-3"/></button>
+                          </div>
+                        </div>
+                        <h3 className="mt-5 font-display text-xl font-semibold">{g.name}</h3>
+                        <p className="mt-1 text-xs opacity-70">{fmt(g.current)} of {fmt(g.target)}</p>
+                        <div className="mt-4 h-2 overflow-hidden rounded-full bg-[hsl(var(--surface)/0.6)]">
+                          <div className="h-full rounded-full bg-current/80 transition-all" style={{width:`${pct}%`}}/>
+                        </div>
+                        <p className="mt-3 text-xs opacity-70">Due {new Date(g.deadline).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})}</p>
+                      </article>
+                    );
+                  })}
+                  <button onClick={()=>setShowNewGoal(true)} className="rounded-[28px] border-2 border-dashed border-border min-h-[200px] flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-primary hover:text-foreground transition">
+                    <Plus className="h-6 w-6"/><span className="text-sm font-medium">New goal</span>
+                  </button>
+                </section>
+              </div>
+            )}
 
-                {/* Bottom Row */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Monthly Savings */}
-                  <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6">
-                    <h3 className="text-lg font-bold text-zinc-100 mb-6">Monthly Savings</h3>
-                    <div className="h-[200px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={monthlyData} margin={{top: 10, right: 10, left: -20, bottom: 0}}>
+            {/* ═══ PERFORMANCE ═══ */}
+            {activeTab==="Performance" && (
+              <div className="space-y-8">
+                <header>
+                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Insights</p>
+                  <h1 className="mt-1 font-display text-4xl font-semibold tracking-tight md:text-5xl">Performance</h1>
+                </header>
+                <section className="grid gap-4 lg:grid-cols-3">
+                  <div className="surface p-5 lg:col-span-2">
+                    <h3 className="font-display text-lg font-semibold">Net balance</h3>
+                    <p className="text-xs text-muted-foreground">Last 6 months</p>
+                    <div className="mt-4 h-72">
+                      <ResponsiveContainer>
+                        <AreaChart data={SEED_MONTHLY} margin={{top:10,right:8,left:-16,bottom:0}}>
                           <defs>
-                            <linearGradient id="colorSaved" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#D4FE44" stopOpacity={0.3}/>
-                              <stop offset="95%" stopColor="#D4FE44" stopOpacity={0}/>
+                            <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="hsl(var(--tile-lavender))" stopOpacity={0.95}/>
+                              <stop offset="100%" stopColor="hsl(var(--tile-lavender))" stopOpacity={0.1}/>
                             </linearGradient>
                           </defs>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#222226" vertical={false} />
-                          <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#71717A' }} />
-                          <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#71717A' }} tickFormatter={(val) => `${bankSymbol}${val}`} />
-                          <Tooltip contentStyle={{ backgroundColor: '#131316', borderRadius: 16, border: '1px solid rgba(255,255,255,0.1)', color: '#FAFAFA' }} />
-                          <Area type="monotone" dataKey="saved" stroke="#D4FE44" strokeWidth={2} fillOpacity={1} fill="url(#colorSaved)" />
+                          <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 6" vertical={false}/>
+                          <XAxis dataKey="d" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false}/>
+                          <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} tickFormatter={v=>`$${v/1000}k`}/>
+                          <Tooltip content={<ChartTip/>}/>
+                          <Area type="monotone" dataKey="balance" name="Balance" stroke="hsl(var(--primary))" strokeWidth={2.5} fill="url(#g1)"/>
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
                   </div>
+                  <div className="surface p-5">
+                    <h3 className="font-display text-lg font-semibold">Cashflow</h3>
+                    <p className="text-xs text-muted-foreground">Income vs spent</p>
+                    <div className="mt-4 h-72">
+                      <ResponsiveContainer>
+                        <BarChart data={SEED_MONTHLY} margin={{top:10,right:8,left:-16,bottom:0}}>
+                          <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 6" vertical={false}/>
+                          <XAxis dataKey="d" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false}/>
+                          <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} tickFormatter={v=>`$${v/1000}k`}/>
+                          <Tooltip content={<ChartTip/>} cursor={{fill:"hsl(var(--muted))"}}/>
+                          <Bar dataKey="income" name="Income" fill="hsl(var(--tile-mint))" radius={[8,8,0,0]}/>
+                          <Bar dataKey="spent" name="Spent" fill="hsl(var(--tile-pink))" radius={[8,8,0,0]}/>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            )}
 
-                  {/* Recent Activity */}
-                  <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6">
-                    <h3 className="text-lg font-bold text-zinc-100 mb-4">Recent Activity</h3>
-                    <div className="space-y-3 max-h-[220px] overflow-y-auto custom-scrollbar">
-                      {filteredEntries.slice(0, 8).map((entry, i) => (
-                        <div key={entry.id} className="flex items-center justify-between p-3 rounded-xl bg-[#09090B] hover:bg-[#1C1C21] transition-colors">
-                          <div className="flex items-center gap-3">
-                            <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", entry.earned > 0 ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400")}>
-                              {entry.earned > 0 ? <ArrowUpRight size={14}/> : <ArrowDownRight size={14}/>}
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-zinc-200">{entry.project}</p>
-                              <p className="text-xs text-zinc-500">{entry.date} • {entry.givenTo}</p>
-                            </div>
+            {/* ═══ SYNC ═══ */}
+            {activeTab==="Sync" && (
+              <div className="space-y-8">
+                <header>
+                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Across devices</p>
+                  <h1 className="mt-1 font-display text-4xl font-semibold tracking-tight md:text-5xl">Cloud sync</h1>
+                  <p className="mt-2 max-w-xl text-sm text-muted-foreground">Share your dashboard between devices with a sync ID. Encrypted in transit and at rest.</p>
+                </header>
+                <section className="grid gap-4 md:grid-cols-2">
+                  {/* Sync ID card */}
+                  <div className="surface p-6">
+                    <div className="flex items-center gap-3 mb-5">
+                      <div className="grid h-10 w-10 place-items-center rounded-xl bg-tile-mint text-[hsl(var(--tile-mint-fg))]"><Cloud className="h-5 w-5"/></div>
+                      <div><h3 className="font-display text-lg font-semibold">Your sync ID</h3><p className="text-xs text-muted-foreground">Use this to load your data on another device</p></div>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-2xl border border-border bg-secondary px-4 py-3">
+                      <input value={syncId} onChange={e=>setSyncId(e.target.value)} className="flex-1 bg-transparent font-mono text-sm focus:outline-none"/>
+                      <button onClick={()=>{navigator.clipboard.writeText(syncId);setSyncCopied(true);setTimeout(()=>setSyncCopied(false),1500);}} className="pill pill-dark px-3 py-1.5 text-xs">
+                        {syncCopied?<Check className="h-3.5 w-3.5"/>:<Copy className="h-3.5 w-3.5"/>}
+                        {syncCopied?"Copied":"Copy"}
+                      </button>
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <button onClick={()=>{try{localStorage.setItem("ledger.syncId",syncId);}catch{}}} className="pill pill-dark justify-center"><Upload className="h-4 w-4"/>Save to cloud</button>
+                      <button onClick={()=>{try{const s=localStorage.getItem("ledger.syncId");if(s)setSyncId(s);}catch{}}} className="pill pill-light justify-center"><Download className="h-4 w-4"/>Load from cloud</button>
+                    </div>
+                  </div>
+
+                  {/* Passcode card */}
+                  <form onSubmit={e=>{
+                    e.preventDefault();
+                    if(newPass.length<6){return;}
+                    if(newPass!==confirmPass){return;}
+                    setStoredPasscode(newPass); try{localStorage.setItem("ledger.passcode",newPass);}catch{}
+                    setNewPass(""); setConfirmPass(""); setShowPassInput(false);
+                  }} className="surface p-6">
+                    <div className="flex items-center gap-3 mb-5">
+                      <div className="grid h-10 w-10 place-items-center rounded-xl bg-tile-lavender text-[hsl(var(--tile-lavender-fg))]"><KeyRound className="h-5 w-5"/></div>
+                      <div className="flex-1">
+                        <h3 className="font-display text-lg font-semibold">Master passcode</h3>
+                        <p className="text-xs text-muted-foreground">Locks the dashboard on this device</p>
+                      </div>
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${storedPasscode?"bg-success/10 text-success":"bg-warning/15 text-warning"}`}>
+                        {storedPasscode?<ShieldCheck className="h-3.5 w-3.5"/>:<ShieldAlert className="h-3.5 w-3.5"/>}
+                        {storedPasscode?"Protected":"Not set"}
+                      </span>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="relative">
+                        <input type={showPassInput?"text":"password"} value={newPass} onChange={e=>setNewPass(e.target.value)} placeholder={storedPasscode?"New passcode":"Choose a passcode"} autoComplete="new-password" maxLength={64}
+                          className="h-12 w-full rounded-2xl border border-border bg-secondary px-4 pr-12 text-center font-mono text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-primary/30"/>
+                        <button type="button" onClick={()=>setShowPassInput(s=>!s)} className="absolute right-3 top-1/2 -translate-y-1/2 grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:text-foreground">
+                          {showPassInput?<EyeOff className="h-4 w-4"/>:<Eye className="h-4 w-4"/>}
+                        </button>
+                      </div>
+                      {newPass && (
+                        <div>
+                          <div className="flex h-1.5 gap-1">
+                            {[0,1,2,3].map(i=><div key={i} className={`h-full flex-1 rounded-full transition-colors ${i<passStrength.score?passStrength.tone:"bg-muted"}`}/>)}
                           </div>
-                          <span className={cn("text-sm font-bold", entry.earned > 0 ? "text-emerald-400" : "text-red-400")}>
-                            {entry.earned > 0 ? '+' : '-'}{bankSymbol}{(entry.earned || entry.given).toFixed(2)}
-                          </span>
+                          <p className="mt-1.5 text-[11px] text-muted-foreground">Strength: <span className="font-semibold text-foreground">{passStrength.label}</span> · use letters + numbers, 6+ chars</p>
                         </div>
+                      )}
+                      <input type={showPassInput?"text":"password"} value={confirmPass} onChange={e=>setConfirmPass(e.target.value)} placeholder="Confirm passcode" autoComplete="new-password" maxLength={64}
+                        className="h-12 w-full rounded-2xl border border-border bg-secondary px-4 text-center font-mono text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-primary/30"/>
+                      <div className="flex gap-2">
+                        <button type="submit" disabled={newPass.length<6||newPass!==confirmPass} className="pill pill-dark flex-1 justify-center disabled:opacity-50">{storedPasscode?"Change passcode":"Set passcode"}</button>
+                        {storedPasscode && <button type="button" onClick={()=>{setStoredPasscode(null);try{localStorage.removeItem("ledger.passcode");}catch{}}} className="pill pill-light text-destructive"><Trash2 className="h-4 w-4"/>Remove</button>}
+                      </div>
+                    </div>
+                  </form>
+                </section>
+                <section className="surface p-6">
+                  <h3 className="font-display text-lg font-semibold">How it works</h3>
+                  <ol className="mt-3 space-y-2 text-sm text-muted-foreground">
+                    <li><span className="font-semibold text-foreground">1.</span> Generate a sync ID and click "Save to cloud".</li>
+                    <li><span className="font-semibold text-foreground">2.</span> On another device, paste the ID and click "Load from cloud".</li>
+                    <li><span className="font-semibold text-foreground">3.</span> Your wallets, cards, entries and goals appear instantly.</li>
+                  </ol>
+                </section>
+              </div>
+            )}
+
+            {/* ═══ SETTINGS ═══ */}
+            {activeTab==="Settings" && (
+              <div className="space-y-8">
+                <header>
+                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Preferences</p>
+                  <h1 className="mt-1 font-display text-4xl font-semibold tracking-tight md:text-5xl">Settings</h1>
+                </header>
+                <section className="grid gap-4 md:grid-cols-2">
+                  {/* Profile */}
+                  <div className="surface p-6 md:col-span-2">
+                    <h3 className="font-display text-lg font-semibold mb-4">Profile</h3>
+                    <div className="flex items-start gap-5">
+                      <div className="flex flex-col items-center gap-2 shrink-0">
+                        <div className="relative h-20 w-20 rounded-full overflow-hidden bg-tile-lavender ring-4 ring-[hsl(var(--surface))] cursor-pointer" onClick={()=>fileInputRef.current?.click()}>
+                          <Avatar src={avatarUrl} alt="Profile" size={80}/>
+                          <div className="absolute inset-0 bg-foreground/20 flex items-center justify-center opacity-0 hover:opacity-100 transition"><span className="text-[hsl(var(--surface))] text-xs font-semibold">Edit</span></div>
+                        </div>
+                        <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleProfileImg}/>
+                      </div>
+                      <div className="flex-1 grid sm:grid-cols-2 gap-3">
+                        <Field label="First name"><FInput value={firstName} onChange={e=>setFirstName(e.target.value)}/></Field>
+                        <Field label="Last name"><FInput value={lastName} onChange={e=>setLastName(e.target.value)}/></Field>
+                        <div className="sm:col-span-2"><Field label="Email"><FInput type="email" value={email} onChange={e=>setEmail(e.target.value)}/></Field></div>
+                        <div className="sm:col-span-2"><button onClick={handleSaveProfile} disabled={isSaving} className="pill pill-dark disabled:opacity-50">{isSaving?"Saving…":"Save changes"}</button></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Currency */}
+                  <div className="surface p-6">
+                    <h3 className="font-display text-lg font-semibold">Display currency</h3>
+                    <p className="text-xs text-muted-foreground">All totals will be converted using live rates</p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {(["USD","EUR","GBP"] as CurrencyCode[]).map(c => (
+                        <button key={c} onClick={()=>setCurrency(c)} className={`pill ${currency===c?"pill-dark":"pill-light"}`}>{c}</button>
                       ))}
-                      {filteredEntries.length === 0 && (
-                        <p className="text-sm text-zinc-500 text-center py-8">No transactions yet</p>
-                      )}
+                    </div>
+                    <p className="mt-3 text-xs text-muted-foreground">Active: <span className="font-semibold text-foreground">{currency}</span> · 1 USD = {FX[currency].toFixed(2)} {currency}</p>
+                  </div>
+
+                  {/* Theme */}
+                  <div className="surface p-6">
+                    <h3 className="font-display text-lg font-semibold">Theme</h3>
+                    <p className="text-xs text-muted-foreground">Light, dark or sync with system</p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {(["light","dark","system"] as ThemeMode[]).map(t => (
+                        <button key={t} onClick={()=>setTheme(t)} className={`pill capitalize ${theme===t?"pill-dark":"pill-light"}`}>{t}</button>
+                      ))}
                     </div>
                   </div>
-                </div>
-              </div>
-            ) : (
-              /* ========== CRYPTO ANALYTICS ========== */
-              <div className="max-w-6xl mx-auto space-y-6 pb-20 md:pb-0">
-                <div className="mb-8">
-                  <h2 className="text-2xl font-bold text-zinc-100">Crypto Analytics</h2>
-                  <p className="text-sm text-zinc-400">Portfolio performance, ROI tracking, and wallet distribution.</p>
-                </div>
 
-                {/* Summary Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {[
-                    { label: 'Portfolio Value', value: totalEarned, color: 'text-purple-400', icon: Wallet, prefix: '$' },
-                    { label: 'Total Invested', value: totalSaved, color: 'text-blue-400', icon: TrendingDown, prefix: '$' },
-                    { label: 'Net P&L', value: totalEarned - totalSaved, color: (totalEarned - totalSaved) >= 0 ? 'text-emerald-400' : 'text-red-400', icon: TrendingUp, prefix: '$' },
-                    { label: 'Transactions', value: filteredEntries.length, color: 'text-[#D4FE44]', icon: Activity, prefix: '' },
-                  ].map((card, i) => (
-                    <div key={i} className="bg-[#131316] border border-[#222226] rounded-2xl p-5 stat-card card-enter">
-                      <div className="flex items-center gap-2 mb-3">
-                        <card.icon size={16} className={card.color} />
-                        <span className="text-xs text-zinc-500 font-medium">{card.label}</span>
-                      </div>
-                      <p className={cn("text-2xl font-bold", card.color)}>{card.prefix}{typeof card.value === 'number' ? (card.prefix === '' ? card.value : card.value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})) : card.value}</p>
+                  {/* Exchange rates */}
+                  <div className="surface p-6 md:col-span-2">
+                    <h3 className="font-display text-lg font-semibold">Exchange rates</h3>
+                    <p className="text-xs text-muted-foreground mb-4">Refreshed hourly</p>
+                    <ul className="grid grid-cols-3 gap-3">
+                      {Object.entries(FX).map(([c, r]) => (
+                        <li key={c} className="rounded-2xl border border-border bg-secondary px-4 py-3">
+                          <p className="text-xs text-muted-foreground">1 USD =</p>
+                          <p className="mt-1 font-display text-lg font-semibold">{r.toFixed(2)} {c}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Recent activity */}
+                  <div className="surface p-6 md:col-span-2">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-display text-lg font-semibold">Recent activity</h3>
+                      <TrendingUp className="h-4 w-4 text-muted-foreground"/>
                     </div>
-                  ))}
-                </div>
-
-                {/* Portfolio Chart */}
-                <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm">
-                  <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-lg font-bold text-zinc-100">Portfolio Value Over Time</h3>
-                    <div className="flex items-center gap-4 text-xs">
-                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-purple-400"></span> Current Value</span>
-                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-blue-400"></span> Invested</span>
-                    </div>
-                  </div>
-                  <div className="h-[300px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={monthlyData} margin={{top: 10, right: 10, left: -20, bottom: 0}}>
-                        <defs>
-                          <linearGradient id="colorCurrentValue" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="#a855f7" stopOpacity={0}/>
-                          </linearGradient>
-                          <linearGradient id="colorInvested" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/>
-                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#222226" vertical={false} />
-                        <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#71717A' }} dy={10} />
-                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#71717A' }} tickFormatter={(val) => `${bankSymbol}${val}`} />
-                        <Tooltip contentStyle={{ backgroundColor: '#131316', borderRadius: 16, border: '1px solid rgba(255,255,255,0.1)', color: '#FAFAFA' }} />
-                        <Area type="monotone" dataKey="saved" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorInvested)" name="Invested" />
-                        <Area type="monotone" dataKey="earned" stroke="#a855f7" strokeWidth={2} fillOpacity={1} fill="url(#colorCurrentValue)" name="Current Value" />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                {/* Bottom Row */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Wallet Distribution */}
-                  <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6">
-                    <h3 className="text-lg font-bold text-zinc-100 mb-4">Wallet Distribution</h3>
-                    {wallets.length > 0 ? (
-                      <div className="space-y-4">
-                        {wallets.map((w, i) => {
-                          const totalBal = wallets.reduce((s, x) => s + x.balance, 0);
-                          const pct = totalBal > 0 ? (w.balance / totalBal) * 100 : 0;
-                          const colors = ['bg-purple-400', 'bg-blue-400', 'bg-emerald-400', 'bg-amber-400', 'bg-pink-400', 'bg-cyan-400'];
-                          return (
-                            <div key={w.id}>
-                              <div className="flex justify-between items-end mb-1.5">
-                                <div className="flex items-center gap-2">
-                                  <span className={cn("w-2.5 h-2.5 rounded-full", colors[i % colors.length])}></span>
-                                  <span className="text-sm font-medium text-zinc-300">{w.name}</span>
-                                </div>
-                                <span className="text-sm font-bold text-zinc-100">${w.balance.toLocaleString('en-US', {minimumFractionDigits: 2})}</span>
-                              </div>
-                              <div className="w-full bg-[#222226] h-2 rounded-full overflow-hidden">
-                                <div className={cn("h-full rounded-full transition-all", colors[i % colors.length])} style={{ width: `${pct}%` }}></div>
-                              </div>
-                              <p className="text-[10px] text-zinc-600 mt-0.5 font-mono">{w.address.slice(0,8)}...{w.address.slice(-4)} • {w.network}</p>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8">
-                        <Wallet size={32} className="text-zinc-600 mx-auto mb-3" />
-                        <p className="text-sm text-zinc-500">No wallets added yet</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Recent Crypto Activity */}
-                  <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6">
-                    <h3 className="text-lg font-bold text-zinc-100 mb-4">Recent Transactions</h3>
-                    <div className="space-y-3 max-h-[280px] overflow-y-auto custom-scrollbar">
-                      {filteredEntries.slice(0, 8).map((entry, i) => {
-                        const wallet = wallets.find(w => w.id === entry.walletId);
-                        return (
-                          <div key={entry.id} className="flex items-center justify-between p-3 rounded-xl bg-[#09090B] hover:bg-[#1C1C21] transition-colors">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-purple-500/10 text-purple-400 flex items-center justify-center">
-                                <Wallet size={14}/>
-                              </div>
-                              <div>
-                                <p className="text-sm font-medium text-zinc-200">{entry.project}</p>
-                                <p className="text-xs text-zinc-500">{entry.date}{wallet ? ` • ${wallet.name}` : ''}</p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <span className="text-sm font-bold text-purple-400">${entry.earned.toFixed(2)}</span>
-                              {entry.saved > 0 && entry.saved !== entry.earned && (
-                                <p className="text-[10px] text-zinc-500">Cost: ${entry.saved.toFixed(2)}</p>
-                              )}
-                            </div>
+                    <ul className="space-y-3 max-h-60 overflow-y-auto">
+                      {activityLog.slice(0,8).map(a => (
+                        <li key={a.id} className="flex items-start gap-3">
+                          <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary"/>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium">{a.action}</p>
+                            <p className="truncate text-xs text-muted-foreground">{a.detail}</p>
                           </div>
-                        );
-                      })}
-                      {filteredEntries.length === 0 && (
-                        <p className="text-sm text-zinc-500 text-center py-8">No transactions yet</p>
-                      )}
-                    </div>
+                          <span className="text-[10px] text-muted-foreground whitespace-nowrap">{a.at}</span>
+                        </li>
+                      ))}
+                      {activityLog.length===0 && <li className="text-sm text-muted-foreground text-center py-4">No activity yet</li>}
+                    </ul>
                   </div>
-                </div>
+                </section>
               </div>
             )}
-          </div>
-        )}
 
-        {activeTab === 'Cards' && (
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 tab-content">
-            {mode === 'banks' ? (
-              <div className="max-w-5xl mx-auto space-y-6 pb-20 md:pb-0">
-                <div className="flex justify-between items-end mb-8">
-                  <div>
-                    <h2 className="text-2xl font-bold text-zinc-100">My Cards</h2>
-                    <p className="text-sm text-zinc-400">Manage your active physical and virtual cards.</p>
-                  </div>
-                  <button onClick={() => { setShowAddCard(true); setCardError(''); }} className="px-4 py-2 bg-[#D4FE44] text-[#0A0A0A] rounded-xl font-bold text-sm hover:bg-[#bceb29] transition-all flex items-center gap-2">
-                    <Plus size={16}/> New Card
-                  </button>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                  {bankCards.map((card, i) => (
-                    <div key={card.id} className={`${i === 0 ? 'bg-gradient-to-tr from-[#D4FE44] to-[#A3D121]' : 'bg-zinc-800 border border-[#222226]'} rounded-3xl p-6 shadow-lg relative overflow-hidden h-64 flex flex-col justify-between group card-hover card-enter`}>
-                      <div className={`absolute ${i === 0 ? '-right-8 -top-8 w-32 h-32 bg-white/20' : '-right-8 -bottom-8 w-32 h-32 bg-white/5'} rounded-full blur-2xl group-hover:bg-white/30 transition-colors`}></div>
-                      <div className="flex justify-between items-start z-10 relative">
-                        <span className={`${i === 0 ? 'text-[#0A0A0A]' : 'text-zinc-100'} font-bold text-lg tracking-tight`}>{card.name}</span>
-                        <button onClick={() => setDeletingCardId(card.id)} className="opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16} className={i === 0 ? 'text-[#0A0A0A]/50 hover:text-red-600' : 'text-zinc-500 hover:text-red-400'} /></button>
-                      </div>
-                      <div className="z-10 relative">
-                        <div className={`${i === 0 ? 'text-[#0A0A0A]/80' : 'text-zinc-300'} font-semibold tracking-widest text-xl font-mono mb-2`}>**** **** **** {card.last4}</div>
-                        <div className={`${i === 0 ? 'text-[#0A0A0A]' : 'text-zinc-100'} font-bold text-xl mb-2`}>{bankSymbol}{toBankDisplay(card.balance)}</div>
-                        <div className="flex justify-between items-end">
-                          <div>
-                             <p className={`${i === 0 ? 'text-[#0A0A0A]/60' : 'text-zinc-500'} text-[10px] font-bold uppercase tracking-wider`}>Cardholder</p>
-                             <p className={`${i === 0 ? 'text-[#0A0A0A]' : 'text-zinc-100'} font-bold text-sm`}>{card.holder}</p>
-                          </div>
-                          <div>
-                             <p className={`${i === 0 ? 'text-[#0A0A0A]/60' : 'text-zinc-500'} text-[10px] font-bold uppercase tracking-wider`}>Expires</p>
-                             <p className={`${i === 0 ? 'text-[#0A0A0A]' : 'text-zinc-100'} font-bold text-sm`}>{card.expiry}</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+          </div>{/* /surface */}
+        </main>
 
-                <h3 className="text-lg font-bold text-zinc-100 mt-10 mb-6">Card Settings</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                   <button onClick={() => alert('Card freeze feature coming soon')} className="bg-[#131316] border border-[#222226] rounded-2xl p-4 flex items-center gap-4 cursor-pointer hover:bg-[#1C1C21] transition-colors text-left">
-                     <div className="w-10 h-10 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center"><Snowflake size={18}/></div>
-                     <div><p className="font-bold text-zinc-100 text-sm">Freeze Card</p><p className="text-xs text-zinc-500">Temporarily lock</p></div>
-                   </button>
-                   <button onClick={() => alert('Spending limits feature coming soon')} className="bg-[#131316] border border-[#222226] rounded-2xl p-4 flex items-center gap-4 cursor-pointer hover:bg-[#1C1C21] transition-colors text-left">
-                     <div className="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center"><Activity size={18}/></div>
-                     <div><p className="font-bold text-zinc-100 text-sm">Spending Limits</p><p className="text-xs text-zinc-500">Set daily limits</p></div>
-                   </button>
-                   <button onClick={() => alert('Card details feature coming soon')} className="bg-[#131316] border border-[#222226] rounded-2xl p-4 flex items-center gap-4 cursor-pointer hover:bg-[#1C1C21] transition-colors text-left">
-                     <div className="w-10 h-10 rounded-full bg-amber-500/10 text-amber-400 flex items-center justify-center"><EyeOff size={18}/></div>
-                     <div><p className="font-bold text-zinc-100 text-sm">Show Details</p><p className="text-xs text-zinc-500">View CVV and expiry</p></div>
-                   </button>
-                </div>
-              </div>
-            ) : (
-              <div className="max-w-5xl mx-auto space-y-6 pb-20 md:pb-0">
-                <div className="flex justify-between items-end mb-8">
-                  <div>
-                    <h2 className="text-2xl font-bold text-zinc-100">My Wallets</h2>
-                    <p className="text-sm text-zinc-400">{wallets.length} wallet{wallets.length !== 1 ? 's' : ''} connected</p>
-                  </div>
-                  <button onClick={() => { setShowAddWallet(true); setWalletError(''); }} className="px-4 py-2 bg-[#D4FE44] text-[#0A0A0A] rounded-xl font-bold text-sm hover:bg-[#bceb29] transition-all flex items-center gap-2">
-                    <Plus size={16}/> Add Wallet
-                  </button>
-                </div>
-
-                {loadingWallets ? (
-                  <div className="flex items-center justify-center py-20"><div className="w-6 h-6 border-2 border-[#D4FE44] border-t-transparent rounded-full animate-spin"></div></div>
-                ) : wallets.length === 0 ? (
-                  <div className="bg-[#131316] border border-[#222226] rounded-3xl p-12 text-center">
-                    <Wallet size={40} className="text-zinc-600 mx-auto mb-4" />
-                    <h3 className="text-lg font-bold text-zinc-300 mb-2">No wallets yet</h3>
-                    <p className="text-sm text-zinc-500 mb-6">Add your first wallet to start tracking your crypto portfolio.</p>
-                    <button onClick={() => { setShowAddWallet(true); setWalletError(''); }} className="px-6 py-3 bg-[#D4FE44] text-[#0A0A0A] rounded-xl font-bold text-sm hover:bg-[#bceb29] transition-all"><Plus size={16} className="inline mr-2"/>Add Wallet</button>
-                  </div>
-                ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {wallets.map((w) => (
-                  <div key={w.id} className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm flex flex-col group hover:border-[#D4FE44]/30 transition-colors">
-                    <div className="flex justify-between items-start mb-6">
-                       <div className="flex items-center gap-3">
-                         <div className="w-10 h-10 rounded-full bg-[#1C1C21] flex items-center justify-center"><Wallet size={18} className="text-zinc-300"/></div>
-                         <div>
-                           <h3 className="font-bold text-zinc-100">{w.name}</h3>
-                           <p className="text-xs text-zinc-500 font-mono">{w.address.length > 12 ? `${w.address.slice(0,6)}...${w.address.slice(-4)}` : w.address}</p>
-                         </div>
-                       </div>
-                       <div className="flex gap-1">
-                         {w.isEncrypted && (
-                           <button onClick={() => { setDecryptingWalletId(w.id); setDecryptPasscode(''); }} className="w-8 h-8 rounded-full bg-[#1C1C21] flex items-center justify-center text-zinc-400 hover:text-amber-400 transition-colors" title="Decrypt"><Lock size={14}/></button>
-                         )}
-                         <button onClick={() => setDeletingWalletId(w.id)} className="w-8 h-8 rounded-full bg-[#1C1C21] flex items-center justify-center text-zinc-400 hover:text-red-400 transition-colors" title="Delete"><Trash2 size={14}/></button>
-                       </div>
-                    </div>
-                    <div className="mb-4">
-                      <p className="text-xs font-semibold text-zinc-400 mb-1 tracking-wider uppercase">Total Balance</p>
-                      <p className="text-2xl font-bold text-zinc-100">${w.balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
-                    </div>
-                    <div className="space-y-3 pt-4 border-t border-[#222226]">
-                       <div className="flex justify-between items-center">
-                         <div className="flex items-center gap-2"><span className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-[10px] font-bold">{w.network === 'Solana' ? 'SOL' : w.network === 'Bitcoin' ? 'BTC' : 'ETH'}</span> <span className="text-sm font-semibold text-zinc-300">{w.network}</span></div>
-                         <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${w.isEncrypted ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'}`}>{w.isEncrypted ? '🔒 Encrypted' : 'Unencrypted'}</span>
-                       </div>
-                    </div>
-                  </div>
-                  ))}
-                </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'Security' && (
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 tab-content">
-            <div className="max-w-4xl mx-auto space-y-6 pb-20 md:pb-0">
-              <div className="mb-8">
-                <h2 className="text-2xl font-bold text-zinc-100">Security</h2>
-                <p className="text-sm text-zinc-400">Manage your dashboard passcode.</p>
-              </div>
-
-              {/* Change Passcode */}
-              <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm flex flex-col max-w-lg">
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="w-10 h-10 rounded-full bg-[#1C1C21] text-zinc-400 flex items-center justify-center">
-                       <Key size={18} />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-zinc-100">Change Passcode</h3>
-                      <p className="text-xs text-zinc-500">Update your 6-digit access code.</p>
-                    </div>
-                  </div>
-                  <div className="space-y-4 flex-1">
-                    {securityPassMessage.text && (
-                      <div className={cn("px-3 py-2 rounded-lg text-xs font-medium border", securityPassMessage.type === 'error' ? "bg-red-500/10 text-red-500 border-red-500/20" : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20")}>
-                        {securityPassMessage.text}
-                      </div>
-                    )}
-                    <div className="space-y-1.5">
-                      <label htmlFor="securityCurrentPass" className="text-xs font-medium text-zinc-400">Current Passcode</label>
-                      <input 
-                        id="securityCurrentPass"
-                        type="password" 
-                        maxLength={6}
-                        value={securityCurrentPass}
-                        onChange={(e) => setSecurityCurrentPass(e.target.value)}
-                        placeholder="••••••" 
-                        className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors font-mono tracking-widest placeholder:tracking-normal" 
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label htmlFor="securityNewPass" className="text-xs font-medium text-zinc-400">New Passcode (6 digits)</label>
-                      <input 
-                        id="securityNewPass"
-                        type="password" 
-                        maxLength={6}
-                        value={securityNewPass}
-                        onChange={(e) => setSecurityNewPass(e.target.value)}
-                        placeholder="••••••" 
-                        className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors font-mono tracking-widest placeholder:tracking-normal" 
-                      />
-                    </div>
-                  </div>
-                  <div className="pt-6">
-                    <button 
-                      onClick={async () => {
-                        if (securityCurrentPass !== appPasscode) {
-                          setSecurityPassMessage({ text: "Current passcode is incorrect.", type: "error" });
-                          return;
-                        }
-                        if (securityNewPass.length !== 6 || !/^\d+$/.test(securityNewPass)) {
-                          setSecurityPassMessage({ text: "New passcode must be exactly 6 digits.", type: "error" });
-                          return;
-                        }
-                        // Save to API (server verifies current, hashes new)
-                        try {
-                          const res = await apiFetch('/api/settings', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ currentPasscode: securityCurrentPass, newPasscode: securityNewPass }),
-                          });
-                          if (!res.ok) {
-                            const data = await res.json();
-                            setSecurityPassMessage({ text: data.error || "Failed to update.", type: "error" });
-                            return;
-                          }
-                          // Update local state
-                          setAppPasscode(securityNewPass);
-                        } catch (err) {
-                          console.error("[savePasscode] failed:", err);
-                          setSecurityPassMessage({ text: "Network error.", type: "error" });
-                          return;
-                        }
-                        changeContextPasscode(securityCurrentPass, securityNewPass);
-                        setSecurityCurrentPass("");
-                        setSecurityNewPass("");
-                        setSecurityPassMessage({ text: "Passcode updated successfully.", type: "success" });
-                        setTimeout(() => setSecurityPassMessage({ text: "", type: "" }), 3000);
-                      }}
-                      disabled={!securityCurrentPass || !securityNewPass}
-                      className="w-full py-3 bg-[#D4FE44] text-[#0A0A0A] hover:bg-[#bceb29] disabled:opacity-50 disabled:hover:bg-[#D4FE44] rounded-xl font-bold text-sm transition-colors"
-                    >
-                      Update Passcode
-                    </button>
-                  </div>
-                </div>
-
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'Settings' && (
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 tab-content">
-            <div className="max-w-4xl mx-auto space-y-6 pb-20 md:pb-0">
-              <div className="mb-8">
-                <h2 className="text-2xl font-bold text-zinc-100">Account Settings</h2>
-                <p className="text-sm text-zinc-400">Manage your personal profile, regional preferences, and subscription details.</p>
-              </div>
-              
-              {/* Profile Card */}
-              <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm">
-                <h3 className="text-lg font-bold text-zinc-100 mb-6">Profile Information</h3>
-                <div className="flex flex-col md:flex-row gap-8">
-                  <div className="flex flex-col items-center gap-3">
-                    <div 
-                      className="relative w-24 h-24 rounded-full border-2 border-white/10 overflow-hidden group cursor-pointer"
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      <Image src={profilePic} alt="Avatar" fill className="object-cover transition-transform group-hover:scale-105" referrerPolicy="no-referrer" />
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Camera size={24} className="text-white" />
-                      </div>
-                    </div>
-                    <input 
-                      type="file" 
-                      ref={fileInputRef} 
-                      className="hidden" 
-                      accept="image/*" 
-                      onChange={handleProfileImageChange} 
-                    />
-                    <button 
-                      className="text-xs font-semibold text-[#D4FE44] hover:underline"
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      Change Picture
-                    </button>
-                  </div>
-                  <div className="flex-1 space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <label htmlFor="firstName" className="text-xs font-medium text-zinc-400">First Name</label>
-                        <input 
-                          id="firstName"
-                          type="text" 
-                          value={firstName} 
-                          onChange={(e) => setFirstName(e.target.value)}
-                          className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors" 
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label htmlFor="lastName" className="text-xs font-medium text-zinc-400">Last Name</label>
-                        <input 
-                          id="lastName"
-                          type="text" 
-                          value={lastName} 
-                          onChange={(e) => setLastName(e.target.value)}
-                          className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors" 
-                        />
-                      </div>
-                      <div className="space-y-1.5 md:col-span-2">
-                        <label htmlFor="email" className="text-xs font-medium text-zinc-400">Email Address</label>
-                        <div className="relative">
-                          <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" />
-                          <input 
-                            id="email"
-                            type="email" 
-                            value={email} 
-                            onChange={(e) => setEmail(e.target.value)}
-                            className="w-full bg-[#09090B] border border-[#222226] rounded-xl pl-10 pr-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors" 
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="pt-4">
-                      <button 
-                        onClick={handleSaveChanges}
-                        disabled={isSaving}
-                        className={cn("px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-[0_5px_20px_rgba(212,254,68,0.15)] focus:outline-none flex items-center justify-center gap-2", 
-                          isSaving ? "bg-[#D4FE44]/70 text-[#0A0A0A]/70 cursor-not-allowed" : "bg-[#D4FE44] text-[#0A0A0A] hover:bg-[#bceb29] hover:-translate-y-0.5"
-                        )}
-                      >
-                         {isSaving ? (
-                            <>
-                              <div className="w-4 h-4 border-2 border-[#0A0A0A]/50 border-t-[#0A0A0A] rounded-full animate-spin"></div>
-                              Saving...
-                            </>
-                         ) : "Save Changes"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Category Manager */}
-              <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm">
-                <div className="flex justify-between items-center mb-6">
-                  <div>
-                    <h3 className="text-lg font-bold text-zinc-100">Transaction Categories</h3>
-                    <p className="text-xs text-zinc-500 mt-1">Manage your banks transaction categories</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-4">
-                  {dbCategories.map(cat => (
-                    <div key={cat.id} className="flex items-center gap-3 bg-[#09090B] border border-[#222226] rounded-xl px-4 py-3 group">
-                      {cat.imageUrl ? (
-                        <img src={cat.imageUrl} alt="" className="w-6 h-6 rounded object-cover" />
-                      ) : (
-                        <span className="text-lg">{cat.icon}</span>
-                      )}
-                      <span className="flex-1 text-sm text-zinc-100 font-medium">{cat.name}</span>
-                      <div className="w-3 h-3 rounded-full" style={{backgroundColor: cat.color}} />
-                      <button onClick={() => { setEditingCategoryId(cat.id); setEditCatImage(cat.imageUrl); }} className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-zinc-300 transition-all">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-                      </button>
-                      <button onClick={() => setDeletingCategoryId(cat.id)} className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400 transition-all">
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                {editingCategoryId && (() => {
-                  const cat = dbCategories.find(c => c.id === editingCategoryId);
-                  if (!cat) return null;
-                  return (
-                    <div className="flex items-center gap-2 mb-4 p-3 bg-[#1a1a1e] border border-[#D4FE44]/30 rounded-xl">
-                      <select id="editCatIcon" defaultValue={cat.icon} className="w-14 bg-[#09090B] border border-[#222226] rounded-xl px-2 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]">
-                        {["📁","💰","🍔","🚗","🛍️","📄","🎬","💊","📚","💻","📈","📊","🎮","✈️","🏠","⚡","🎯","🔥","💎","🌐"].map(e => <option key={e} value={e}>{e}</option>)}
-                      </select>
-                      <input id="editCatName" type="text" defaultValue={cat.name} className="flex-1 bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]" />
-                      <label className="flex items-center gap-1.5 px-3 py-2.5 bg-white/5 hover:bg-white/10 rounded-xl cursor-pointer transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-400"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-                        <span className="text-xs text-zinc-400">Icon</span>
-                        <input type="file" accept="image/*" className="hidden" onChange={e => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            if (file.size > 500 * 1024) { alert('Image must be under 500KB'); return; }
-                            const reader = new FileReader();
-                            reader.onload = () => setEditCatImage(reader.result as string);
-                            reader.readAsDataURL(file);
-                          }
-                        }} />
-                      </label>
-                      {editCatImage && (
-                        <img src={editCatImage} alt="" className="w-7 h-7 rounded object-cover" />
-                      )}
-                      {editCatImage && (
-                        <button onClick={() => setEditCatImage(null)} className="text-xs text-zinc-500 hover:text-red-400">✕</button>
-                      )}
-                      <button onClick={async () => {
-                        const nameInput = document.getElementById("editCatName") as HTMLInputElement;
-                        const iconSelect = document.getElementById("editCatIcon") as HTMLSelectElement;
-                        if (!nameInput?.value.trim()) return;
-                        const res = await apiFetch("/api/banks-categories", {
-                          method: "PUT",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ id: editingCategoryId, name: nameInput.value.trim(), icon: iconSelect.value, imageUrl: editCatImage }),
-                        });
-                        if (res.ok) {
-                          const updated = await res.json();
-                          setDbCategories(prev => prev.map(c => c.id === updated.id ? updated : c));
-                          setEditingCategoryId(null);
-                          setEditCatImage(null);
-                        }
-                      }} className="px-3 py-2.5 bg-[#D4FE44] text-black rounded-xl text-sm font-bold">Save</button>
-                      <button onClick={() => { setEditingCategoryId(null); setEditCatImage(null); }} className="px-3 py-2.5 bg-white/5 text-zinc-400 rounded-xl text-sm">Cancel</button>
-                    </div>
-                  );
-                })()}
-                <div className="flex gap-2">
-                  <select id="newCatIcon" className="w-14 bg-[#09090B] border border-[#222226] rounded-xl px-2 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]">
-                    {["📁","💰","🍔","🚗","🛍️","📄","🎬","💊","📚","💻","📈","📊","🎮","✈️","🏠","⚡","🎯","🔥","💎","🌐"].map(e => <option key={e} value={e}>{e}</option>)}
-                  </select>
-                  <input id="newCatNameInput" type="text" placeholder="New category name" className="flex-1 bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44]" />
-                  <label className="flex items-center gap-1.5 px-3 py-2.5 bg-white/5 hover:bg-white/10 rounded-xl cursor-pointer transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-400"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-                    <span className="text-xs text-zinc-400">Icon</span>
-                    <input type="file" accept="image/*" className="hidden" onChange={e => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        if (file.size > 500 * 1024) { alert('Image must be under 500KB'); return; }
-                        const reader = new FileReader();
-                        reader.onload = () => setNewCatImageSettings(reader.result as string);
-                        reader.readAsDataURL(file);
-                      }
-                    }} />
-                  </label>
-                  {newCatImageSettings && (
-                    <img src={newCatImageSettings} alt="" className="w-7 h-7 rounded object-cover" />
-                  )}
-                  {newCatImageSettings && (
-                    <button onClick={() => setNewCatImageSettings(null)} className="text-xs text-zinc-500 hover:text-red-400 self-center">✕</button>
-                  )}
-                  <button onClick={async () => {
-                    const nameInput = document.getElementById("newCatNameInput") as HTMLInputElement;
-                    const iconSelect = document.getElementById("newCatIcon") as HTMLSelectElement;
-                    if (!nameInput?.value.trim()) return;
-                    const res = await apiFetch("/api/banks-categories", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ name: nameInput.value.trim(), icon: iconSelect.value, imageUrl: newCatImageSettings }),
-                    });
-                    if (res.ok) {
-                      const cat = await res.json();
-                      setDbCategories(prev => [...prev, cat].sort((a, b) => a.name.localeCompare(b.name)));
-                      nameInput.value = "";
-                      setNewCatImageSettings(null);
-                    }
-                  }} className="px-4 py-2.5 bg-[#D4FE44] text-black rounded-xl text-sm font-bold hover:bg-[#bceb29] transition-colors">Add</button>
-                </div>
-              </div>
-
-              {/* Recent Activity */}
-              <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 shadow-sm">
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-lg font-bold text-zinc-100">Recent Activity</h3>
-                  <span className="text-xs text-zinc-500 font-medium">{activities.length} actions</span>
-                </div>
-                {activities.length === 0 ? (
-                  <div className="text-center py-8 text-zinc-500 text-sm">
-                    <Activity size={24} className="mx-auto mb-2 opacity-50" />
-                    No activity yet. Add a card, wallet, or entry to get started.
-                  </div>
-                ) : (
-                  <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar pr-1">
-                    {activities.map((a) => (
-                      <div key={a.id} className="flex items-center justify-between p-3 bg-[#09090B] border border-[#222226] rounded-xl group hover:border-zinc-600 transition-colors">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                            a.type === 'bank_entry' ? 'bg-emerald-500/10 text-emerald-400' :
-                            a.type === 'crypto_entry' ? 'bg-purple-500/10 text-purple-400' :
-                            a.type === 'card' ? 'bg-blue-500/10 text-blue-400' :
-                            'bg-amber-500/10 text-amber-400'
-                          }`}>
-                            {a.type === 'card' ? <CreditCard size={14} /> :
-                             a.type === 'wallet' ? <Wallet size={14} /> :
-                             <ArrowRightLeft size={14} />}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-zinc-200 truncate">{a.action}</p>
-                            <p className="text-xs text-zinc-500">
-                              {new Date(a.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                              {' • '}
-                              <span className={a.mode === 'banks' ? 'text-emerald-400' : 'text-purple-400'}>
-                                {a.mode === 'banks' ? 'Banks' : 'Crypto'}
-                              </span>
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <span className="text-xs font-mono text-zinc-400">
-                            {a.mode === 'banks' ? bankSymbol : '$'}{a.amount.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}
-                          </span>
-                          <button
-                            onClick={() => deleteActivity(a.id, a.type)}
-                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/10 text-zinc-500 hover:text-red-400 transition-all"
-                            title="Delete this activity"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-            </div>
-          </div>
-        )}
-      </main>
-        
-
-      {/* RIGHT SIDEBAR / QUICK ACTIONS PANEL */}
-      <aside className="w-[320px] bg-[#09090B] border-l border-[#222226] hidden xl:flex flex-col flex-shrink-0 relative">
-        <div className="p-8 flex flex-col h-full overflow-y-auto custom-scrollbar">
-          
-          {/* User Section */}
-          <div className="flex items-center justify-between mb-10">
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <div className="w-12 h-12 rounded-full border-2 border-white/10 overflow-hidden">
-                  <Image src={profilePic} alt="Avatar" width={48} height={48} className="object-cover" referrerPolicy="no-referrer" />
-                </div>
-                <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-[#131316] rounded-full"></span>
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-zinc-100">{firstName} {lastName ? `${lastName[0]}.` : ''}</h3>
-                <p className="text-xs text-zinc-400 font-medium">Premium Member</p>
-              </div>
-            </div>
-            <button 
-              onClick={() => setActiveTab('Settings')}
-              className="w-10 h-10 rounded-full bg-[#131316] border border-[#222226] flex items-center justify-center text-zinc-400 hover:text-zinc-50 transition-colors"
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
-
-          {/* VIRTUAL CARD */}
-          <div className="mb-8">
-            <div className="flex justify-between items-end mb-4">
-               <h3 className="text-sm font-bold text-zinc-100">{mode === 'banks' ? 'My Cards' : 'My Wallets'}</h3>
-               <button 
-                onClick={() => setActiveTab('Cards')}
-                className="text-xs font-semibold text-[#D4FE44] hover:underline cursor-pointer"
-               >
-                 View All
-               </button>
-            </div>
-            
-            <div className="bg-gradient-to-tr from-[#D4FE44] to-[#A3D121] rounded-3xl p-6 shadow-[0_20px_40px_rgba(212,254,68,0.15)] relative overflow-hidden group hover:scale-[1.02] transition-transform cursor-pointer">
-              {/* Glass Shapes */}
-              <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/20 rounded-full blur-2xl group-hover:bg-white/30 transition-colors"></div>
-              <div className="absolute -left-8 -bottom-8 w-24 h-24 bg-black/10 rounded-full blur-xl"></div>
-              
-              <div className="relative z-10 flex flex-col h-full justify-between gap-8">
-                <div className="flex justify-between items-start">
-                  <span className="text-[#0A0A0A] font-bold text-lg tracking-tight">korgon</span>
-                  <Monitor size={24} className="text-[#0A0A0A] opacity-80" />
-                </div>
-                
-                <div>
-                  <p className="text-[#0A0A0A]/60 text-xs font-bold uppercase tracking-wider mb-1">Available Balance</p>
-                  <h3 className="text-[#0A0A0A] text-3xl font-extrabold tracking-tight">${wallets.length > 0 ? wallets.reduce((sum, w) => sum + w.balance, 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : netIncome.toLocaleString()}</h3>
-                </div>
-                
-                <div className="flex justify-between items-end">
-                  <div className="text-[#0A0A0A]/80 font-semibold tracking-widest text-sm font-mono">
-                    {wallets.length > 0 ? (wallets[0].address.length > 12 ? `${wallets[0].address.slice(0,6)}...${wallets[0].address.slice(-4)}` : wallets[0].address) : '**** **** **** ****'}
-                  </div>
-                  <div className="text-[#0A0A0A] font-bold text-sm">
-                    {wallets.length > 0 ? `${wallets.length} wallet${wallets.length > 1 ? 's' : ''}` : 'No wallets'}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex-1" />
-
-          {/* QUICK ACTIONS */}
-          <div className="bg-[#131316] border border-[#222226] rounded-3xl p-6 mt-8 force-dark-card shadow-2xl">
-            <h3 className="text-sm font-bold text-zinc-100 mb-6">Global Activity</h3>
-            
-            <div className="space-y-4">
-              <button 
-                onClick={() => setShowAdd(true)}
-                className="w-full flex justify-between items-center bg-[#D4FE44] text-[#0A0A0A] p-4 rounded-2xl font-bold text-sm shadow-[0_10px_30px_rgba(212,254,68,0.2)] hover:-translate-y-1 transition-all"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="p-1.5 bg-[#0A0A0A]/10 rounded-lg">
-                    <Plus size={16} strokeWidth={2.5} />
-                  </div>
-                  New Transaction
-                </div>
-                <ChevronRight size={18} className="opacity-50" />
-              </button>
-              
-              <button 
-                onClick={() => setShowTransfer(true)}
-                className="w-full flex justify-between items-center text-zinc-200 border border-white/5 bg-white/5 hover:bg-white/10 p-4 rounded-2xl font-semibold text-sm transition-all"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="p-1.5 bg-white/10 rounded-lg text-zinc-300">
-                    <ArrowUpRight size={16} />
-                  </div>
-                  Transfer Funds
-                </div>
-                <span className="text-xs font-mono text-[#D4FE44] bg-[#D4FE44]/10 px-2.5 py-1 rounded-md border border-[#D4FE44]/20 items-center justify-center">Bank</span>
-              </button>
-
-              <button 
-                onClick={() => setShowTransferToWeb2(true)}
-                className="w-full flex justify-between items-center text-zinc-200 border border-emerald-500/10 bg-emerald-500/5 hover:bg-emerald-500/10 p-4 rounded-2xl font-semibold text-sm transition-all"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="p-1.5 bg-emerald-500/20 rounded-lg text-emerald-400">
-                    <ArrowRightLeft size={16} />
-                  </div>
-                  Transfer Crypto
-                </div>
-                <span className="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/20 items-center justify-center">Web3</span>
-              </button>
-            </div>
-          </div>
-
-        </div>
-      </aside>
-
-      {/* MOBILE BOTTOM NAV */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#131316] border-t border-[#222226] z-50 flex items-center justify-around px-4 pb-safe shadow-[0_-10px_40px_rgba(0,0,0,0.8)]">
-         <button onClick={() => setActiveTab('Dashboard')} className={cn("p-2 flex flex-col items-center gap-1 transition-colors", activeTab === 'Dashboard' ? "text-[#D4FE44]" : "text-zinc-500")}><Home size={20} /><span className="text-[10px] font-semibold">Home</span></button>
-         <button onClick={() => setActiveTab('Analytics')} className={cn("p-2 flex flex-col items-center gap-1 transition-colors", activeTab === 'Analytics' ? "text-[#D4FE44]" : "text-zinc-500")}><PieChart size={20} /><span className="text-[10px] font-semibold">Stats</span></button>
-         <button onClick={() => setShowAdd(true)} className="p-3 bg-[#D4FE44] rounded-full text-black -mt-6 border-4 border-[#09090B] shadow-[0_0_20px_rgba(212,254,68,0.2)] hover:scale-105 transition-transform pulse-glow btn-press"><Plus size={24} strokeWidth={2.5}/></button>
-         <button onClick={() => setActiveTab('Cards')} className={cn("p-2 flex flex-col items-center gap-1 transition-colors", activeTab === 'Cards' ? "text-[#D4FE44]" : "text-zinc-500")}><CreditCard size={20} /><span className="text-[10px] font-semibold">Cards</span></button>
-         <button onClick={() => setActiveTab('Security')} className={cn("p-2 flex flex-col items-center gap-1 transition-colors", activeTab === 'Security' ? "text-[#D4FE44]" : "text-zinc-500")}><Shield size={20} /><span className="text-[10px] font-semibold">Security</span></button>
+        {/* Right panel */}
+        <ProfilePanel
+          entries={entries} wallets={wallets} notifications={notifications}
+          onMarkRead={()=>setNotifications(p=>p.map(n=>({...n,read:true})))}
+          onNav={setActiveTab} avatarUrl={avatarUrl} userName={`${firstName} ${lastName}`}
+          period={period} setPeriod={setPeriod}
+        />
       </div>
 
-      {/* MODALS */}
-      {showAdd && <EntryModal 
-        onClose={() => setShowAdd(false)} 
-        mode={mode}
-        bankCards={bankCards.map(c => ({ id: c.id, name: c.name, last4: c.last4 }))}
-        wallets={wallets.map(w => ({ id: w.id, name: w.name, address: w.address }))}
-        onSave={async (entryData) => {
-        const newEntry = { ...entryData, id: Math.random().toString(36).substr(2, 9), mode };
-        setEntries(prev => [newEntry, ...prev]);
-        // Update card/wallet balance
-        if (newEntry.walletId) {
-          const delta = (newEntry.earned || 0) - (newEntry.given || 0);
-          if (mode === 'banks') {
-            setBankCards(prev => prev.map(c => {
-              if (c.id === newEntry.walletId) {
-                const newBal = Math.max(0, c.balance + delta);
-                apiFetch(`/api/cards/${c.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
-                return { ...c, balance: newBal };
-              }
-              return c;
-            }));
-          } else {
-            setWallets(prev => prev.map(w => {
-              if (w.id === newEntry.walletId) {
-                const newBal = Math.max(0, w.balance + delta);
-                // Persist to API
-                apiFetch(`/api/wallets/${w.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
-                return { ...w, balance: newBal };
-              }
-              return w;
-            }));
-          }
-        }
-        setShowAdd(false);
-        try {
-          await apiFetch("/api/entries", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(newEntry),
-          });
-        } catch (err) {
-          console.error("[addEntry] failed:", err);
-        }
-        fetchActivity();
-      }} />}
+      {/* ═══ MODALS ═══ */}
+      {showNewEntry && <NewEntryModal onClose={()=>setShowNewEntry(false)} onSave={addEntry} wallets={wallets}/>}
+      {showSend && <SendModal onClose={()=>setShowSend(false)} onSave={addEntry} wallets={wallets} cards={cards}/>}
+      {showReceive && <ReceiveModal onClose={()=>setShowReceive(false)} onSave={addEntry} wallets={wallets}/>}
 
-      {editingEntry && <EditModal
-        entry={editingEntry}
-        onClose={() => setEditingEntry(null)}
-        mode={mode}
-        bankCards={bankCards.map(c => ({ id: c.id, name: c.name, last4: c.last4 }))}
-        wallets={wallets.map(w => ({ id: w.id, name: w.name, address: w.address }))}
-        onSave={async (updatedEntry) => {
-          setEntries(prev => prev.map(e => e.id === updatedEntry.id ? updatedEntry : e));
-          setEditingEntry(null);
-          try {
-            await apiFetch(`/api/entries/${updatedEntry.id}`, {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(updatedEntry),
-            });
-          } catch (err) {
-            console.error("[editEntry] failed:", err);
-          }
-          fetchActivity();
-        }}
-      />}
-
-      {showTransfer && <TransferModal onClose={() => setShowTransfer(false)} onTransfer={async (amount, fromCardId, toCardId) => {
-        const from = bankCards.find(c => c.id === fromCardId)?.name || "Card";
-        const to = bankCards.find(c => c.id === toCardId)?.name || "Card";
-        // Update card balances & persist
-        setBankCards(prev => prev.map(c => {
-          if (c.id === fromCardId) {
-            const newBal = Math.max(0, c.balance - amount);
-            apiFetch(`/api/cards/${c.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
-            return { ...c, balance: newBal };
-          }
-          if (c.id === toCardId) {
-            const newBal = c.balance + amount;
-            apiFetch(`/api/cards/${c.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
-            return { ...c, balance: newBal };
-          }
-          return c;
-        }));
-        // Create transfer entries
-        const fromEntry = {
-            id: Math.random().toString(36).substr(2, 9),
-            date: new Date().toISOString().split('T')[0],
-            project: `Transfer: ${from} → ${to}`,
-            earned: 0, saved: 0, given: amount,
-            givenTo: "Transfer", mode: "banks" as const, walletId: fromCardId,
-        };
-        const toEntry = {
-            id: Math.random().toString(36).substr(2, 9),
-            date: new Date().toISOString().split('T')[0],
-            project: `Received: ${from} → ${to}`,
-            earned: amount, saved: 0, given: 0,
-            givenTo: "Transfer", mode: "banks" as const, walletId: toCardId,
-        };
-        setEntries(prev => [fromEntry, toEntry, ...prev]);
-        // Save both to API
-        try {
-          await apiFetch("/api/entries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(fromEntry) });
-          await apiFetch("/api/entries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toEntry) });
-        } catch (err) { console.error("[bankTransfer] save failed:", err); }
-        fetchActivity();
-      }} />}
-      
-      {showTransferToWeb2 && <TransferToWeb2Modal 
-        onClose={() => setShowTransferToWeb2(false)} 
-        bankCards={bankCards.map(c => ({ id: c.id, name: c.name, last4: c.last4, balance: c.balance }))}
-        wallets={wallets.map(w => ({ id: w.id, name: w.name, address: w.address, balance: w.balance }))}
-        bankSymbol={bankSymbol}
-        bankCurrency={bankCurrency}
-        toBankDisplay={toBankDisplay}
-        onTransfer={async (amount, cardId, walletId) => {
-        // Add to bank card balance & persist
-        setBankCards(prev => prev.map(c => {
-          if (c.id === cardId) {
-            const newBal = c.balance + amount;
-            apiFetch(`/api/cards/${c.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
-            return { ...c, balance: newBal };
-          }
-          return c;
-        }));
-        // Deduct from crypto wallet balance & persist
-        setWallets(prev => prev.map(w => {
-          if (w.id === walletId) {
-            const newBal = Math.max(0, w.balance - amount);
-            apiFetch(`/api/wallets/${w.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
-            return { ...w, balance: newBal };
-          }
-          return w;
-        }));
-        const cardName = bankCards.find(c => c.id === cardId)?.name || 'Bank Card';
-        const walletName = wallets.find(w => w.id === walletId)?.name || 'Crypto Wallet';
-        const cryptoId = Math.random().toString(36).substr(2, 9);
-        const bankId = Math.random().toString(36).substr(2, 9);
-        const today = new Date().toISOString().split('T')[0];
-        
-        // Create crypto entry (shown in crypto mode)
-        const cryptoEntry = {
-            id: cryptoId, date: today,
-            project: `Off-Ramp → ${cardName}`, earned: 0, saved: 0, given: amount,
-            givenTo: cardName, mode: "crypto" as const, walletId: walletId,
-        };
-        // Create bank entry (shown in banks mode)
-        const bankEntry = {
-            id: bankId, date: today,
-            project: `Received from ${walletName}`, earned: amount, saved: 0, given: 0,
-            givenTo: "Crypto Off-Ramp", mode: "banks" as const, walletId: cardId,
-        };
-        
-        setEntries(prev => [cryptoEntry, bankEntry, ...prev]);
-        
-        // Save BOTH entries to API so they persist across mode switches
-        try {
-          await apiFetch("/api/entries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cryptoEntry) });
-          await apiFetch("/api/entries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(bankEntry) });
-        } catch (err) { console.error("[transferToBank] save failed:", err); }
-        fetchActivity();
-      }} />}
-      
-      {deletingTransactionId && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm modal-backdrop">
-          <div className="bg-[#131316] border border-[#222226] max-w-sm w-full rounded-3xl p-6 shadow-2xl relative text-center">
-            <Trash2 size={40} className="text-red-500 mx-auto mb-4 opacity-90" strokeWidth={1.5} />
-            <h3 className="text-xl font-bold text-zinc-100 mb-2">Delete Transaction?</h3>
-            <p className="text-zinc-400 text-sm mb-8">This action cannot be undone. Are you sure you want to permanently delete this transaction?</p>
-            <div className="flex gap-4">
-              <button 
-                onClick={() => setDeletingTransactionId(null)}
-                className="flex-1 py-3 bg-[#1C1C21] hover:bg-[#222226] text-zinc-300 rounded-xl font-semibold text-sm border border-[#2A2A30] transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={async () => {
-                  const id = deletingTransactionId;
-                  // Reverse balance change
-                  const entry = entries.find(e => e.id === id);
-                  if (entry?.walletId) {
-                    const delta = -((entry.earned || 0) - (entry.given || 0));
-                    if (entry.mode === 'banks') {
-                      setBankCards(prev => prev.map(c => {
-                        if (c.id === entry.walletId) {
-                          const newBal = Math.max(0, c.balance + delta);
-                          apiFetch(`/api/cards/${c.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
-                          return { ...c, balance: newBal };
-                        }
-                        return c;
-                      }));
-                    } else {
-                      setWallets(prev => prev.map(w => {
-                        if (w.id === entry.walletId) {
-                          const newBal = Math.max(0, w.balance + delta);
-                          apiFetch(`/api/wallets/${w.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: newBal }) }).catch(() => {});
-                          return { ...w, balance: newBal };
-                        }
-                        return w;
-                      }));
-                    }
-                  }
-                  setEntries(prev => prev.filter(e => e.id !== id));
-                  setDeletingTransactionId(null);
-                  try {
-                    await apiFetch(`/api/entries/${id}`, { method: "DELETE" });
-                  } catch (err) {
-                    console.error("[delete] failed:", err);
-                  }
-                  fetchActivity();
-                }}
-                className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold text-sm shadow-[0_5px_20px_rgba(239,68,68,0.3)] transition-all"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Add Wallet Modal */}
       {showAddWallet && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm modal-backdrop">
-          <div className="bg-[#131316] border border-[#222226] max-w-md w-full rounded-3xl p-6 shadow-2xl">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-zinc-100">Add Wallet</h3>
-              <button onClick={() => setShowAddWallet(false)} className="w-8 h-8 rounded-full bg-[#1C1C21] flex items-center justify-center text-zinc-400 hover:text-white"><X size={16}/></button>
+        <Modal onClose={()=>{setShowAddWallet(false);setFormError("")}} title="New wallet">
+          <div className="space-y-4">
+            {formError && <p className="text-sm text-destructive bg-destructive/10 rounded-xl px-4 py-2">{formError}</p>}
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Name"><FInput value={wForm.name} onChange={e=>setWForm(p=>({...p,name:e.target.value}))} placeholder="Main Checking"/></Field>
+              <Field label="Bank / Network"><FInput value={wForm.bank} onChange={e=>setWForm(p=>({...p,bank:e.target.value}))} placeholder="Chase"/></Field>
             </div>
-            {walletError && <div className="px-3 py-2 rounded-lg text-xs font-medium border bg-red-500/10 text-red-500 border-red-500/20 mb-4">{walletError}</div>}
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="walletName" className="text-xs font-medium text-zinc-400 mb-1.5 block">Wallet Name</label>
-                <input id="walletName" value={walletForm.name} onChange={e => setWalletForm({...walletForm, name: e.target.value})} placeholder="e.g. MetaMask, Ledger" className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors" />
-              </div>
-              <div>
-                <label htmlFor="walletAddress" className="text-xs font-medium text-zinc-400 mb-1.5 block">Wallet Address</label>
-                <input id="walletAddress" value={walletForm.address} onChange={e => setWalletForm({...walletForm, address: e.target.value})} placeholder="0x... or Solana address" className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors font-mono text-xs" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="walletNetwork" className="text-xs font-medium text-zinc-400 mb-1.5 block">Network</label>
-                  <select id="walletNetwork" value={walletForm.network} onChange={e => setWalletForm({...walletForm, network: e.target.value})} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors">
-                    <option value="Ethereum">Ethereum</option>
-                    <option value="Solana">Solana</option>
-                    <option value="Bitcoin">Bitcoin</option>
-                    <option value="Polygon">Polygon</option>
-                    <option value="Arbitrum">Arbitrum</option>
-                    <option value="Base">Base</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="walletBalance" className="text-xs font-medium text-zinc-400 mb-1.5 block">Balance (USD)</label>
-                  <input id="walletBalance" type="number" step="0.01" value={walletForm.balance} onChange={e => setWalletForm({...walletForm, balance: e.target.value})} placeholder="0.00" className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors" />
-                </div>
-              </div>
-              <div className="bg-[#09090B] border border-[#222226] rounded-xl p-4 flex items-center gap-3">
-                <Shield size={18} className="text-amber-400" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-zinc-200">Encrypt Address</p>
-                  <p className="text-xs text-zinc-500">Hide wallet address behind your passcode</p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" checked={walletForm.encrypt || false} onChange={e => { setWalletForm({...walletForm, encrypt: e.target.checked}); if (!e.target.checked) setEncryptPasscode(''); }} className="sr-only peer" />
-                  <div className="w-9 h-5 bg-[#222226] rounded-full peer peer-checked:bg-[#D4FE44] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
-                </label>
-              </div>
-              {walletForm.encrypt && (
-                <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4 space-y-2">
-                  <label htmlFor="encryptPasscode" className="text-xs font-medium text-amber-400">Enter Passcode to Encrypt</label>
-                  <input id="encryptPasscode" type="password" maxLength={6} value={encryptPasscode} onChange={e => setEncryptPasscode(e.target.value)} placeholder="••••••" className="w-full bg-[#09090B] border border-amber-500/30 rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-amber-400 transition-colors font-mono tracking-widest text-center" />
-                  <p className="text-[10px] text-zinc-500">You'll need this passcode to reveal the address later.</p>
-                </div>
-              )}
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Starting balance"><FInput type="number" step="0.01" value={wForm.balance} onChange={e=>setWForm(p=>({...p,balance:e.target.value}))} placeholder="0.00"/></Field>
+              <Field label="Currency"><FSelect value={wForm.currency} onChange={e=>setWForm(p=>({...p,currency:e.target.value as CurrencyCode}))}>{["USD","EUR","GBP"].map(c=><option key={c}>{c}</option>)}</FSelect></Field>
             </div>
-            <button onClick={async () => {
-              setWalletError('');
-              if (!walletForm.name.trim()) { setWalletError('Wallet name is required.'); return; }
-              if (!walletForm.address.trim()) { setWalletError('Wallet address is required.'); return; }
-              const bal = parseFloat(walletForm.balance) || 0;
-              const doEncrypt = walletForm.encrypt || false;
-              try {
-                let payload: any = {
-                  name: walletForm.name.trim(),
-                  address: walletForm.address.trim(),
-                  network: walletForm.network,
-                  balance: bal,
-                };
-                if (doEncrypt) {
-                  if (!encryptPasscode || encryptPasscode.length !== 6) { setWalletError('Enter a 6-digit passcode to encrypt.'); return; }
-                  const { encryptData } = await import('./utils/encryption');
-                  const encrypted = await encryptData(walletForm.address.trim(), encryptPasscode);
-                  payload = {
-                    ...payload,
-                    address: walletForm.address.trim().slice(0, 4) + '••••••••' + walletForm.address.trim().slice(-4),
-                    isEncrypted: true,
-                    encryptedData: encrypted,
-                  };
-                }
-                const res = await apiFetch('/api/wallets', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(payload),
-                });
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                setShowAddWallet(false);
-                setWalletForm({ name: '', address: '', network: 'Ethereum', balance: '', encrypt: false });
-                fetchWallets();
-                fetchActivity();
-              } catch (err: any) { setWalletError('Failed to add wallet: ' + err.message); }
-            }} className="w-full py-3 mt-6 bg-[#D4FE44] text-[#0A0A0A] rounded-xl font-bold text-sm hover:bg-[#bceb29] transition-colors">
-              Add Wallet
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Wallet Modal */}
-      {deletingWalletId && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm modal-backdrop">
-          <div className="bg-[#131316] border border-[#222226] max-w-sm w-full rounded-3xl p-6 shadow-2xl relative text-center">
-            <Trash2 size={40} className="text-red-500 mx-auto mb-4 opacity-90" strokeWidth={1.5} />
-            <h3 className="text-xl font-bold text-zinc-100 mb-2">Delete Wallet?</h3>
-            <p className="text-zinc-400 text-sm mb-8">This will permanently remove this wallet from your dashboard.</p>
-            <div className="flex gap-4">
-              <button onClick={() => setDeletingWalletId(null)} className="flex-1 py-3 bg-[#1C1C21] hover:bg-[#222226] text-zinc-300 rounded-xl font-semibold text-sm border border-[#2A2A30] transition-colors">Cancel</button>
-              <button onClick={async () => {
-                const id = deletingWalletId;
-                setDeletingWalletId(null);
-                setWallets(prev => prev.filter(w => w.id !== id));
-                try { await apiFetch(`/api/wallets/${id}`, { method: 'DELETE' }); } catch {}
-                fetchWallets();
-                fetchActivity();
-              }} className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold text-sm shadow-[0_5px_20px_rgba(239,68,68,0.3)] transition-all">Delete</button>
+            <Field label="Tile colour"><FSelect value={wForm.tile} onChange={e=>setWForm(p=>({...p,tile:e.target.value as Tile}))}>{TILES.map(t=><option key={t} value={t} className="capitalize">{t}</option>)}</FSelect></Field>
+            <div className="flex gap-3 pt-2">
+              <button onClick={()=>{setShowAddWallet(false);setFormError("")}} className="pill pill-light flex-1 justify-center">Cancel</button>
+              <button onClick={addWallet} className="pill pill-dark flex-[2] justify-center">Add wallet</button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
-      {/* Add Card Modal */}
       {showAddCard && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm modal-backdrop">
-          <div className="bg-[#131316] border border-[#222226] max-w-md w-full rounded-3xl p-6 shadow-2xl">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-zinc-100">Add Card</h3>
-              <button onClick={() => setShowAddCard(false)} className="w-8 h-8 rounded-full bg-[#1C1C21] flex items-center justify-center text-zinc-400 hover:text-white"><X size={16}/></button>
+        <Modal onClose={()=>{setShowAddCard(false);setFormError("")}} title="New card">
+          <div className="space-y-4">
+            {formError && <p className="text-sm text-destructive bg-destructive/10 rounded-xl px-4 py-2">{formError}</p>}
+            <Field label="Label"><FInput value={cForm.label} onChange={e=>setCForm(p=>({...p,label:e.target.value}))} placeholder="Daily Spend"/></Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Brand"><FSelect value={cForm.brand} onChange={e=>setCForm(p=>({...p,brand:e.target.value as Card["brand"]}))}>{["Visa","Mastercard","Amex"].map(b=><option key={b}>{b}</option>)}</FSelect></Field>
+              <Field label="Last 4"><FInput maxLength={4} value={cForm.last4} onChange={e=>setCForm(p=>({...p,last4:e.target.value.replace(/\D/g,"")}))} placeholder="4821"/></Field>
             </div>
-            {cardError && <div className="px-3 py-2 rounded-lg text-xs font-medium border bg-red-500/10 text-red-500 border-red-500/20 mb-4">{cardError}</div>}
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="cardName" className="text-xs font-medium text-zinc-400 mb-1.5 block">Card Name</label>
-                <input id="cardName" value={cardForm.name} onChange={e => setCardForm({...cardForm, name: e.target.value})} placeholder="e.g. Chase Debit, Savings" className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="cardLast4" className="text-xs font-medium text-zinc-400 mb-1.5 block">Last 4 Digits</label>
-                  <input id="cardLast4" maxLength={4} value={cardForm.last4} onChange={e => setCardForm({...cardForm, last4: e.target.value.replace(/\D/g, '')})} placeholder="4209" className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors font-mono" />
-                </div>
-                <div>
-                  <label htmlFor="cardExpiry" className="text-xs font-medium text-zinc-400 mb-1.5 block">Expiry</label>
-                  <input id="cardExpiry" maxLength={5} value={cardForm.expiry} onChange={e => setCardForm({...cardForm, expiry: e.target.value})} placeholder="MM/YY" className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors font-mono" />
-                </div>
-              </div>
-              <div>
-                <label htmlFor="cardType" className="text-xs font-medium text-zinc-400 mb-1.5 block">Card Type</label>
-                <select id="cardType" value={cardForm.type} onChange={e => setCardForm({...cardForm, type: e.target.value as 'physical' | 'virtual'})} className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors">
-                  <option value="physical">Physical</option>
-                  <option value="virtual">Virtual</option>
-                </select>
-              </div>
+            {wallets.length>0 && <Field label="Linked wallet"><FSelect value={cForm.walletId} onChange={e=>setCForm(p=>({...p,walletId:e.target.value}))}><option value="">Select wallet…</option>{wallets.map(w=><option key={w.id} value={w.id}>{w.name} · {w.bank}</option>)}</FSelect></Field>}
+            <Field label="Tile colour"><FSelect value={cForm.tile} onChange={e=>setCForm(p=>({...p,tile:e.target.value as Tile}))}>{TILES.map(t=><option key={t} value={t} className="capitalize">{t}</option>)}</FSelect></Field>
+            <div className="flex gap-3 pt-2">
+              <button onClick={()=>{setShowAddCard(false);setFormError("")}} className="pill pill-light flex-1 justify-center">Cancel</button>
+              <button onClick={addCard} className="pill pill-dark flex-[2] justify-center">Add card</button>
             </div>
-            <button onClick={async () => {
-              setCardError('');
-              if (!cardForm.name.trim()) { setCardError('Card name is required.'); return; }
-              if (cardForm.last4.length !== 4) { setCardError('Last 4 digits must be exactly 4 numbers.'); return; }
-              if (!cardForm.expiry.match(/^\d{2}\/\d{2}$/)) { setCardError('Expiry must be MM/YY format.'); return; }
-              const cardData = {
-                name: cardForm.name.trim(),
-                last4: cardForm.last4,
-                holder: `${firstName} ${lastName}`,
-                expiry: cardForm.expiry,
-                type: cardForm.type,
-                balance: 0,
-              };
-              try {
-                const res = await apiFetch('/api/cards', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(cardData),
-                });
-                if (res.ok) {
-                  const saved = await res.json();
-                  setBankCards(prev => [...prev, saved]);
-                  fetchActivity();
-                }
-              } catch (err) { console.error("[addCard] failed:", err); }
-              setShowAddCard(false);
-              setCardForm({ name: '', last4: '', expiry: '', type: 'virtual' });
-            }} className="w-full py-3 mt-6 bg-[#D4FE44] text-[#0A0A0A] rounded-xl font-bold text-sm hover:bg-[#bceb29] transition-colors">
-              Add Card
-            </button>
           </div>
-        </div>
+        </Modal>
       )}
 
-      {/* Delete Card Modal */}
-      {deletingCardId && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm modal-backdrop">
-          <div className="bg-[#131316] border border-[#222226] max-w-sm w-full rounded-3xl p-6 shadow-2xl relative text-center">
-            <Trash2 size={40} className="text-red-500 mx-auto mb-4 opacity-90" strokeWidth={1.5} />
-            <h3 className="text-xl font-bold text-zinc-100 mb-2">Delete Card?</h3>
-            <p className="text-zinc-400 text-sm mb-8">This will permanently remove this card.</p>
-            <div className="flex gap-4">
-              <button onClick={() => setDeletingCardId(null)} className="flex-1 py-3 bg-[#1C1C21] hover:bg-[#222226] text-zinc-300 rounded-xl font-semibold text-sm border border-[#2A2A30] transition-colors">Cancel</button>
-              <button onClick={async () => {
-                const id = deletingCardId;
-                setBankCards(prev => prev.filter(c => c.id !== id));
-                setDeletingCardId(null);
-                try { await apiFetch(`/api/cards/${id}`, { method: 'DELETE' }); } catch {}
-                fetchActivity();
-              }} className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold text-sm shadow-[0_5px_20px_rgba(239,68,68,0.3)] transition-all">Delete</button>
+      {showNewGoal && (
+        <Modal onClose={()=>{setShowNewGoal(false);setFormError("")}} title="New goal">
+          <div className="space-y-4">
+            {formError && <p className="text-sm text-destructive bg-destructive/10 rounded-xl px-4 py-2">{formError}</p>}
+            <Field label="Goal name"><FInput value={gForm.name} onChange={e=>setGForm(p=>({...p,name:e.target.value}))} placeholder="e.g. Emergency Fund"/></Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Target ($)"><FInput type="number" step="0.01" value={gForm.target} onChange={e=>setGForm(p=>({...p,target:e.target.value}))} placeholder="5000"/></Field>
+              <Field label="Saved so far"><FInput type="number" step="0.01" value={gForm.current} onChange={e=>setGForm(p=>({...p,current:e.target.value}))} placeholder="0"/></Field>
+            </div>
+            <Field label="Deadline"><FInput type="date" value={gForm.deadline} onChange={e=>setGForm(p=>({...p,deadline:e.target.value}))}/></Field>
+            <Field label="Tile colour"><FSelect value={gForm.tile} onChange={e=>setGForm(p=>({...p,tile:e.target.value as Tile}))}>{TILES.map(t=><option key={t} value={t} className="capitalize">{t}</option>)}</FSelect></Field>
+            <div className="flex gap-3 pt-2">
+              <button onClick={()=>{setShowNewGoal(false);setFormError("")}} className="pill pill-light flex-1 justify-center">Cancel</button>
+              <button onClick={addGoal} className="pill pill-dark flex-[2] justify-center">Create goal</button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
-      {/* Delete Category Modal */}
-      {deletingCategoryId && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm modal-backdrop">
-          <div className="bg-[#131316] border border-[#222226] max-w-sm w-full rounded-3xl p-6 shadow-2xl relative text-center">
-            <Trash2 size={40} className="text-red-500 mx-auto mb-4 opacity-90" strokeWidth={1.5} />
-            <h3 className="text-xl font-bold text-zinc-100 mb-2">Delete Category?</h3>
-            <p className="text-zinc-400 text-sm mb-8">This will permanently remove this category. Transactions using it will not be affected.</p>
-            <div className="flex gap-4">
-              <button onClick={() => setDeletingCategoryId(null)} className="flex-1 py-3 bg-[#1C1C21] hover:bg-[#222226] text-zinc-300 rounded-xl font-semibold text-sm border border-[#2A2A30] transition-colors">Cancel</button>
-              <button onClick={async () => {
-                const id = deletingCategoryId;
-                setDeletingCategoryId(null);
-                setDbCategories(prev => prev.filter(c => c.id !== id));
-                try { await apiFetch(`/api/banks-categories?id=${id}`, { method: "DELETE" }); } catch {}
-              }} className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold text-sm shadow-[0_5px_20px_rgba(239,68,68,0.3)] transition-all">Delete</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Decrypt Wallet Modal */}
-      {decryptingWalletId && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm modal-backdrop">
-          <div className="bg-[#131316] border border-[#222226] max-w-sm w-full rounded-3xl p-6 shadow-2xl">
-            <div className="text-center mb-6">
-              <Lock size={40} className="text-amber-400 mx-auto mb-4" />
-              <h3 className="text-xl font-bold text-zinc-100 mb-2">Decrypt Wallet</h3>
-              <p className="text-zinc-400 text-sm">Enter your 6-digit passcode to reveal the wallet address.</p>
-            </div>
-            <input type="password" maxLength={6} value={decryptPasscode} onChange={e => setDecryptPasscode(e.target.value)} placeholder="••••••" className="w-full bg-[#09090B] border border-[#222226] rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none focus:border-[#D4FE44] transition-colors font-mono tracking-widest text-center mb-4" />
-            <div className="flex gap-4">
-              <button onClick={() => { setDecryptingWalletId(null); setDecryptPasscode(''); }} className="flex-1 py-3 bg-[#1C1C21] hover:bg-[#222226] text-zinc-300 rounded-xl font-semibold text-sm border border-[#2A2A30] transition-colors">Cancel</button>
-              <button onClick={async () => {
-                try {
-                  // Fetch wallet to get encrypted data
-                  const walletRes = await apiFetch(`/api/wallets/${decryptingWalletId}`);
-                  if (!walletRes.ok) throw new Error('Wallet not found');
-                  const wallet = await walletRes.json();
-                  if (!wallet.encryptedData) throw new Error('No encrypted data');
-                  
-                  // Decrypt client-side
-                  const { decryptData } = await import('./utils/encryption');
-                  const decryptedAddress = await decryptData(
-                    wallet.encryptedData.encryptedData,
-                    decryptPasscode,
-                    wallet.encryptedData.salt,
-                    wallet.encryptedData.iv
-                  );
-                  
-                  // Update wallet to remove encryption and restore real address
-                  const updateRes = await apiFetch(`/api/wallets/${decryptingWalletId}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      address: decryptedAddress,
-                      isEncrypted: false,
-                    }),
-                  });
-                  
-                  if (updateRes.ok) {
-                    setDecryptingWalletId(null);
-                    setDecryptPasscode('');
-                    fetchWallets();
-                  } else {
-                    alert('Failed to save decrypted wallet.');
-                  }
-                } catch (err: any) {
-                  alert('Decryption failed: wrong passcode or corrupted data.');
-                }
-              }} className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-sm transition-all">Decrypt</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {deletingId && <ConfirmDelete title="This action cannot be undone." onConfirm={confirmDelete} onClose={()=>setDeletingId(null)}/>}
     </div>
   );
 }

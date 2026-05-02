@@ -1,398 +1,318 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { useWeb3 } from "../context/Web3Context";
-import { useAppSettings } from "../context/AppSettingsContext";
-import { encryptData, decryptData, maskData } from "../utils/encryption";
-import { MasterPasscodeGuard } from "../components/MasterPasscodeGuard";
-import { Sidebar, THEME, type ThemeType } from "../components/Sidebar";
-import { PageTransition } from "../components/PageTransition";
 import { useWallets } from "@/lib/hooks/useWallets";
+import { apiFetch } from "../lib/apiClient";
 import {
-  Plus, Trash2, Copy, X, Shield, Wallet, CreditCard,
-  Check, AlertCircle, Lock, Unlock, Activity, ArrowUpRight
+  Plus, Trash2, Copy, Check, Lock, Unlock, Wallet,
+  CreditCard, Globe, Zap, Shield, ArrowUpRight, X
 } from "lucide-react";
 
+const BRAND = "#C8FF00";
+
 interface CryptoWallet {
-  id: string;
-  name: string;
-  address: string;
-  network: string;
-  balance: number;
-  createdAt: string;
-  isEncrypted?: boolean;
+  id: string; name: string; address: string; network: string;
+  balance: number; createdAt: string; isEncrypted?: boolean;
 }
-
 interface BankCard {
-  id: string;
-  name: string;
-  last4: string;
-  holder: string;
-  expiry: string;
-  type: "physical" | "virtual";
-  balance: number;
+  id: string; name: string; last4: string; holder: string;
+  expiry: string; type: "physical" | "virtual"; balance: number;
 }
 
-function shortAddr(a: string) { return a ? `${a.slice(0, 6)}…${a.slice(-4)}` : " "; }
+function shortAddr(a: string) { return a ? `${a.slice(0,6)}…${a.slice(-4)}` : ""; }
+
+function ModalShell({ onClose, title, subtitle, children }: { onClose: ()=>void; title: string; subtitle?: string; children: React.ReactNode }) {
+  return (
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-md">
+      <div className="bg-[#0E0E11] border border-white/8 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden">
+        <div className="h-0.5 w-full" style={{ background: `linear-gradient(90deg, ${BRAND}, transparent)` }} />
+        <div className="p-6 sm:p-8">
+          <div className="flex items-start justify-between mb-6">
+            <div>
+              <h2 className="text-xl font-bold text-white">{title}</h2>
+              {subtitle && <p className="text-sm text-white/35 mt-1">{subtitle}</p>}
+            </div>
+            <button onClick={onClose} className="w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/40 hover:text-white transition-all">
+              <X size={16} />
+            </button>
+          </div>
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs font-semibold text-white/30 uppercase tracking-wider">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return <input {...props} className={`w-full bg-white/4 border border-white/8 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-[#C8FF00]/50 transition-all ${props.className||''}`} />;
+}
+
+function Select({ children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return <select {...props} className="w-full bg-white/4 border border-white/8 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-[#C8FF00]/50 appearance-none cursor-pointer transition-all">{children}</select>;
+}
+
+function ConfirmDelete({ title, subtitle, onConfirm, onClose }: { title: string; subtitle: string; onConfirm: ()=>void; onClose: ()=>void }) {
+  return (
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-md">
+      <div className="bg-[#0E0E11] border border-white/8 max-w-sm w-full rounded-2xl p-6 text-center">
+        <div className="w-14 h-14 rounded-2xl bg-red-500/10 flex items-center justify-center mx-auto mb-4"><Trash2 size={22} className="text-red-400"/></div>
+        <h3 className="text-lg font-bold text-white mb-1">{title}</h3>
+        <p className="text-sm text-white/35 mb-6">{subtitle}</p>
+        <div className="flex gap-3">
+          <button onClick={onClose} className="flex-1 py-3 bg-white/5 text-white/50 rounded-xl text-sm font-medium hover:bg-white/8 transition-all">Cancel</button>
+          <button onClick={onConfirm} className="flex-1 py-3 bg-red-500 hover:bg-red-400 text-white rounded-xl text-sm font-bold transition-all">Delete</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function CardsPage() {
-  const { isWeb3, mode, setMode } = useWeb3();
-  const { setCurrentPage, isDark, setIsDark } = useAppSettings();
-  const T = isDark ? THEME.dark : THEME.light;
-
-  const [hydrated, setHydrated] = useState(false);
+  const { mode } = useWeb3();
   const [cards, setCards] = useState<BankCard[]>([]);
   const [loadingCards, setLoadingCards] = useState(true);
   const [showAddCard, setShowAddCard] = useState(false);
   const [showAddWallet, setShowAddWallet] = useState(false);
-  const [cardForm, setCardForm] = useState({ name: "", last4: "", expiry: "", type: "virtual" as "physical" | "virtual" });
-  const [walletForm, setWalletForm] = useState({ name: "", address: "", network: "Ethereum", balance: "" });
+  const [cardForm, setCardForm] = useState({ name:"", last4:"", expiry:"", type:"virtual" as "physical"|"virtual" });
+  const [walletForm, setWalletForm] = useState({ name:"", address:"", network:"Ethereum", balance:"" });
   const [formError, setFormError] = useState("");
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [copySuccess, setCopySuccess] = useState<string | null>(null);
+  const [deletingCardId, setDeletingCardId] = useState<string|null>(null);
+  const [deletingWalletId, setDeletingWalletId] = useState<string|null>(null);
+  const [copySuccess, setCopySuccess] = useState<string|null>(null);
 
   const { wallets, loading: wLoading, addWallet, removeWallet } = useWallets();
 
-  useEffect(() => {
-    setHydrated(true);
-    setCurrentPage("cards");
-    fetchCards();
-  }, [setCurrentPage]);
+  useEffect(() => { fetchCards(); }, []);
 
   async function fetchCards() {
     setLoadingCards(true);
-    try {
-      const r = await fetch("/api/cards");
-      if (r.ok) {
-        const data = await r.json();
-        if (Array.isArray(data)) setCards(data);
-      }
-    } catch {}
+    try { const r = await apiFetch("/api/cards"); if (r.ok) { const d = await r.json(); if (Array.isArray(d)) setCards(d); } } catch {}
     setLoadingCards(false);
   }
 
-  // FIX: card deletion now calls the API
   const handleDeleteCard = async (id: string) => {
-    setCards(prev => prev.filter(c => c.id !== id));
-    setDeletingId(null);
-    try {
-      await fetch(`/api/cards/${id}`, { method: "DELETE" });
-    } catch {
-      // Restore on failure
-      fetchCards();
-    }
-  };
-
-  const handleDeleteWallet = async (id: string) => {
-    setDeletingId(null);
-    await removeWallet(id);
+    const prev = [...cards];
+    setCards(p => p.filter(c => c.id !== id));
+    setDeletingCardId(null);
+    try { await apiFetch(`/api/cards/${id}`, { method: "DELETE" }); }
+    catch { setCards(prev); }
   };
 
   const handleAddCard = async () => {
     setFormError("");
     if (!cardForm.name.trim()) { setFormError("Card name is required."); return; }
-    if (cardForm.last4.length !== 4) { setFormError("Last 4 digits must be exactly 4 numbers."); return; }
-    if (!cardForm.expiry.match(/^\d{2}\/\d{2}$/)) { setFormError("Expiry must be MM/YY format."); return; }
+    if (cardForm.last4.length !== 4) { setFormError("Last 4 digits required."); return; }
+    if (!cardForm.expiry.match(/^\d{2}\/\d{2}$/)) { setFormError("Use MM/YY format."); return; }
     try {
-      const res = await fetch("/api/cards", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...cardForm, holder: "Korgon", balance: 0 }),
-      });
-      if (res.ok) {
-        const saved = await res.json();
-        setCards(prev => [...prev, saved]);
-        setShowAddCard(false);
-        setCardForm({ name: "", last4: "", expiry: "", type: "virtual" });
-      } else {
-        setFormError("Failed to add card.");
-      }
-    } catch {
-      setFormError("Network error.");
-    }
+      const r = await apiFetch("/api/cards", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ name: cardForm.name.trim(), last4: cardForm.last4, holder: "Account Holder", expiry: cardForm.expiry, type: cardForm.type, balance: 0 }) });
+      if (r.ok) { const d = await r.json(); setCards(p => [...p, d]); setShowAddCard(false); setCardForm({ name:"", last4:"", expiry:"", type:"virtual" }); }
+      else { const d = await r.json(); setFormError(d.error || "Failed to add card."); }
+    } catch { setFormError("Network error."); }
   };
 
   const handleAddWallet = async () => {
     setFormError("");
-    if (!walletForm.name.trim()) { setFormError("Wallet name is required."); return; }
-    if (!walletForm.address.trim()) { setFormError("Wallet address is required."); return; }
-    const result = await addWallet({
-      name: walletForm.name.trim(),
-      address: walletForm.address.trim(),
-      network: walletForm.network,
-      balance: parseFloat(walletForm.balance) || 0,
-    });
-    if (result) {
-      setShowAddWallet(false);
-      setWalletForm({ name: "", address: "", network: "Ethereum", balance: "" });
-    } else {
-      setFormError("Failed to add wallet.");
-    }
+    if (!walletForm.name.trim()) { setFormError("Name required."); return; }
+    if (!walletForm.address.trim()) { setFormError("Address required."); return; }
+    try {
+      const ok = await addWallet({ name: walletForm.name.trim(), address: walletForm.address.trim(), network: walletForm.network, balance: parseFloat(walletForm.balance) || 0 });
+      if (ok) { setShowAddWallet(false); setWalletForm({ name:"", address:"", network:"Ethereum", balance:"" }); }
+      else setFormError("Failed to add wallet.");
+    } catch { setFormError("Network error."); }
   };
 
-  const handleCopy = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopySuccess(id);
-    setTimeout(() => setCopySuccess(null), 2000);
+  const copyToClipboard = (text: string, id: string) => {
+    navigator.clipboard.writeText(text).then(() => { setCopySuccess(id); setTimeout(() => setCopySuccess(null), 2000); });
   };
 
-  if (!hydrated) return null;
-
-  const assets = mode === "crypto" ? wallets : cards;
-  const totalBalance = assets.reduce((s: number, c: any) => s + (c.balance || 0), 0);
+  const networks: Record<string, string> = { Ethereum:"#627EEA", Solana:"#9945FF", Bitcoin:"#F7931A", Polygon:"#8247E5", Arbitrum:"#2D374B", Base:"#0052FF", Other:"#888" };
 
   return (
-    <MasterPasscodeGuard isDark={isDark}>
-      <PageTransition>
-        <style>{`
-          .bento-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-          .bento-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px rgba(0,0,0,0.08); }
-          .card-chip { width: 40px; height: 30px; background: linear-gradient(135deg, #ffd700, #b8860b); border-radius: 6px; margin-bottom: 20px; }
-        `}</style>
+    <div className="bg-[#080809] min-h-screen text-white font-sans">
+      {/* Header */}
+      <div className="border-b border-white/5 px-4 md:px-8 py-5 flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-bold text-white">{mode === 'banks' ? 'Bank Cards' : 'Crypto Wallets'}</h1>
+          <p className="text-xs text-white/25 mt-0.5">{mode === 'banks' ? `${cards.length} cards` : `${wallets.length} wallets`}</p>
+        </div>
+        <button onClick={() => mode === 'banks' ? setShowAddCard(true) : setShowAddWallet(true)}
+          className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold text-black transition-all hover:opacity-90" style={{ background: BRAND }}>
+          <Plus size={15} /> {mode === 'banks' ? 'Add Card' : 'Add Wallet'}
+        </button>
+      </div>
 
-        <div style={{ display: "flex", minHeight: "100vh", background: T.bg, fontFamily: "'Outfit', sans-serif", color: T.textPri }}>
-          <Sidebar isDark={isDark} setIsDark={setIsDark} />
-
-          <main style={{ marginLeft: 80, flex: 1, padding: "2.5rem 3rem", maxWidth: 1400, margin: "0 auto", width: "calc(100% - 80px)" }}>
-
-            {/* Header */}
-            <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "3rem" }}>
-              <div>
-                <h1 style={{ fontSize: 42, fontWeight: 800, letterSpacing: "-0.04em", marginBottom: 8 }}>
-                  {mode === "crypto" ? "Wallets" : "Bank Cards"}
-                </h1>
-                <div style={{ display: "flex", gap: 12 }}>
-                  {["banks", "crypto"].map(m => (
-                    <button key={m} onClick={() => setMode(m as any)}
-                      style={{
-                        padding: "8px 20px", borderRadius: 99, border: "none", fontSize: 13, fontWeight: 700,
-                        background: mode === m ? T.textPri : T.pill, color: mode === m ? T.bg : T.textSec,
-                        cursor: "pointer", transition: "all 0.2s"
-                      }}>
-                      {m.toUpperCase()}
+      <div className="p-4 md:p-8">
+        {/* ── BANK CARDS ── */}
+        {mode === 'banks' && (
+          loadingCards ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {[1,2,3].map(i => <div key={i} className="h-48 rounded-2xl bg-white/3 animate-pulse"/>)}
+            </div>
+          ) : cards.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 text-white/20">
+              <CreditCard size={40} className="mb-4"/>
+              <p className="text-base font-semibold mb-2">No cards yet</p>
+              <p className="text-sm mb-6">Add your first bank card to get started</p>
+              <button onClick={() => setShowAddCard(true)} className="px-5 py-2.5 rounded-xl font-bold text-sm text-black" style={{ background: BRAND }}>Add Card</button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {cards.map((card, i) => (
+                <div key={card.id} className="rounded-2xl p-6 relative overflow-hidden group transition-transform hover:-translate-y-0.5"
+                  style={{ background: i === 0 ? `linear-gradient(135deg, ${BRAND} 0%, #8AC800 100%)` : 'linear-gradient(135deg, #111116 0%, #0D0D10 100%)', border: i === 0 ? 'none' : '1px solid rgba(255,255,255,0.06)' }}>
+                  {/* Chip */}
+                  <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => setDeletingCardId(card.id)} className={`w-7 h-7 rounded-lg flex items-center justify-center ${i===0?'bg-black/10 text-black/50 hover:text-red-700':'bg-white/5 text-white/25 hover:text-red-400'} transition-colors`}>
+                      <Trash2 size={13}/>
                     </button>
-                  ))}
+                  </div>
+                  <div className="flex items-start justify-between mb-8">
+                    <span className={`font-bold text-base ${i===0?'text-black':'text-white'}`}>{card.name}</span>
+                    <Globe size={18} className={i===0?'text-black/30':'text-white/15'}/>
+                  </div>
+                  <p className={`text-2xl font-bold tracking-tight mb-1 ${i===0?'text-black':'text-white'}`}>
+                    ${card.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                  <p className={`text-sm font-mono mb-5 ${i===0?'text-black/50':'text-white/25'}`}>···· ···· ···· {card.last4}</p>
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <p className={`text-[10px] uppercase tracking-widest font-semibold mb-0.5 ${i===0?'text-black/40':'text-white/20'}`}>Holder</p>
+                      <p className={`text-sm font-semibold ${i===0?'text-black':'text-white/60'}`}>{card.holder}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className={`text-[10px] uppercase tracking-widest font-semibold mb-0.5 ${i===0?'text-black/40':'text-white/20'}`}>Expires</p>
+                      <p className={`text-sm font-semibold ${i===0?'text-black':'text-white/60'}`}>{card.expiry}</p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <button
-                onClick={() => mode === "crypto" ? setShowAddWallet(true) : setShowAddCard(true)}
-                style={{
-                  padding: "0 24px", height: 48, borderRadius: 16, background: T.yellow,
-                  border: "none", cursor: "pointer", fontSize: 14, fontWeight: 800, color: "#000",
-                  display: "flex", alignItems: "center", gap: 8, boxShadow: `0 8px 20px ${T.yellow}40`
-                }}>
-                <Plus size={20} strokeWidth={3} /> Add {mode === "crypto" ? "Wallet" : "Card"}
+              ))}
+              {/* Add card placeholder */}
+              <button onClick={() => setShowAddCard(true)} className="rounded-2xl border border-dashed border-white/10 h-48 flex flex-col items-center justify-center gap-2 text-white/20 hover:text-white/40 hover:border-white/20 transition-all">
+                <Plus size={24}/><span className="text-sm font-medium">Add Card</span>
               </button>
-            </header>
+            </div>
+          )
+        )}
 
-            {/* Bento Grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: "1.5rem" }}>
-
-              {/* Stats Column */}
-              <div style={{ gridColumn: "span 4", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-                <div className="bento-card" style={{ background: T.card, borderRadius: 32, padding: "2rem", border: `1px solid ${T.border}` }}>
-                  <div style={{ width: 48, height: 48, borderRadius: 16, background: `${T.blue}20`, display: "flex", alignItems: "center", justifyContent: "center", color: T.blue, marginBottom: "1.5rem" }}>
-                    <Shield size={24} />
-                  </div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: T.textSec, textTransform: "uppercase", marginBottom: 4 }}>Security Status</div>
-                  <div style={{ fontSize: 24, fontWeight: 800, color: T.green }}>Fully Encrypted</div>
-                  <p style={{ fontSize: 13, color: T.textMut, marginTop: 8 }}>All sensitive data is protected with AES-256 encryption.</p>
-                </div>
-
-                <div className="bento-card" style={{ background: T.yellow + "15", borderRadius: 32, padding: "2rem", border: `1px solid ${T.yellow}30` }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: T.textSec, textTransform: "uppercase", marginBottom: 4 }}>Total Balance</div>
-                  <div style={{ fontSize: 32, fontWeight: 800 }}>${totalBalance.toLocaleString()}</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 12, color: T.green }}>
-                    <Activity size={14} />
-                    <span style={{ fontSize: 12, fontWeight: 700 }}>{assets.length} Active Assets</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Assets Grid */}
-              <div style={{ gridColumn: "span 8", display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "1.5rem" }}>
-                {(wLoading || loadingCards) ? (
-                  <div style={{ gridColumn: "span 2", display: "flex", alignItems: "center", justifyContent: "center", height: 200 }}>
-                    <div style={{ width: 32, height: 32, border: `3px solid ${T.yellow}`, borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-                  </div>
-                ) : assets.length === 0 ? (
-                  <div style={{ gridColumn: "span 2", background: T.pill, borderRadius: 32, padding: "4rem", border: `1px dashed ${T.border}`, textAlign: "center", color: T.textMut }}>
-                    <Plus size={48} style={{ marginBottom: 16, opacity: 0.2 }} />
-                    <div style={{ fontSize: 16, fontWeight: 700 }}>No {mode === "crypto" ? "wallets" : "cards"} added yet</div>
-                    <p style={{ fontSize: 13, marginTop: 4 }}>Click the button above to add your first asset.</p>
-                  </div>
-                ) : assets.map((asset: any) => (
-                  <div key={asset.id} className="bento-card" style={{ background: T.card, borderRadius: 32, padding: "2rem", border: `1px solid ${T.border}`, position: "relative", overflow: "hidden" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <div style={{ width: 44, height: 44, borderRadius: 14, background: T.pill, display: "flex", alignItems: "center", justifyContent: "center", color: T.textSec }}>
-                          {mode === "crypto" ? <Wallet size={20} /> : <CreditCard size={20} />}
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 16, fontWeight: 800 }}>{asset.name}</div>
-                          <div style={{ fontSize: 12, color: T.textMut }}>{mode === "crypto" ? asset.network : (asset.holder || "Card")}</div>
+        {/* ── WALLETS ── */}
+        {mode === 'crypto' && (
+          wLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[1,2,3].map(i => <div key={i} className="h-40 rounded-2xl bg-white/3 animate-pulse"/>)}
+            </div>
+          ) : wallets.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 text-white/20">
+              <Wallet size={40} className="mb-4"/>
+              <p className="text-base font-semibold mb-2">No wallets yet</p>
+              <p className="text-sm mb-6">Connect your first crypto wallet</p>
+              <button onClick={() => setShowAddWallet(true)} className="px-5 py-2.5 rounded-xl font-bold text-sm text-black" style={{ background: BRAND }}>Add Wallet</button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {wallets.map(w => (
+                <div key={w.id} className="bg-[#0E0E11] border border-white/5 rounded-2xl p-5 group hover:border-white/10 transition-all">
+                  <div className="flex items-start justify-between mb-5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: `${networks[w.network]||'#888'}15`, border: `1px solid ${networks[w.network]||'#888'}30` }}>
+                        <Wallet size={18} style={{ color: networks[w.network]||'#888' }}/>
+                      </div>
+                      <div>
+                        <p className="font-bold text-white">{w.name}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <p className="text-xs text-white/25 font-mono">{shortAddr(w.address)}</p>
+                          <button onClick={() => copyToClipboard(w.address, w.id)} className="text-white/20 hover:text-white/50 transition-colors">
+                            {copySuccess === w.id ? <Check size={11} className="text-green-400"/> : <Copy size={11}/>}
+                          </button>
                         </div>
                       </div>
-                      <button
-                        onClick={() => setDeletingId(asset.id)}
-                        style={{ width: 36, height: 36, borderRadius: 10, background: T.pill, border: "none", cursor: "pointer", color: T.red, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <Trash2 size={14} />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {w.isEncrypted ? <Lock size={14} className="text-amber-400"/> : <Unlock size={14} className="text-white/20"/>}
+                      <button onClick={() => setDeletingWalletId(w.id)} className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-white/4 flex items-center justify-center text-white/25 hover:text-red-400 transition-all">
+                        <Trash2 size={13}/>
                       </button>
                     </div>
+                  </div>
 
-                    {mode === "banks" && <div className="card-chip" />}
+                  <p className="text-2xl font-bold text-white mb-1">${w.balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                  <p className="text-xs text-white/25">USD equivalent</p>
 
-                    <div style={{ marginBottom: "1.5rem" }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: T.textSec, textTransform: "uppercase", marginBottom: 4 }}>Balance</div>
-                      <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em" }}>${(asset.balance || 0).toLocaleString()}</div>
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/5">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 rounded-full" style={{ background: networks[w.network]||'#888' }}/>
+                      <span className="text-sm text-white/40 font-medium">{w.network}</span>
                     </div>
-
-                    <div
-                      onClick={() => handleCopy(mode === "crypto" ? asset.address : asset.last4, asset.id)}
-                      style={{ background: T.pill, borderRadius: 16, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
-                      <span style={{ fontSize: 13, color: T.textSec, fontFamily: "monospace" }}>
-                        {mode === "crypto" ? shortAddr(asset.address) : `**** **** **** ${asset.last4}`}
-                      </span>
-                      {copySuccess === asset.id ? <Check size={14} color={T.green} /> : <Copy size={14} color={T.textMut} />}
-                    </div>
+                    <span className={`text-xs px-2 py-0.5 rounded-lg font-semibold ${w.isEncrypted?'text-amber-400 bg-amber-400/10':'text-emerald-400 bg-emerald-400/10'}`}>
+                      {w.isEncrypted ? '🔒 Encrypted' : 'Unencrypted'}
+                    </span>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
+              <button onClick={() => setShowAddWallet(true)} className="rounded-2xl border border-dashed border-white/10 h-40 flex flex-col items-center justify-center gap-2 text-white/20 hover:text-white/40 hover:border-white/20 transition-all">
+                <Plus size={24}/><span className="text-sm font-medium">Add Wallet</span>
+              </button>
             </div>
-          </main>
-        </div>
+          )
+        )}
+      </div>
 
-        {/* Delete Confirmation Modal */}
-        {deletingId && (
-          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(8px)" }}>
-            <div style={{ background: T.card, borderRadius: 24, padding: "2rem", maxWidth: 360, width: "90%", border: `1px solid ${T.border}`, textAlign: "center" }}>
-              <Trash2 size={40} color={T.red} style={{ margin: "0 auto 1rem" }} />
-              <h3 style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>Delete {mode === "crypto" ? "Wallet" : "Card"}?</h3>
-              <p style={{ color: T.textSec, fontSize: 14, marginBottom: "1.5rem" }}>This action cannot be undone.</p>
-              <div style={{ display: "flex", gap: 12 }}>
-                <button onClick={() => setDeletingId(null)}
-                  style={{ flex: 1, padding: "12px", borderRadius: 14, background: T.pill, border: `1px solid ${T.border}`, color: T.textSec, cursor: "pointer", fontSize: 14, fontWeight: 700 }}>
-                  Cancel
-                </button>
-                <button onClick={() => mode === "crypto" ? handleDeleteWallet(deletingId) : handleDeleteCard(deletingId)}
-                  style={{ flex: 1, padding: "12px", borderRadius: 14, background: T.red + "22", border: `1px solid ${T.red}44`, color: T.red, cursor: "pointer", fontSize: 14, fontWeight: 700 }}>
-                  Delete
-                </button>
-              </div>
+      {/* ── ADD CARD MODAL ── */}
+      {showAddCard && (
+        <ModalShell onClose={() => { setShowAddCard(false); setFormError(""); }} title="Add Bank Card">
+          <div className="space-y-4">
+            {formError && <div className="px-4 py-3 rounded-xl text-sm bg-red-400/8 text-red-400 border border-red-400/20">{formError}</div>}
+            <Field label="Card Name"><Input value={cardForm.name} onChange={e => setCardForm(p=>({...p, name:e.target.value}))} placeholder="e.g. Chase Debit"/></Field>
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Last 4"><Input maxLength={4} value={cardForm.last4} onChange={e=>setCardForm(p=>({...p,last4:e.target.value.replace(/\D/g,'')}))} placeholder="4209" className="font-mono text-center"/></Field>
+              <Field label="Expiry"><Input maxLength={5} value={cardForm.expiry} onChange={e=>setCardForm(p=>({...p,expiry:e.target.value}))} placeholder="MM/YY" className="font-mono"/></Field>
+              <Field label="Type"><Select value={cardForm.type} onChange={e=>setCardForm(p=>({...p,type:e.target.value as any}))}><option value="virtual">Virtual</option><option value="physical">Physical</option></Select></Field>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => { setShowAddCard(false); setFormError(""); }} className="flex-1 py-3 bg-white/5 text-white/50 rounded-xl text-sm hover:bg-white/8 transition-all">Cancel</button>
+              <button onClick={handleAddCard} className="flex-[2] py-3 rounded-xl font-bold text-sm text-black transition-all hover:opacity-90" style={{ background: BRAND }}>Add Card</button>
             </div>
           </div>
-        )}
+        </ModalShell>
+      )}
 
-        {/* Add Card Modal */}
-        {showAddCard && (
-          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(8px)" }}>
-            <div style={{ background: T.card, borderRadius: 28, padding: "2rem", maxWidth: 420, width: "90%", border: `1px solid ${T.border}` }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
-                <h3 style={{ fontSize: 20, fontWeight: 800 }}>Add Card</h3>
-                <button onClick={() => { setShowAddCard(false); setFormError(""); }} style={{ background: "none", border: "none", cursor: "pointer", color: T.textSec }}><X size={20} /></button>
-              </div>
-              {formError && <div style={{ background: T.red + "15", border: `1px solid ${T.red}30`, borderRadius: 12, padding: "10px 14px", color: T.red, fontSize: 13, marginBottom: 16 }}>{formError}</div>}
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                <div>
-                  <label style={{ fontSize: 12, color: T.textSec, display: "block", marginBottom: 6 }}>Card Name</label>
-                  <input value={cardForm.name} onChange={e => setCardForm(p => ({ ...p, name: e.target.value }))}
-                    placeholder="e.g. Chase Debit"
-                    style={{ width: "100%", background: T.pill, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 14px", color: T.textPri, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div>
-                    <label style={{ fontSize: 12, color: T.textSec, display: "block", marginBottom: 6 }}>Last 4 Digits</label>
-                    <input value={cardForm.last4} maxLength={4} onChange={e => setCardForm(p => ({ ...p, last4: e.target.value.replace(/\D/g, "") }))}
-                      placeholder="4209"
-                      style={{ width: "100%", background: T.pill, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 14px", color: T.textPri, fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 12, color: T.textSec, display: "block", marginBottom: 6 }}>Expiry (MM/YY)</label>
-                    <input value={cardForm.expiry} maxLength={5} onChange={e => setCardForm(p => ({ ...p, expiry: e.target.value }))}
-                      placeholder="12/28"
-                      style={{ width: "100%", background: T.pill, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 14px", color: T.textPri, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
-                  </div>
-                </div>
-                <div>
-                  <label style={{ fontSize: 12, color: T.textSec, display: "block", marginBottom: 6 }}>Type</label>
-                  <select value={cardForm.type} onChange={e => setCardForm(p => ({ ...p, type: e.target.value as any }))}
-                    style={{ width: "100%", background: T.pill, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 14px", color: T.textPri, fontSize: 14, outline: "none" }}>
-                    <option value="physical">Physical</option>
-                    <option value="virtual">Virtual</option>
-                  </select>
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 12, marginTop: "1.5rem" }}>
-                <button onClick={() => { setShowAddCard(false); setFormError(""); }}
-                  style={{ flex: 1, padding: "12px", borderRadius: 14, background: T.pill, border: `1px solid ${T.border}`, color: T.textSec, cursor: "pointer", fontSize: 14, fontWeight: 700 }}>
-                  Cancel
-                </button>
-                <button onClick={handleAddCard}
-                  style={{ flex: 2, padding: "12px", borderRadius: 14, background: T.yellow, border: "none", color: "#000", cursor: "pointer", fontSize: 14, fontWeight: 800 }}>
-                  Add Card
-                </button>
-              </div>
+      {/* ── ADD WALLET MODAL ── */}
+      {showAddWallet && (
+        <ModalShell onClose={() => { setShowAddWallet(false); setFormError(""); }} title="Add Wallet" subtitle="Connect a crypto wallet to track balance">
+          <div className="space-y-4">
+            {formError && <div className="px-4 py-3 rounded-xl text-sm bg-red-400/8 text-red-400 border border-red-400/20">{formError}</div>}
+            <Field label="Wallet Name"><Input value={walletForm.name} onChange={e=>setWalletForm(p=>({...p,name:e.target.value}))} placeholder="e.g. MetaMask"/></Field>
+            <Field label="Address"><Input value={walletForm.address} onChange={e=>setWalletForm(p=>({...p,address:e.target.value}))} placeholder="0x…" className="font-mono text-xs"/></Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Network">
+                <Select value={walletForm.network} onChange={e=>setWalletForm(p=>({...p,network:e.target.value}))}>
+                  {Object.keys(networks).map(n => <option key={n}>{n}</option>)}
+                </Select>
+              </Field>
+              <Field label="Balance (USD)"><Input type="number" step="0.01" value={walletForm.balance} onChange={e=>setWalletForm(p=>({...p,balance:e.target.value}))} placeholder="0.00"/></Field>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => { setShowAddWallet(false); setFormError(""); }} className="flex-1 py-3 bg-white/5 text-white/50 rounded-xl text-sm hover:bg-white/8 transition-all">Cancel</button>
+              <button onClick={handleAddWallet} className="flex-[2] py-3 rounded-xl font-bold text-sm text-black transition-all hover:opacity-90" style={{ background: BRAND }}>Add Wallet</button>
             </div>
           </div>
-        )}
+        </ModalShell>
+      )}
 
-        {/* Add Wallet Modal */}
-        {showAddWallet && (
-          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(8px)" }}>
-            <div style={{ background: T.card, borderRadius: 28, padding: "2rem", maxWidth: 420, width: "90%", border: `1px solid ${T.border}` }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
-                <h3 style={{ fontSize: 20, fontWeight: 800 }}>Add Wallet</h3>
-                <button onClick={() => { setShowAddWallet(false); setFormError(""); }} style={{ background: "none", border: "none", cursor: "pointer", color: T.textSec }}><X size={20} /></button>
-              </div>
-              {formError && <div style={{ background: T.red + "15", border: `1px solid ${T.red}30`, borderRadius: 12, padding: "10px 14px", color: T.red, fontSize: 13, marginBottom: 16 }}>{formError}</div>}
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                <div>
-                  <label style={{ fontSize: 12, color: T.textSec, display: "block", marginBottom: 6 }}>Wallet Name</label>
-                  <input value={walletForm.name} onChange={e => setWalletForm(p => ({ ...p, name: e.target.value }))}
-                    placeholder="e.g. MetaMask, Ledger"
-                    style={{ width: "100%", background: T.pill, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 14px", color: T.textPri, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 12, color: T.textSec, display: "block", marginBottom: 6 }}>Wallet Address</label>
-                  <input value={walletForm.address} onChange={e => setWalletForm(p => ({ ...p, address: e.target.value }))}
-                    placeholder="0x... or Solana address"
-                    style={{ width: "100%", background: T.pill, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 14px", color: T.textPri, fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div>
-                    <label style={{ fontSize: 12, color: T.textSec, display: "block", marginBottom: 6 }}>Network</label>
-                    <select value={walletForm.network} onChange={e => setWalletForm(p => ({ ...p, network: e.target.value }))}
-                      style={{ width: "100%", background: T.pill, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 14px", color: T.textPri, fontSize: 14, outline: "none" }}>
-                      <option value="Ethereum">Ethereum</option>
-                      <option value="Solana">Solana</option>
-                      <option value="Bitcoin">Bitcoin</option>
-                      <option value="Polygon">Polygon</option>
-                      <option value="Arbitrum">Arbitrum</option>
-                      <option value="Base">Base</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 12, color: T.textSec, display: "block", marginBottom: 6 }}>Balance (USD)</label>
-                    <input type="number" value={walletForm.balance} onChange={e => setWalletForm(p => ({ ...p, balance: e.target.value }))}
-                      placeholder="0.00"
-                      style={{ width: "100%", background: T.pill, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 14px", color: T.textPri, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
-                  </div>
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 12, marginTop: "1.5rem" }}>
-                <button onClick={() => { setShowAddWallet(false); setFormError(""); }}
-                  style={{ flex: 1, padding: "12px", borderRadius: 14, background: T.pill, border: `1px solid ${T.border}`, color: T.textSec, cursor: "pointer", fontSize: 14, fontWeight: 700 }}>
-                  Cancel
-                </button>
-                <button onClick={handleAddWallet}
-                  style={{ flex: 2, padding: "12px", borderRadius: 14, background: T.yellow, border: "none", color: "#000", cursor: "pointer", fontSize: 14, fontWeight: 800 }}>
-                  Add Wallet
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </PageTransition>
-    </MasterPasscodeGuard>
+      {/* Confirm deletes */}
+      {deletingCardId && <ConfirmDelete title="Delete Card?" subtitle="This will permanently remove this card." onClose={()=>setDeletingCardId(null)} onConfirm={()=>handleDeleteCard(deletingCardId)}/>}
+      {deletingWalletId && (
+        <ConfirmDelete title="Delete Wallet?" subtitle="This will permanently remove this wallet." onClose={()=>setDeletingWalletId(null)}
+          onConfirm={async()=>{ const id=deletingWalletId; setDeletingWalletId(null); removeWallet(id); }}/>
+      )}
+    </div>
   );
 }
