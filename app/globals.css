@@ -2,104 +2,122 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Ledger — Pastel Finance Dashboard */
+/* Ledger Finance — Modern Dark Theme with Blue Accent + Clean Shadows */
 @layer base {
   :root {
-    --background: 152 50% 86%;
-    --foreground: 220 18% 14%;
+    /* Modern Light Palette */
+    --background: 0 0% 98%;
+    --foreground: 222 84% 5%;
 
-    --surface: 40 38% 97%;
-    --surface-foreground: 220 18% 14%;
+    --surface: 0 0% 100%;
+    --surface-foreground: 222 84% 5%;
 
-    --card: 40 38% 97%;
-    --card-foreground: 220 18% 14%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 84% 5%;
 
-    --popover: 40 38% 98%;
-    --popover-foreground: 220 18% 14%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 84% 5%;
 
-    --primary: 220 18% 12%;
-    --primary-foreground: 40 38% 97%;
+    /* Modern Blue Primary (#3B82F6) */
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 40 30% 92%;
-    --secondary-foreground: 220 18% 14%;
+    /* Clean Secondary */
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 84% 5%;
 
-    --muted: 40 24% 90%;
-    --muted-foreground: 220 10% 42%;
+    --muted: 210 40% 94%;
+    --muted-foreground: 215 16% 47%;
 
-    --accent: 152 60% 78%;
-    --accent-foreground: 220 18% 14%;
+    /* Blue Accent */
+    --accent: 217 91% 60%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 78% 60%;
-    --destructive-foreground: 40 38% 97%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
 
-    --success: 152 56% 42%;
-    --warning: 38 92% 56%;
+    --success: 142 76% 36%;
+    --warning: 38 92% 50%;
 
-    --border: 40 22% 88%;
-    --input: 40 22% 88%;
-    --ring: 220 18% 14%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 217 91% 60%;
 
-    --radius: 1.25rem;
+    --radius: 0.75rem;
 
-    /* Pastel tile palette */
-    --tile-pink: 6 82% 86%;
-    --tile-pink-fg: 0 60% 28%;
-    --tile-yellow: 42 96% 80%;
-    --tile-yellow-fg: 28 60% 24%;
-    --tile-lavender: 252 70% 88%;
-    --tile-lavender-fg: 252 40% 26%;
-    --tile-mint: 152 56% 80%;
-    --tile-mint-fg: 152 50% 18%;
-    --tile-peach: 22 92% 84%;
-    --tile-peach-fg: 18 60% 26%;
-    --tile-blue: 210 80% 86%;
-    --tile-blue-fg: 220 50% 22%;
+    /* Modern Tile Palette */
+    --tile-pink: 330 81% 88%;
+    --tile-pink-fg: 330 75% 25%;
+    --tile-yellow: 45 93% 85%;
+    --tile-yellow-fg: 45 93% 20%;
+    --tile-lavender: 262 83% 88%;
+    --tile-lavender-fg: 262 83% 25%;
+    --tile-mint: 160 84% 85%;
+    --tile-mint-fg: 160 84% 25%;
+    --tile-peach: 25 95% 88%;
+    --tile-peach-fg: 25 95% 25%;
+    --tile-blue: 217 91% 88%;
+    --tile-blue-fg: 217 91% 25%;
 
-    --shadow-card: 0 1px 0 0 hsl(40 22% 88%), 0 24px 48px -28px hsl(220 30% 18% / 0.18);
-    --shadow-pill: 0 6px 20px -8px hsl(220 30% 18% / 0.25);
-
-    --sidebar-background: 40 38% 97%;
-    --sidebar-foreground: 220 12% 36%;
-    --sidebar-primary: 220 18% 12%;
-    --sidebar-primary-foreground: 40 38% 97%;
-    --sidebar-accent: 40 30% 92%;
-    --sidebar-accent-foreground: 220 18% 14%;
-    --sidebar-border: 40 22% 88%;
-    --sidebar-ring: 220 18% 14%;
+    /* Modern Clean Shadows */
+    --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-pill: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+    --shadow-elevated: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   }
 
   .dark {
-    --background: 220 18% 8%;
-    --foreground: 40 38% 96%;
-    --surface: 220 18% 12%;
-    --card: 220 18% 12%;
-    --card-foreground: 40 38% 96%;
-    --primary: 40 38% 96%;
-    --primary-foreground: 220 18% 12%;
-    --secondary: 220 14% 18%;
-    --secondary-foreground: 40 38% 96%;
-    --muted: 220 14% 18%;
-    --muted-foreground: 220 8% 65%;
-    --accent: 152 40% 40%;
-    --accent-foreground: 40 38% 96%;
-    --border: 220 14% 20%;
-    --input: 220 14% 20%;
-    --ring: 40 38% 96%;
-    --surface-foreground: 40 38% 96%;
-    --shadow-card: 0 1px 0 0 hsl(220 14% 20%), 0 24px 48px -28px hsl(0 0% 0% / 0.4);
+    /* Modern Dark Palette */
+    --background: 222 84% 5%;
+    --foreground: 210 40% 98%;
 
-    --tile-pink: 6 50% 28%;
-    --tile-pink-fg: 6 82% 86%;
-    --tile-yellow: 42 60% 24%;
-    --tile-yellow-fg: 42 96% 80%;
-    --tile-lavender: 252 40% 26%;
-    --tile-lavender-fg: 252 70% 88%;
-    --tile-mint: 152 40% 18%;
-    --tile-mint-fg: 152 56% 80%;
-    --tile-peach: 18 50% 22%;
-    --tile-peach-fg: 22 92% 84%;
-    --tile-blue: 220 40% 20%;
-    --tile-blue-fg: 210 80% 86%;
+    --surface: 222 84% 8%;
+    --surface-foreground: 210 40% 98%;
+
+    --card: 222 84% 8%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 84% 8%;
+    --popover-foreground: 210 40% 98%;
+
+    /* Blue Primary */
+    --primary: 217 91% 60%;
+    --primary-foreground: 222 84% 5%;
+
+    --secondary: 217 32% 17%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217 32% 17%;
+    --muted-foreground: 215 20% 65%;
+
+    /* Blue Accent */
+    --accent: 217 91% 60%;
+    --accent-foreground: 222 84% 5%;
+
+    --destructive: 0 62% 52%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217 32% 17%;
+    --input: 217 32% 17%;
+    --ring: 217 91% 60%;
+
+    /* Dark Mode Tile Colors */
+    --tile-pink: 330 75% 25%;
+    --tile-pink-fg: 330 81% 88%;
+    --tile-yellow: 45 93% 20%;
+    --tile-yellow-fg: 45 93% 85%;
+    --tile-lavender: 262 83% 25%;
+    --tile-lavender-fg: 262 83% 88%;
+    --tile-mint: 160 84% 25%;
+    --tile-mint-fg: 160 84% 85%;
+    --tile-peach: 25 95% 25%;
+    --tile-peach-fg: 25 95% 88%;
+    --tile-blue: 217 91% 25%;
+    --tile-blue-fg: 217 91% 88%;
+
+    /* Modern Dark Shadows */
+    --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+    --shadow-pill: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+    --shadow-elevated: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
   }
 }
 
@@ -121,19 +139,35 @@
     background: hsl(var(--surface));
     border-radius: var(--radius);
     box-shadow: var(--shadow-card);
+    border: 1px solid hsl(var(--border));
   }
   .pill {
-    @apply inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition;
+    @apply inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition-all duration-150 cursor-pointer select-none;
+    box-shadow: var(--shadow-pill);
+    background: hsl(var(--secondary));
+    color: hsl(var(--secondary-foreground));
+    border: 1px solid hsl(var(--border));
   }
   .pill-dark {
     background: hsl(var(--primary));
     color: hsl(var(--primary-foreground));
     box-shadow: var(--shadow-pill);
+    border: none;
+  }
+  .pill-dark:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-elevated);
   }
   .pill-light {
-    background: hsl(var(--surface));
+    background: hsl(var(--secondary));
     color: hsl(var(--foreground));
     border: 1px solid hsl(var(--border));
+    box-shadow: var(--shadow-pill);
+  }
+  .pill-light:hover {
+    background: hsl(210 40% 92%);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-elevated);
   }
 }
 

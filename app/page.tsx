@@ -8,15 +8,13 @@ import {
   Tooltip, ResponsiveContainer,
 } from "recharts";
 import {
-  Home, Wallet, CreditCard, Target, BarChart3, Settings, Cloud, Lock,
+  Home, Wallet, CreditCard, Target, BarChart3, Settings, Lock,
   Bell, Plus, Search, ArrowUpRight, MoreHorizontal, Star, Wifi,
-  Copy, Check, Upload, Download, KeyRound, ShieldCheck, ShieldAlert,
-  Eye, EyeOff, Trash2, X, ChevronRight, TrendingUp, Send, Inbox,
+  Trash2, X, ChevronRight, TrendingUp, Send, Inbox,
   Menu,
 } from "lucide-react";
 import Image from "next/image";
 import { useWeb3 } from "./context/Web3Context";
-import { useAppSettings } from "./context/AppSettingsContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Tile = "pink" | "yellow" | "lavender" | "mint" | "peach" | "blue";
@@ -36,6 +34,17 @@ interface ActivityItem { id: string; action: string; detail: string; at: string;
 interface Notification { id: string; title: string; body: string; at: string; read: boolean; }
 interface SeriesPoint { d: string; income: number; spent: number; balance: number; }
 
+type ApiEntry = { id?: string; txType?: string; type?: string; earned?: number; given?: number; walletId?: string; project?: string; date?: string; category?: string; givenTo?: string; };
+type ApiWallet = { id?: string; name?: string; network?: string; bank?: string; address?: string; balance?: number; };
+type ApiCard = { id?: string; name?: string; last4?: string; holder?: string; expiry?: string; };
+type ApiActivity = { id?: string; action?: string; amount?: number; date?: string; };
+
+type ChartTooltipPayload = { dataKey: string; color?: string; name?: string; value?: number | string; };
+interface Goal { id: string; name: string; target: number; current: number; deadline: string; tile: Tile; }
+interface ActivityItem { id: string; action: string; detail: string; at: string; }
+interface Notification { id: string; title: string; body: string; at: string; read: boolean; }
+interface SeriesPoint { d: string; income: number; spent: number; balance: number; }
+
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const TILE: Record<Tile, { bg: string; fg: string; chip: string }> = {
   pink:     { bg: "bg-tile-pink",     fg: "text-[hsl(var(--tile-pink-fg))]",     chip: "bg-[hsl(var(--tile-pink-fg)_/_0.08)] text-[hsl(var(--tile-pink-fg))]" },
@@ -47,7 +56,6 @@ const TILE: Record<Tile, { bg: string; fg: string; chip: string }> = {
 };
 const TILES: Tile[] = ["pink", "yellow", "lavender", "mint", "peach", "blue"];
 const CATEGORIES = ["All","Housing","Food","Transport","Shopping","Entertainment","Income"];
-const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const FX: Record<CurrencyCode, number> = { USD: 1, EUR: 1.07, GBP: 1.27 };
 
 const SEED_MONTHLY: SeriesPoint[] = [
@@ -86,21 +94,30 @@ const fmt = (n: number, c: CurrencyCode = "USD") =>
   new Intl.NumberFormat("en-US", { style:"currency", currency:c, maximumFractionDigits: n%1===0?0:2 }).format(n);
 
 function Avatar({ src, alt, size = 48 }: { src: string; alt: string; size?: number }) {
-  if (src.startsWith("data:")) return <img src={src} alt={alt} width={size} height={size} className="w-full h-full object-cover" />;
-  return <Image src={src} alt={alt} width={size} height={size} className="object-cover w-full h-full" referrerPolicy="no-referrer" />;
+  return (
+    <Image
+      src={src}
+      alt={alt}
+      width={size}
+      height={size}
+      className="object-cover w-full h-full"
+      referrerPolicy="no-referrer"
+      unoptimized
+    />
+  );
 }
 
 // ─── Chart tooltip ────────────────────────────────────────────────────────────
-function ChartTip({ active, payload, label }: any) {
+function ChartTip({ active, payload, label }: { active?: boolean; payload?: ChartTooltipPayload[]; label?: string }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="surface px-3 py-2 text-xs shadow-lg">
-      <div className="mb-1 font-semibold">{label}</div>
-      {payload.map((p: any) => (
-        <div key={p.dataKey} className="flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full" style={{ background: p.color }} />
-          <span className="text-muted-foreground">{p.name}:</span>
-          <span className="font-semibold">{fmt(p.value)}</span>
+    <div className="rounded-2xl border border-border bg-[hsl(var(--surface))] px-3.5 py-2.5 text-xs shadow-[var(--shadow-card)]">
+      <p className="mb-1.5 font-display font-semibold text-foreground">{label}</p>
+      {payload.map((p) => (
+        <div key={p.dataKey} className="flex items-center gap-2 text-muted-foreground">
+          <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: p.color }} />
+          <span className="capitalize">{p.name}:</span>
+          <span className="font-semibold text-foreground">${Number(p.value).toLocaleString()}</span>
         </div>
       ))}
     </div>
@@ -110,15 +127,19 @@ function ChartTip({ active, payload, label }: any) {
 // ─── Modal ────────────────────────────────────────────────────────────────────
 function Modal({ onClose, title, children }: { onClose:()=>void; title:string; children:React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-foreground/20 backdrop-blur-sm">
-      <div className="surface w-full sm:max-w-[460px] rounded-t-[28px] sm:rounded-[28px] overflow-hidden">
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
-          <h2 className="font-display text-xl font-semibold">{title}</h2>
-          <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-full hover:bg-secondary transition text-muted-foreground hover:text-foreground">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-foreground/25 backdrop-blur-md">
+      <div className="surface w-full sm:max-w-[460px] rounded-t-[32px] sm:rounded-[28px] overflow-hidden shadow-[0_-8px_40px_rgba(0,0,0,0.15)] sm:shadow-[var(--shadow-card)]">
+        {/* Mobile drag handle */}
+        <div className="sm:hidden flex justify-center pt-3 pb-1">
+          <div className="h-1 w-10 rounded-full bg-border" />
+        </div>
+        <div className="flex items-center justify-between px-6 pt-4 sm:pt-6 pb-4 border-b border-border">
+          <h2 className="font-display text-xl font-semibold tracking-tight">{title}</h2>
+          <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-full hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground">
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="p-6">{children}</div>
+        <div className="p-6 max-h-[85vh] overflow-y-auto">{children}</div>
       </div>
     </div>
   );
@@ -126,14 +147,16 @@ function Modal({ onClose, title, children }: { onClose:()=>void; title:string; c
 
 function ConfirmDelete({ title, onConfirm, onClose }: { title:string; onConfirm:()=>void; onClose:()=>void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/20 backdrop-blur-sm">
-      <div className="surface max-w-sm w-full p-6 text-center">
-        <div className="grid h-14 w-14 place-items-center rounded-2xl bg-destructive/10 mx-auto mb-4"><Trash2 className="h-6 w-6 text-destructive" /></div>
-        <h3 className="font-display text-lg font-semibold mb-1">Delete?</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/25 backdrop-blur-md">
+      <div className="surface max-w-sm w-full p-6 text-center shadow-[var(--shadow-card)]">
+        <div className="grid h-14 w-14 place-items-center rounded-2xl bg-destructive/10 ring-1 ring-destructive/20 mx-auto mb-4">
+          <Trash2 className="h-6 w-6 text-destructive" />
+        </div>
+        <h3 className="font-display text-lg font-semibold mb-1">Are you sure?</h3>
         <p className="text-sm text-muted-foreground mb-6">{title}</p>
         <div className="flex gap-3">
           <button onClick={onClose} className="pill pill-light flex-1 justify-center">Cancel</button>
-          <button onClick={onConfirm} className="pill flex-1 justify-center bg-destructive text-destructive-foreground">Delete</button>
+          <button onClick={onConfirm} className="pill flex-1 justify-center bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors">Delete</button>
         </div>
       </div>
     </div>
@@ -143,92 +166,66 @@ function ConfirmDelete({ title, onConfirm, onClose }: { title:string; onConfirm:
 function Field({ label, children }: { label:string; children:React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{label}</label>
+      <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.08em]">{label}</label>
       {children}
     </div>
   );
 }
 function FInput(p: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...p} className={`h-11 w-full rounded-2xl border border-input bg-secondary/60 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 ${p.className||""}`} />;
+  return <input {...p} className={`h-11 w-full rounded-2xl border border-input bg-secondary/50 px-4 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all ${p.className||""}`} />;
 }
 function FSelect({ children, ...p }: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select {...p} className="h-11 w-full rounded-2xl border border-input bg-secondary/60 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 appearance-none">{children}</select>;
-}
-
-// ─── Passcode lock screen ─────────────────────────────────────────────────────
-function PasscodeLock({ storedPasscode, onUnlock }: { storedPasscode: string; onUnlock: ()=>void }) {
-  const [value, setValue] = useState("");
-  const [shake, setShake] = useState(false);
-  const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => { ref.current?.focus(); }, []);
-  const tryUnlock = (next: string) => {
-    if (next === storedPasscode) { sessionStorage.setItem("ledger.unlocked","1"); onUnlock(); }
-    else { setShake(true); setValue(""); setTimeout(() => setShake(false), 450); }
-  };
   return (
-    <div onClick={() => ref.current?.focus()} className="fixed inset-0 z-50 grid place-items-center bg-background/80 backdrop-blur-xl p-6">
-      <div className={shake ? "animate-[shake_0.4s_ease-in-out]" : ""} style={{ display:"flex", flexDirection:"column", alignItems:"center", textAlign:"center" }}>
-        <div className="grid h-12 w-12 place-items-center rounded-full bg-secondary text-foreground ring-1 ring-border">
-          <Lock className="h-5 w-5" />
-        </div>
-        <h1 className="mt-4 font-display text-lg font-semibold">Locked</h1>
-        <p className="mt-1 text-xs text-muted-foreground">Type your passcode</p>
-        <div className="mt-6 flex items-center gap-3">
-          {Array.from({ length: Math.max(storedPasscode.length, 6) }).map((_,i) => (
-            <span key={i} className={`h-2.5 w-2.5 rounded-full transition-all ${i < value.length ? "scale-110 bg-primary" : "bg-muted ring-1 ring-inset ring-border"}`} />
-          ))}
-        </div>
-        <input ref={ref} type="password" inputMode="numeric" value={value}
-          onChange={e => { const v = e.target.value.replace(/\D/g,"").slice(0, 8); setValue(v); if (v.length >= storedPasscode.length) setTimeout(() => tryUnlock(v), 60); }}
-          className="sr-only" />
-        <p className="mt-5 text-[11px] text-muted-foreground">Type your passcode to unlock</p>
-      </div>
-      <style>{`@keyframes shake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(3px)}30%,50%,70%{transform:translateX(-6px)}40%,60%{transform:translateX(6px)}}`}</style>
+    <div className="relative">
+      <select {...p} className="h-11 w-full rounded-2xl border border-input bg-secondary/50 px-4 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 appearance-none transition-all cursor-pointer">
+        {children}
+      </select>
+      <svg className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
     </div>
   );
 }
 
-// ─── Sidebar ──────────────────────────────────────────────────────────────────
 const NAV = [
   { label:"Home", icon:Home }, { label:"Wallets", icon:Wallet },
   { label:"Cards", icon:CreditCard }, { label:"Goals", icon:Target },
   { label:"Performance", icon:BarChart3 },
 ];
-const NAV_BOTTOM = [{ label:"Sync", icon:Cloud }, { label:"Settings", icon:Settings }];
+const NAV_BOTTOM = [{ label:"Settings", icon:Settings }];
 
 function Sidebar({ active, setActive, avatarUrl, mobileOpen, setMobileOpen }: {
   active:string; setActive:(t:string)=>void; avatarUrl:string; mobileOpen:boolean; setMobileOpen:(v:boolean)=>void;
 }) {
   return (
     <>
-      {mobileOpen && <div className="fixed inset-0 bg-foreground/30 z-40 md:hidden" onClick={() => setMobileOpen(false)} />}
-      <aside className={`fixed md:sticky top-0 md:top-4 z-50 md:z-auto h-screen md:h-[calc(100vh-2rem)] w-[72px] shrink-0 flex flex-col items-center gap-3 rounded-none md:rounded-[28px] border-r md:border border-border bg-[hsl(var(--surface))] py-5 shadow-[var(--shadow-card)] transition-transform md:translate-x-0 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="grid h-10 w-10 place-items-center rounded-2xl bg-primary text-primary-foreground">
+      {mobileOpen && <div className="fixed inset-0 bg-foreground/40 z-40 md:hidden backdrop-blur-sm" onClick={() => setMobileOpen(false)} />}
+      <aside className={`fixed md:sticky top-0 md:top-4 z-50 md:z-auto h-screen md:h-[calc(100vh-2rem)] w-[72px] shrink-0 flex flex-col items-center gap-3 rounded-none md:rounded-[28px] border-r md:border border-border bg-[hsl(var(--surface))] py-5 shadow-[var(--shadow-card)] transition-transform duration-300 md:translate-x-0 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}>
+        <div className="grid h-10 w-10 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-[var(--shadow-pill)]">
           <Lock className="h-4 w-4" strokeWidth={2.5} />
         </div>
-        <nav className="mt-2 flex flex-1 flex-col items-center gap-2">
+        <nav className="mt-2 flex flex-1 flex-col items-center gap-1.5">
           {NAV.map(({ label, icon:Icon }) => {
             const a = active === label;
             return (
               <button key={label} title={label} onClick={() => { setActive(label); setMobileOpen(false); }}
-                className={`group relative grid h-11 w-11 place-items-center rounded-2xl transition ${a ? "bg-primary text-primary-foreground shadow-[var(--shadow-pill)]" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}>
-                <Icon className="h-[18px] w-[18px]" />
-                <span className="pointer-events-none absolute left-14 whitespace-nowrap rounded-xl bg-primary px-2 py-1 text-xs font-semibold text-primary-foreground opacity-0 group-hover:opacity-100 transition-opacity hidden md:block z-50">{label}</span>
+                className={`group relative grid h-11 w-11 place-items-center rounded-2xl transition-all duration-200 ${a ? "bg-primary text-primary-foreground shadow-[var(--shadow-pill)]" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}>
+                <Icon className="h-[18px] w-[18px]" strokeWidth={a ? 2.5 : 2} />
+                <span className="pointer-events-none absolute left-[calc(100%+10px)] whitespace-nowrap rounded-xl bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground opacity-0 group-hover:opacity-100 transition-all duration-150 hidden md:block z-50 shadow-[var(--shadow-pill)]">{label}</span>
               </button>
             );
           })}
         </nav>
-        <div className="flex flex-col items-center gap-2">
+        <div className="flex flex-col items-center gap-1.5">
           {NAV_BOTTOM.map(({ label, icon:Icon }) => {
             const a = active === label;
             return (
               <button key={label} title={label} onClick={() => { setActive(label); setMobileOpen(false); }}
-                className={`grid h-11 w-11 place-items-center rounded-2xl transition ${a ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}>
-                <Icon className="h-[18px] w-[18px]" />
+                className={`grid h-11 w-11 place-items-center rounded-2xl transition-all duration-200 ${a ? "bg-primary text-primary-foreground shadow-[var(--shadow-pill)]" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}>
+                <Icon className="h-[18px] w-[18px]" strokeWidth={a ? 2.5 : 2} />
               </button>
             );
           })}
-          <button title="Settings" onClick={() => { setActive("Settings"); setMobileOpen(false); }} className="mt-1 h-9 w-9 overflow-hidden rounded-full ring-2 ring-[hsl(var(--surface))] hover:ring-primary transition-all">
+          <button title="Settings" onClick={() => { setActive("Settings"); setMobileOpen(false); }}
+            className="mt-1 h-9 w-9 overflow-hidden rounded-full ring-2 ring-border hover:ring-primary/50 transition-all duration-200">
             <Avatar src={avatarUrl} alt="Profile" size={36} />
           </button>
         </div>
@@ -260,24 +257,35 @@ function ProfilePanel({ entries, wallets, notifications, onMarkRead, onNav, avat
       <div className="surface relative overflow-hidden p-5">
         <div className="flex items-center justify-between">
           <div className="relative">
-            <button onClick={() => setNotifOpen(!notifOpen)} className="relative grid h-9 w-9 place-items-center rounded-full border border-border bg-[hsl(var(--surface))] hover:bg-secondary transition">
+            <button onClick={() => setNotifOpen(!notifOpen)}
+              className="relative grid h-9 w-9 place-items-center rounded-full border border-border bg-[hsl(var(--surface))] hover:bg-secondary transition-colors">
               <Bell className="h-4 w-4" />
-              {unread > 0 && <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">{unread}</span>}
+              {unread > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-[1rem] place-items-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
+                  {unread}
+                </span>
+              )}
             </button>
             {notifOpen && (
               <>
                 <div className="fixed inset-0 z-30" onClick={() => setNotifOpen(false)} />
-                <div className="absolute left-0 top-11 z-40 w-72 surface shadow-[var(--shadow-card)] overflow-hidden rounded-[20px]">
+                <div className="absolute left-0 top-11 z-40 w-72 surface shadow-[var(--shadow-card)] overflow-hidden rounded-[20px] border border-border">
                   <div className="flex items-center justify-between border-b border-border px-4 py-3">
-                    <div><p className="font-display text-sm font-semibold">Notifications</p><p className="text-xs text-muted-foreground">{unread} unread</p></div>
-                    <button onClick={onMarkRead} className="text-xs font-semibold text-primary hover:underline">Mark all read</button>
+                    <div>
+                      <p className="font-display text-sm font-semibold">Notifications</p>
+                      <p className="text-xs text-muted-foreground">{unread} unread</p>
+                    </div>
+                    <button onClick={onMarkRead} className="text-xs font-semibold text-primary hover:underline transition-colors">Mark all read</button>
                   </div>
-                  <ul className="max-h-64 overflow-y-auto">
+                  <ul className="max-h-64 overflow-y-auto divide-y divide-border/60">
                     {notifications.map(n => (
-                      <li key={n.id} className="flex items-start gap-3 border-b border-border/60 px-4 py-3 last:border-0">
-                        <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${n.read ? "bg-muted-foreground/30" : "bg-primary"}`} />
-                        <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{n.title}</p><p className="truncate text-xs text-muted-foreground">{n.body}</p></div>
-                        <span className="text-[10px] text-muted-foreground">{n.at}</span>
+                      <li key={n.id} className={`flex items-start gap-3 px-4 py-3 transition-colors hover:bg-secondary/50 ${!n.read ? "bg-primary/[0.03]" : ""}`}>
+                        <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${n.read ? "bg-muted-foreground/20" : "bg-primary"}`} />
+                        <div className="min-w-0 flex-1">
+                          <p className={`truncate text-sm ${n.read ? "text-muted-foreground" : "font-medium"}`}>{n.title}</p>
+                          <p className="truncate text-xs text-muted-foreground mt-0.5">{n.body}</p>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap">{n.at}</span>
                       </li>
                     ))}
                   </ul>
@@ -285,49 +293,61 @@ function ProfilePanel({ entries, wallets, notifications, onMarkRead, onNav, avat
               </>
             )}
           </div>
-          <button onClick={() => onNav("Settings")} className="grid h-9 w-9 place-items-center rounded-full border border-border bg-[hsl(var(--surface))] hover:bg-secondary transition"><Settings className="h-4 w-4" /></button>
+          <button onClick={() => onNav("Settings")}
+            className="grid h-9 w-9 place-items-center rounded-full border border-border bg-[hsl(var(--surface))] hover:bg-secondary transition-colors">
+            <Settings className="h-4 w-4" />
+          </button>
         </div>
-        <div className="mt-3 flex flex-col items-center text-center">
-          <div className="relative h-20 w-20 rounded-full overflow-hidden bg-tile-lavender ring-4 ring-[hsl(var(--surface))]">
+
+        <div className="mt-4 flex flex-col items-center text-center">
+          <div className="h-20 w-20 rounded-full overflow-hidden ring-4 ring-[hsl(var(--surface))] shadow-[var(--shadow-card)]">
             <Avatar src={avatarUrl} alt="Profile" size={80} />
           </div>
-          <h3 className="mt-3 font-display text-lg font-semibold">{userName}</h3>
-          <p className="text-xs text-muted-foreground">Premium · {wallets.length} accounts</p>
+          <h3 className="mt-3 font-display text-lg font-semibold tracking-tight">{userName}</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Premium · {wallets.length} {wallets.length === 1 ? "account" : "accounts"}</p>
         </div>
-        <button onClick={() => onNav("Wallets")} className="mt-4 flex w-full items-center justify-between rounded-2xl bg-secondary px-4 py-3 text-sm hover:bg-muted transition">
-          <div className="flex items-center gap-2">
-            <span className="grid h-7 w-7 place-items-center rounded-full bg-primary text-primary-foreground text-[11px] font-semibold">{wallets.length}</span>
+
+        <button onClick={() => onNav("Wallets")}
+          className="mt-4 flex w-full items-center justify-between rounded-2xl bg-secondary px-4 py-3 text-sm hover:bg-muted transition-colors group">
+          <div className="flex items-center gap-2.5">
+            <span className="grid h-7 w-7 place-items-center rounded-full bg-primary text-primary-foreground text-[11px] font-bold">
+              {wallets.length}
+            </span>
             <span className="font-medium">Linked accounts</span>
           </div>
           <div className="flex items-center gap-1">
-            {TILES.slice(0,2).map(t => <span key={t} className={`h-5 w-5 rounded-full ${TILE[t].bg} ring-2 ring-secondary`} />)}
-            <ChevronRight className="ml-1 h-3.5 w-3.5 text-muted-foreground" />
+            {TILES.slice(0,3).map((t,i) => (
+              <span key={t} className={`h-5 w-5 rounded-full ${TILE[t].bg} ring-2 ring-secondary`} style={{ marginLeft: i > 0 ? "-6px" : 0 }} />
+            ))}
+            <ChevronRight className="ml-2 h-3.5 w-3.5 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
           </div>
         </button>
       </div>
 
       {/* Activity chart */}
       <div className="surface p-5">
-        <div className="mb-3 flex items-center justify-between">
-          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Activity</span>
-          <select value={period} onChange={e => setPeriod(e.target.value as Period)} className="rounded-full border border-border px-3 py-1 text-xs font-medium bg-transparent focus:outline-none cursor-pointer hover:bg-secondary transition">
-            {(["Daily","Weekly","Monthly","Yearly"] as Period[]).map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
-        </div>
-        <div className="flex items-end justify-between">
+        <div className="mb-4 flex items-center justify-between">
           <div>
-            <p className="font-display text-2xl font-semibold tracking-tight">${(total/1000).toFixed(1)}k</p>
-            <p className="text-xs text-muted-foreground">{period.toLowerCase()} view</p>
+            <p className="text-xs font-bold uppercase tracking-[0.08em] text-muted-foreground">Activity</p>
+            <p className="font-display text-2xl font-semibold tracking-tight mt-0.5">${(total/1000).toFixed(1)}k</p>
           </div>
-          <span className="rounded-full bg-tile-mint px-2.5 py-1 text-xs font-semibold text-[hsl(var(--tile-mint-fg))]">+{entries.filter(e=>e.type==="income"||e.type==="receive").length} in</span>
+          <div className="flex flex-col items-end gap-1.5">
+            <select value={period} onChange={e => setPeriod(e.target.value as Period)}
+              className="rounded-full border border-border px-3 py-1 text-xs font-medium bg-transparent focus:outline-none cursor-pointer hover:bg-secondary transition-colors">
+              {(["Daily","Weekly","Monthly","Yearly"] as Period[]).map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+            <span className="rounded-full bg-tile-mint px-2.5 py-0.5 text-[10px] font-bold text-[hsl(var(--tile-mint-fg))]">
+              +{entries.filter(e=>e.type==="income"||e.type==="receive").length} in
+            </span>
+          </div>
         </div>
-        <div className="mt-3 h-28">
+        <div className="h-28">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top:8, right:0, left:-28, bottom:0 }}>
+            <BarChart data={data} margin={{ top:4, right:0, left:-28, bottom:0 }} barGap={2}>
               <XAxis dataKey="d" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
-              <Tooltip cursor={{ fill:"hsl(var(--muted) / 0.4)" }} contentStyle={{ background:"hsl(var(--surface))", border:"1px solid hsl(var(--border))", borderRadius:12, fontSize:12 }} />
-              <Bar dataKey="income" fill="hsl(var(--tile-lavender))" radius={[8,8,8,8]} />
-              <Bar dataKey="spent" fill="hsl(var(--tile-pink))" radius={[8,8,8,8]} />
+              <Tooltip cursor={{ fill:"hsl(var(--muted)/0.5)", rx:6 }} content={<ChartTip />} />
+              <Bar dataKey="income" name="Income" fill="hsl(var(--tile-lavender))" radius={[6,6,6,6]} maxBarSize={20} />
+              <Bar dataKey="spent"  name="Spent"  fill="hsl(var(--tile-pink))"     radius={[6,6,6,6]} maxBarSize={20} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -368,7 +388,6 @@ function NewEntryModal({ onClose, onSave, wallets }: { onClose:()=>void; onSave:
 // ─── Send / Receive Modals ────────────────────────────────────────────────────
 const CRYPTO_CURRENCIES = ["BTC","ETH","SOL","USDT","USDC","BNB","XRP","MATIC","AVAX","DOT"];
 const FIAT_CURRENCIES   = ["USD","EUR","GBP","INR","JPY","CAD","AUD","CHF","SGD","AED"];
-const ALL_CURRENCIES    = [...FIAT_CURRENCIES, ...CRYPTO_CURRENCIES];
 
 // Static approx rates vs USD (good enough for display preview)
 const RATE_VS_USD: Record<string, number> = {
@@ -551,25 +570,32 @@ function ReceiveModal({ onClose, onSave, wallets }: { onClose:()=>void; onSave:(
 // MAIN COMPONENT
 // ═════════════════════════════════════════════════════════════════════════════
 export default function FinanceDashboard() {
-  const { changeAppPasscode: changeCtxPasscode } = useAppSettings();
   const { mode } = useWeb3();
 
   // ── Auth ──
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [appPasscode, setAppPasscode] = useState("");
+  const [isAuthenticated, setIsAuthenticated] = useState(() => typeof window !== "undefined" && sessionStorage.getItem("fv_api_key") ? true : false);
   const [loginPasscode, setLoginPasscode] = useState("");
   const [wrongPass, setWrongPass] = useState(false);
+  const [hasPasscode, setHasPasscode] = useState<boolean | null>(null);
+  const [currentPasscode, setCurrentPasscode] = useState("");
+  const [newPasscode, setNewPasscode] = useState("");
+  const [confirmNewPasscode, setConfirmNewPasscode] = useState("");
+  const [passcodeSetupError, setPasscodeSetupError] = useState("");
+  const [passcodeSetupLoading, setPasscodeSetupLoading] = useState(false);
   const loginRef = useRef<HTMLInputElement>(null);
-
-  // ── Passcode lock ──
-  const [storedPasscode, setStoredPasscode] = useState<string|null>(null);
-  const [unlocked, setUnlocked] = useState(false);
 
   // ── UI ──
   const [activeTab, setActiveTab] = useState("Home");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [period, setPeriod] = useState<Period>("Monthly");
   const [catFilter, setCatFilter] = useState("All");
+
+  // ── Hydration ──
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
 
   // ── Modals ──
   const [showNewEntry, setShowNewEntry] = useState(false);
@@ -590,40 +616,101 @@ export default function FinanceDashboard() {
   const [notifications, setNotifications] = useState<Notification[]>([
     { id:"n1", title:"Salary received", body:"Acme Corp · +$6,800", at:"2m ago", read:false },
     { id:"n2", title:"Budget alert", body:"Food spending at 82%", at:"1h ago", read:false },
-    { id:"n3", title:"Cloud sync complete", body:"12 changes pushed", at:"3h ago", read:true },
+    { id:"n3", title:"Weekly summary ready", body:"12 new transactions added", at:"3h ago", read:true },
   ]);
-
-  // ── Profile ──
   const [firstName, setFirstName] = useState("Alex");
   const [lastName, setLastName] = useState("Korgon");
   const [email, setEmail] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("https://picsum.photos/seed/avatar5/150/150");
-  const [currency, setCurrencyState] = useState<CurrencyCode>("USD");
-  const [theme, setThemeState] = useState<ThemeMode>("light");
+  const [currency, setCurrencyState] = useState<CurrencyCode>(() => {
+    if (typeof window === "undefined") return "USD";
+    const saved = localStorage.getItem("ledger.currency") as CurrencyCode | null;
+    return saved ?? "USD";
+  });
+  const [theme, setThemeState] = useState<ThemeMode>(() => {
+    if (typeof window === "undefined") return "light";
+    const saved = localStorage.getItem("ledger.theme") as ThemeMode | null;
+    return saved ?? "light";
+  });
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // ── Sync page ──
-  const [syncId, setSyncId] = useState("LDG-7Q4X-2NAV-91KE");
-  const [syncCopied, setSyncCopied] = useState(false);
-  const [newPass, setNewPass] = useState(""); const [confirmPass, setConfirmPass] = useState(""); const [showPassInput, setShowPassInput] = useState(false);
 
   // ── Forms ──
   const [wForm, setWForm] = useState({ name:"", bank:"", balance:"", currency:"USD" as CurrencyCode, tile:"mint" as Tile });
   const [cForm, setCForm] = useState({ label:"", brand:"Visa" as Card["brand"], last4:"", walletId:"", tile:"pink" as Tile });
-  const [gForm, setGForm] = useState({ name:"", target:"", current:"0", deadline:new Date(Date.now()+1000*60*60*24*90).toISOString().slice(0,10), tile:"mint" as Tile });
+  const [gForm, setGForm] = useState(() => ({ name:"", target:"", current:"0", deadline:new Date(Date.now()+1000*60*60*24*90).toISOString().slice(0,10), tile:"mint" as Tile }));
 
-  // ── Init ──
   useEffect(() => {
-    try {
-      if (sessionStorage.getItem("fv_api_key")) { setApiKey(sessionStorage.getItem("fv_api_key")!); setIsAuthenticated(true); }
-      const lp = localStorage.getItem("ledger.passcode"); if (lp) setStoredPasscode(lp);
-      if (sessionStorage.getItem("ledger.unlocked")==="1") setUnlocked(true);
-      const lc = localStorage.getItem("ledger.currency") as CurrencyCode|null; if (lc) setCurrencyState(lc);
-      const lt = localStorage.getItem("ledger.theme") as ThemeMode|null; if (lt) setThemeState(lt);
-      const si = localStorage.getItem("ledger.syncId"); if (si) setSyncId(si);
-    } catch {}
+    let active = true;
+    fetch("/api/settings")
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (!active || !data) return;
+        if (typeof data.hasPasscode === "boolean") {
+          setHasPasscode(data.hasPasscode);
+        }
+      })
+      .catch(() => {
+        if (active) setHasPasscode(true);
+      });
+    return () => { active = false; };
   }, []);
+
+  const handleSetPasscode = async () => {
+    setPasscodeSetupError("");
+    if (hasPasscode) {
+      if (!/^[0-9]{6}$/.test(currentPasscode)) {
+        setPasscodeSetupError("Enter your current passcode.");
+        return;
+      }
+    }
+    if (!/^[0-9]{6}$/.test(newPasscode)) {
+      setPasscodeSetupError("Enter a 6-digit passcode.");
+      return;
+    }
+    if (newPasscode !== confirmNewPasscode) {
+      setPasscodeSetupError("Passcodes do not match.");
+      return;
+    }
+
+    setPasscodeSetupLoading(true);
+    try {
+      const payload = hasPasscode
+        ? { currentPasscode, newPasscode }
+        : { action: "set-passcode", newPasscode };
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (!hasPasscode) {
+          setHasPasscode(true);
+          setIsAuthenticated(true);
+          setApiKey("korgon-finance-2026");
+          try { sessionStorage.setItem("fv_api_key", "korgon-finance-2026"); } catch {}
+        }
+        setCurrentPasscode("");
+        setNewPasscode("");
+        setConfirmNewPasscode("");
+        setPasscodeSetupError("");
+      } else {
+        setPasscodeSetupError(data.error || "Unable to update passcode.");
+      }
+    } catch {
+      setPasscodeSetupError("Unable to update passcode.");
+    } finally {
+      setPasscodeSetupLoading(false);
+    }
+  };
+
+  const handleLockApp = () => {
+    try { sessionStorage.removeItem("fv_api_key"); } catch {}
+    setIsAuthenticated(false);
+    setLoginPasscode("");
+    setWrongPass(false);
+  };
 
   // ── Theme ──
   useEffect(() => {
@@ -638,115 +725,373 @@ export default function FinanceDashboard() {
 
   // ── Login passcode ──
   useEffect(() => { loginRef.current?.focus(); }, [isAuthenticated]);
-  useEffect(() => {
-    if (!isAuthenticated && loginPasscode.length === 6) {
-      setWrongPass(false);
-      fetch("/api/settings", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({action:"verify-passcode",passcode:loginPasscode}) })
-        .then(r=>r.json()).then(d => {
-          if (d.success) { setIsAuthenticated(true); setAppPasscode(loginPasscode); setApiKey("korgon-finance-2026"); try { sessionStorage.setItem("fv_api_key","korgon-finance-2026"); } catch {} setLoginPasscode(""); }
-          else { setWrongPass(true); setLoginPasscode(""); }
-        }).catch(() => { setWrongPass(true); setLoginPasscode(""); });
+
+  const verifyLoginPasscode = async (code: string) => {
+    if (hasPasscode === false || isAuthenticated || code.length !== 6) return;
+    setWrongPass(false);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "verify-passcode", passcode: code }),
+      });
+      const d = await res.json();
+      if (d.success) {
+        setIsAuthenticated(true);
+        setApiKey("korgon-finance-2026");
+        try { sessionStorage.setItem("fv_api_key", "korgon-finance-2026"); } catch {}
+        setLoginPasscode("");
+        return;
+      }
+      if (d.error === "No passcode set") {
+        setHasPasscode(false);
+      }
+      setWrongPass(true);
+      setLoginPasscode("");
+    } catch {
+      setWrongPass(true);
+      setLoginPasscode("");
     }
-    if (loginPasscode.length < 6) setWrongPass(false);
-  }, [loginPasscode, isAuthenticated]);
+  };
+
+  const handleLoginInput = (value: string) => {
+    const cleaned = value.replace(/\D/g, "");
+    setLoginPasscode(cleaned);
+    if (cleaned.length === 6) {
+      verifyLoginPasscode(cleaned);
+      return;
+    }
+    setWrongPass(false);
+  };
 
   // ── Load settings + data ──
   useEffect(() => {
     if (!isAuthenticated) return;
-    apiFetch("/api/settings").then(r=>r.ok?r.json():null).then(d => {
-      if (!d) return;
-      if (d.firstName) setFirstName(d.firstName);
-      if (d.lastName!==undefined) setLastName(d.lastName);
-      if (d.email) setEmail(d.email);
-      if (d.avatarUrl) setAvatarUrl(d.avatarUrl);
-    }).catch(()=>{});
+    
+    apiFetch("/api/settings")
+      .then(r => {
+        if (!r.ok) {
+          console.error("Failed to load settings:", r.status);
+          return null;
+        }
+        return r.json();
+      })
+      .then(d => {
+        if (!d) return;
+        // Only update if values don't match - prevents overwriting pending changes
+        if (d.firstName && d.firstName !== firstName) setFirstName(d.firstName);
+        if (d.lastName !== undefined && d.lastName !== lastName) setLastName(d.lastName);
+        if (d.email && d.email !== email) setEmail(d.email);
+        // NOTE: avatarUrl is only set if it's a valid URL (not a data URL being uploaded)
+        // This prevents overwriting user's unsaved avatar upload
+        if (d.avatarUrl && !avatarUrl?.startsWith("data:")) {
+          if (d.avatarUrl !== avatarUrl) setAvatarUrl(d.avatarUrl);
+        }
+      })
+      .catch(e => {
+        console.error("Settings load error:", e);
+      });
 
-    apiFetch(`/api/entries?mode=${mode}`).then(r=>r.ok?r.json():[]).then((d:any[]) => {
-      setEntries(d.map(e => ({ id:e.id, type:(e.txType||e.type||"expense") as EntryType, amount:(e.earned||0)+(e.given||0), currency:"USD", category:e.givenTo||"Other", walletId:e.walletId||"", note:e.project||"", date:e.date })));
-    }).catch(()=>{});
+    apiFetch(`/api/entries?mode=${mode}`)
+      .then(r => {
+        if (!r.ok) {
+          console.error("Failed to load entries:", r.status);
+          return [];
+        }
+        return r.json();
+      })
+      .then((d: ApiEntry[]) => {
+        setEntries(d.map(e => ({ id: e.id || "", type: (e.txType || e.type || "expense") as EntryType, amount: (e.earned || 0) + (e.given || 0), currency: "USD", category: e.givenTo || "Other", walletId: e.walletId || "", note: e.project || "", date: e.date || "" })));
+      })
+      .catch(e => {
+        console.error("Entries load error:", e);
+      });
 
-    apiFetch("/api/wallets").then(r=>r.ok?r.json():[]).then((d:any[]) => {
-      setWallets(d.map((w,i) => ({ id:w.id, name:w.name, bank:w.network||w.bank||"Bank", currency:"USD", balance:w.balance||0, tile:TILES[i%TILES.length], address:w.address })));
-    }).catch(()=>{});
+    apiFetch("/api/wallets")
+      .then(r => {
+        if (!r.ok) {
+          console.error("Failed to load wallets:", r.status);
+          return [];
+        }
+        return r.json();
+      })
+      .then((d: ApiWallet[]) => {
+        setWallets(d.map((w, i) => ({ id: w.id || `w${i}`, name: w.name || "Wallet", bank: w.network || w.bank || "Bank", currency: "USD", balance: w.balance || 0, tile: TILES[i % TILES.length], address: w.address })));
+      })
+      .catch(e => {
+        console.error("Wallets load error:", e);
+      });
 
-    apiFetch("/api/cards").then(r=>r.ok?r.json():[]).then((d:any[]) => {
-      setCards(d.map((c,i) => ({ id:c.id, label:c.name, brand:"Visa" as Card["brand"], last4:c.last4, walletId:"", tile:TILES[i%TILES.length], holder:c.holder, expiry:c.expiry })));
-    }).catch(()=>{});
+    apiFetch("/api/cards")
+      .then(r => {
+        if (!r.ok) {
+          console.error("Failed to load cards:", r.status);
+          return [];
+        }
+        return r.json();
+      })
+      .then((d: ApiCard[]) => {
+        setCards(d.map((c, i) => ({ id: c.id || `c${i}`, label: c.name || "Card", brand: "Visa" as Card["brand"], last4: c.last4 || "0000", walletId: "", tile: TILES[i % TILES.length], holder: c.holder, expiry: c.expiry })));
+      })
+      .catch(e => {
+        console.error("Cards load error:", e);
+      });
 
-    apiFetch("/api/goal?mode=banks").then(r=>r.ok?r.json():null).then(d => {
-      if (d?.amount) setGoals([{ id:"g1", name:"Financial Goal", target:d.amount, current:0, deadline:new Date(Date.now()+1000*60*60*24*180).toISOString().slice(0,10), tile:"mint" }]);
-    }).catch(()=>{});
+    apiFetch("/api/goal?mode=banks")
+      .then(r => {
+        if (!r.ok) {
+          console.error("Failed to load goals:", r.status);
+          return null;
+        }
+        return r.json();
+      })
+      .then(d => {
+        if (d?.amount) setGoals([{ id: "g1", name: "Financial Goal", target: d.amount, current: 0, deadline: new Date(Date.now() + 1000 * 60 * 60 * 24 * 180).toISOString().slice(0, 10), tile: "mint" }]);
+      })
+      .catch(e => {
+        console.error("Goals load error:", e);
+      });
 
-    apiFetch("/api/activity").then(r=>r.ok?r.json():[]).then((d:any[]) => {
-      setActivityLog(d.slice(0,8).map(a => ({ id:a.id, action:a.action, detail:`$${a.amount}`, at:new Date(a.date).toLocaleDateString("en-US",{month:"short",day:"numeric"}) })));
-    }).catch(()=>{});
-  }, [isAuthenticated, mode]);
+    apiFetch("/api/activity")
+      .then(r => {
+        if (!r.ok) {
+          console.error("Failed to load activity:", r.status);
+          return [];
+        }
+        return r.json();
+      })
+      .then((d: ApiActivity[]) => {
+        setActivityLog(d.slice(0, 8).map(a => ({ id: a.id || "", action: a.action || "", detail: `$${a.amount ?? 0}`, at: a.date ? new Date(a.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "" })));
+      })
+      .catch(e => {
+        console.error("Activity load error:", e);
+      });
+  }, [isAuthenticated, mode, avatarUrl, email, firstName, lastName]);
 
   // ── Add entry ──
   const addEntry = useCallback(async (e: Omit<Entry,"id">) => {
     const ne: Entry = { ...e, id:`e${Date.now()}` };
     setEntries(p => [ne,...p]);
     setShowNewEntry(false); setShowSend(false); setShowReceive(false);
+    
     try {
       const payload = { id:ne.id, date:ne.date, project:ne.note, earned:ne.type==="income"||ne.type==="receive"?ne.amount:0, saved:0, given:ne.type==="expense"||ne.type==="send"?ne.amount:0, givenTo:ne.category, mode, walletId:ne.walletId||undefined, txType:ne.type };
-      await apiFetch("/api/entries",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
-    } catch {}
+      const response = await apiFetch("/api/entries", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload) });
+      
+      if (!response.ok) {
+        console.error("Failed to add entry:", response.status);
+        alert("Failed to save entry. Removing from list.");
+        setEntries(p => p.filter(entry => entry.id !== ne.id));
+        return;
+      }
+    } catch (error) {
+      console.error("Entry add error:", error);
+      alert("Error adding entry: " + (error instanceof Error ? error.message : "Unknown error"));
+      setEntries(p => p.filter(entry => entry.id !== ne.id));
+      return;
+    }
+    
     setActivityLog(p => [{ id:`a${Date.now()}`, action:"Entry added", detail:`${ne.note} · ${ne.type==="expense"||ne.type==="send"?"−":"+"}$${ne.amount}`, at:"just now" }, ...p]);
   }, [mode]);
 
   // ── Wallet / card / goal add ──
   const addWallet = async () => {
-    setFormError(""); if (!wForm.name.trim()) { setFormError("Name required."); return; }
+    setFormError(""); 
+    if (!wForm.name.trim()) { setFormError("Name required."); return; }
     try {
-      const r = await apiFetch("/api/wallets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:wForm.name.trim(),address:"",network:wForm.bank||"Bank",balance:parseFloat(wForm.balance)||0})});
-      if (r.ok) { const d=await r.json(); setWallets(p=>[...p,{id:d.id,name:d.name,bank:d.network||wForm.bank,currency:wForm.currency,balance:d.balance,tile:wForm.tile}]); setShowAddWallet(false); setWForm({name:"",bank:"",balance:"",currency:"USD",tile:"mint"}); setActivityLog(p=>[{id:`a${Date.now()}`,action:"Wallet added",detail:wForm.name,at:"just now"},...p]); }
-      else setFormError("Failed to add.");
-    } catch { setFormError("Network error."); }
+      const r = await apiFetch("/api/wallets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: wForm.name.trim(), address: "", network: wForm.bank || "Bank", balance: parseFloat(wForm.balance) || 0 })
+      });
+      if (r.ok) { 
+        const d = await r.json(); 
+        setWallets(p => [...p, { id: d.id, name: d.name, bank: d.network || wForm.bank, currency: wForm.currency, balance: d.balance, tile: wForm.tile }]); 
+        setShowAddWallet(false); 
+        setWForm({ name: "", bank: "", balance: "", currency: "USD", tile: "mint" }); 
+        setActivityLog(p => [{ id: `a${Date.now()}`, action: "Wallet added", detail: wForm.name, at: "just now" }, ...p]); 
+      } else {
+        console.error("Failed to add wallet:", r.status);
+        setFormError("Failed to add wallet. Please try again.");
+      }
+    } catch (e) { 
+      console.error("Wallet add error:", e);
+      setFormError("Network error. Please try again."); 
+    }
   };
 
   const addCard = async () => {
-    setFormError(""); if (!cForm.label.trim()||!/^\d{4}$/.test(cForm.last4)) { setFormError("Label and 4-digit number required."); return; }
+    setFormError(""); 
+    if (!cForm.label.trim() || !/^\d{4}$/.test(cForm.last4)) { setFormError("Label and 4-digit number required."); return; }
     try {
-      const r = await apiFetch("/api/cards",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:cForm.label.trim(),last4:cForm.last4,holder:`${firstName} ${lastName}`,expiry:"12/28",type:"virtual",balance:0})});
-      if (r.ok) { const d=await r.json(); setCards(p=>[...p,{id:d.id,label:d.name,brand:cForm.brand,last4:d.last4,walletId:cForm.walletId,tile:cForm.tile,holder:d.holder,expiry:d.expiry}]); setShowAddCard(false); setCForm({label:"",brand:"Visa",last4:"",walletId:"",tile:"pink"}); setActivityLog(p=>[{id:`a${Date.now()}`,action:"Card added",detail:`${cForm.brand} •• ${cForm.last4}`,at:"just now"},...p]); }
-      else setFormError("Failed to add.");
-    } catch { setFormError("Network error."); }
+      const r = await apiFetch("/api/cards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: cForm.label.trim(), last4: cForm.last4, holder: `${firstName} ${lastName}`, expiry: "12/28", type: "virtual", balance: 0 })
+      });
+      if (r.ok) { 
+        const d = await r.json(); 
+        setCards(p => [...p, { id: d.id, label: d.name, brand: cForm.brand, last4: d.last4, walletId: cForm.walletId, tile: cForm.tile, holder: d.holder, expiry: d.expiry }]); 
+        setShowAddCard(false); 
+        setCForm({ label: "", brand: "Visa", last4: "", walletId: "", tile: "pink" }); 
+        setActivityLog(p => [{ id: `a${Date.now()}`, action: "Card added", detail: `${cForm.brand} •• ${cForm.last4}`, at: "just now" }, ...p]); 
+      } else {
+        console.error("Failed to add card:", r.status);
+        setFormError("Failed to add card. Please try again.");
+      }
+    } catch (e) { 
+      console.error("Card add error:", e);
+      setFormError("Network error. Please try again."); 
+    }
   };
 
   const addGoal = async () => {
-    setFormError(""); const t=parseFloat(gForm.target); if(!gForm.name.trim()||!t){setFormError("Name and target required.");return;}
-    const ng:Goal={id:`g${Date.now()}`,name:gForm.name.trim(),target:t,current:parseFloat(gForm.current)||0,deadline:gForm.deadline,tile:gForm.tile};
-    setGoals(p=>[...p,ng]); try{await apiFetch("/api/goal",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"banks",amount:t,currency:"USD"})});}catch{}
-    setShowNewGoal(false); setGForm({name:"",target:"",current:"0",deadline:new Date(Date.now()+1000*60*60*24*90).toISOString().slice(0,10),tile:"mint"});
-    setActivityLog(p=>[{id:`a${Date.now()}`,action:"Goal created",detail:`${gForm.name} · target $${t}`,at:"just now"},...p]);
+    setFormError(""); 
+    const t = parseFloat(gForm.target); 
+    if (!gForm.name.trim() || !t) { setFormError("Name and target required."); return; }
+    
+    const ng: Goal = { id: `g${Date.now()}`, name: gForm.name.trim(), target: t, current: parseFloat(gForm.current) || 0, deadline: gForm.deadline, tile: gForm.tile };
+    setGoals(p => [...p, ng]); 
+    
+    try {
+      const response = await apiFetch("/api/goal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "banks", amount: t, currency: "USD" })
+      });
+      if (!response.ok) {
+        console.error("Failed to add goal:", response.status);
+        setFormError("Failed to save goal. It may not persist.");
+      }
+    } catch (e) {
+      console.error("Goal add error:", e);
+      setFormError("Network error saving goal. It may not persist.");
+    }
+    
+    setShowNewGoal(false); 
+    setGForm({ name: "", target: "", current: "0", deadline: new Date(Date.now() + 1000 * 60 * 60 * 24 * 90).toISOString().slice(0, 10), tile: "mint" });
+    setActivityLog(p => [{ id: `a${Date.now()}`, action: "Goal created", detail: `${gForm.name} · target $${t}`, at: "just now" }, ...p]);
   };
 
   const confirmDelete = async () => {
     if (!deletingId) return;
-    const {id,kind}=deletingId; setDeletingId(null);
-    if (kind==="entry") { setEntries(p=>p.filter(e=>e.id!==id)); try{await apiFetch(`/api/entries/${id}`,{method:"DELETE"});}catch{} }
-    if (kind==="wallet") { setWallets(p=>p.filter(w=>w.id!==id)); try{await apiFetch(`/api/wallets/${id}`,{method:"DELETE"});}catch{} }
-    if (kind==="card") { setCards(p=>p.filter(c=>c.id!==id)); try{await apiFetch(`/api/cards/${id}`,{method:"DELETE"});}catch{} }
-    if (kind==="goal") { setGoals(p=>p.filter(g=>g.id!==id)); }
+    const { id, kind } = deletingId; 
+    setDeletingId(null);
+    
+    try {
+      if (kind === "entry") { 
+        setEntries(p => p.filter(e => e.id !== id)); 
+        const response = await apiFetch(`/api/entries/${id}`, { method: "DELETE" });
+        if (!response.ok) {
+          console.error("Failed to delete entry:", response.status);
+          alert("Failed to delete entry. Please try again.");
+        }
+      }
+      if (kind === "wallet") { 
+        setWallets(p => p.filter(w => w.id !== id)); 
+        const response = await apiFetch(`/api/wallets/${id}`, { method: "DELETE" });
+        if (!response.ok) {
+          console.error("Failed to delete wallet:", response.status);
+          alert("Failed to delete wallet. Please try again.");
+        }
+      }
+      if (kind === "card") { 
+        setCards(p => p.filter(c => c.id !== id)); 
+        const response = await apiFetch(`/api/cards/${id}`, { method: "DELETE" });
+        if (!response.ok) {
+          console.error("Failed to delete card:", response.status);
+          alert("Failed to delete card. Please try again.");
+        }
+      }
+      if (kind === "goal") { 
+        setGoals(p => p.filter(g => g.id !== id)); 
+      }
+    } catch (e) {
+      console.error("Delete error:", e);
+      alert("Error during deletion. Please try again.");
+    }
   };
 
   const handleSaveProfile = async () => {
     setIsSaving(true);
-    try { await apiFetch("/api/settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({firstName,lastName,email,avatarUrl,theme,banksGoal:goals[0]?.target})}); } catch {}
-    setTimeout(()=>setIsSaving(false),500);
+    try { 
+      const payload: Partial<{
+        firstName: string;
+        lastName: string;
+        email: string;
+        avatarUrl: string;
+        theme: string;
+        banksGoal: number;
+      }> = { firstName, lastName, theme, banksGoal: goals[0]?.target };
+      if (email.trim()) payload.email = email;
+      if (avatarUrl && !avatarUrl.startsWith("data:")) payload.avatarUrl = avatarUrl;
+      const response = await apiFetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        const error = await response.text();
+        console.error("Profile save failed:", error);
+        alert("Failed to save profile. Please try again.");
+      }
+    } catch (e) {
+      console.error("Profile save error:", e);
+      alert("Error saving profile: " + (e instanceof Error ? e.message : "Unknown error"));
+    }
+    setTimeout(() => setIsSaving(false), 500);
   };
 
   const handleProfileImg = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f=e.target.files?.[0]; if(f){const r=new FileReader();r.onloadend=()=>{if(typeof r.result==="string")setAvatarUrl(r.result);};r.readAsDataURL(f);}
+    const f = e.target.files?.[0]; 
+    if (f) {
+      // Validate file size (max 5MB for safety)
+      const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+      if (f.size > MAX_FILE_SIZE) {
+        alert("Image too large. Please choose an image under 5MB.");
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        if (typeof reader.result === "string") {
+          // Validate data URL size (max 4MB after encoding)
+          if (reader.result.length > 4 * 1024 * 1024) {
+            alert("Image data too large. Please choose a smaller image.");
+            return;
+          }
+          
+          // Update UI optimistically
+          setAvatarUrl(reader.result);
+          
+          // Auto-save after brief delay
+          setTimeout(async () => {
+            try {
+              const response = await apiFetch("/api/settings", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ firstName, lastName, email, theme, banksGoal: goals[0]?.target })
+              });
+              if (!response.ok) {
+                console.error("Auto-save of avatar failed");
+                alert("Failed to save avatar. Your changes may not persist.");
+                // Reload settings to show correct avatar
+                const settingsResponse = await apiFetch("/api/settings");
+                if (settingsResponse.ok) {
+                  const settings = await settingsResponse.json();
+                  if (settings.avatarUrl) setAvatarUrl(settings.avatarUrl);
+                }
+              }
+            } catch (error) {
+              console.error("Avatar auto-save error:", error);
+              alert("Error saving avatar. Please try again.");
+            }
+          }, 300);
+        }
+      };
+      reader.readAsDataURL(f);
+    }
   };
-
-  // ── Passcode strength ──
-  const passStrength = useMemo(() => {
-    let s=0; if(newPass.length>=6)s++; if(newPass.length>=10)s++;
-    if(/[A-Z]/.test(newPass)&&/[a-z]/.test(newPass))s++; if(/[0-9]/.test(newPass)&&/[^A-Za-z0-9]/.test(newPass))s++;
-    const score=Math.min(4,s) as 0|1|2|3|4;
-    return {score,label:["Too weak","Weak","Fair","Strong","Excellent"][score],tone:["bg-destructive","bg-destructive","bg-warning","bg-success","bg-success"][score]};
-  },[newPass]);
 
   // ── Computed ──
   const filteredEntries = useMemo(() => {
@@ -761,7 +1106,48 @@ export default function FinanceDashboard() {
   // ══════════════════════════════════════════════════════════
   // LOGIN SCREEN
   // ══════════════════════════════════════════════════════════
+  if (!mounted) {
+    return (
+      <div suppressHydrationWarning className="min-h-screen bg-background grid place-items-center p-6">
+        <div className="grid h-12 w-12 place-items-center rounded-full bg-secondary text-foreground ring-1 ring-border">
+          <Lock className="h-5 w-5" />
+        </div>
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
+    if (hasPasscode === false) {
+      return (
+        <div suppressHydrationWarning className="min-h-screen bg-background grid place-items-center p-6">
+          <div className="flex flex-col items-center text-center max-w-sm">
+            <div className="grid h-12 w-12 place-items-center rounded-full bg-secondary text-foreground ring-1 ring-border shadow-[var(--shadow-card)]">
+              <Lock className="h-5 w-5" />
+            </div>
+            <h1 className="mt-4 font-display text-xl font-semibold">Restore access</h1>
+            <p className="mt-1 text-sm text-muted-foreground">No passcode was found. Create a new 6-digit passcode to continue.</p>
+            <div className="mt-6 grid gap-3 w-full">
+              <input type="password" maxLength={6} value={newPasscode}
+                onChange={e => setNewPasscode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                className="h-12 w-full rounded-2xl border border-input bg-secondary/60 text-center font-mono text-xl tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="New passcode" autoFocus />
+              <input type="password" maxLength={6} value={confirmNewPasscode}
+                onChange={e => setConfirmNewPasscode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                className="h-12 w-full rounded-2xl border border-input bg-secondary/60 text-center font-mono text-xl tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="Confirm passcode" />
+              <button type="button" onClick={handleSetPasscode}
+                disabled={passcodeSetupLoading}
+                className="pill pill-dark w-full justify-center disabled:opacity-50">
+                {passcodeSetupLoading ? "Setting passcode…" : "Set passcode"}
+              </button>
+              {passcodeSetupError && <p className="text-sm text-destructive font-medium">{passcodeSetupError}</p>}
+              <p className="text-xs text-muted-foreground">If you previously removed the passcode from the database, setting a new one will restore access.</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div suppressHydrationWarning className="min-h-screen bg-background grid place-items-center p-6">
         <div className="flex flex-col items-center text-center">
@@ -775,7 +1161,7 @@ export default function FinanceDashboard() {
               <span key={i} className={`h-2.5 w-2.5 rounded-full transition-all ${i<loginPasscode.length?"scale-110 bg-primary":"bg-muted ring-1 ring-inset ring-border"}`} />
             ))}
           </div>
-          <input type="password" maxLength={6} value={loginPasscode} onChange={e=>setLoginPasscode(e.target.value.replace(/\D/g,""))} ref={loginRef}
+          <input type="password" maxLength={6} value={loginPasscode} onChange={e=>handleLoginInput(e.target.value)} ref={loginRef}
             className="mt-4 h-12 w-48 rounded-2xl border border-input bg-secondary/60 text-center font-mono text-xl tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary/30" />
           <div className="h-7 mt-3 flex items-center">
             {wrongPass && <p className="text-sm text-destructive font-medium">Incorrect passcode</p>}
@@ -785,9 +1171,6 @@ export default function FinanceDashboard() {
     );
   }
 
-  if (storedPasscode && !unlocked) {
-    return <PasscodeLock storedPasscode={storedPasscode} onUnlock={()=>setUnlocked(true)} />;
-  }
 
   // ══════════════════════════════════════════════════════════
   // MAIN APP
@@ -871,34 +1254,42 @@ export default function FinanceDashboard() {
                       const palette = (["pink","yellow","lavender","peach"] as Tile[])[i%4];
                       const t = TILE[palette];
                       const pos = e.type==="income"||e.type==="receive";
+                      const typeLabel = e.type==="send"?"Sent":e.type==="receive"?"Received":e.type==="income"?"Income":"Expense";
                       return (
-                        <article key={e.id} className={`relative overflow-hidden rounded-[28px] p-5 ${t.bg} ${t.fg} group`}>
+                        <article key={e.id} className={`relative overflow-hidden rounded-[28px] p-5 ${t.bg} ${t.fg} group transition-all duration-200 hover:-translate-y-0.5`}>
                           <div className="flex items-center justify-between">
-                            <span className={`pill ${t.chip} px-3 py-1 text-xs`}>{e.category}</span>
+                            <span className={`pill ${t.chip} px-3 py-1 text-xs gap-1.5`}>
+                              {e.type==="send"?<Send className="h-3 w-3"/>:e.type==="receive"?<Inbox className="h-3 w-3"/>:<Star className="h-3 w-3 fill-current opacity-70"/>}
+                              {typeLabel}
+                            </span>
                             <div className="flex items-center gap-2">
-                              <span className="flex items-center gap-1 rounded-full bg-[hsl(var(--surface)/0.7)] px-2.5 py-1 text-xs font-semibold backdrop-blur">
-                                {e.type==="send"?<Send className="h-3 w-3"/>:e.type==="receive"?<Inbox className="h-3 w-3"/>:<Star className="h-3 w-3 fill-current"/>}
+                              <span className="flex items-center gap-1.5 rounded-full bg-[hsl(var(--surface)/0.75)] px-3 py-1 text-xs font-bold backdrop-blur-sm">
                                 {pos?"+":"−"}{fmt(e.amount)}
+                                {e.currency!=="USD"&&<span className="opacity-60 text-[10px] ml-0.5">{e.currency}</span>}
                               </span>
-                              <button onClick={()=>setDeletingId({id:e.id,kind:"entry"})} className="opacity-0 group-hover:opacity-100 transition grid h-6 w-6 place-items-center rounded-full bg-[hsl(var(--surface)/0.6)]"><X className="h-3 w-3"/></button>
+                              <button onClick={()=>setDeletingId({id:e.id,kind:"entry"})} className="opacity-0 group-hover:opacity-100 transition-all grid h-6 w-6 place-items-center rounded-full bg-[hsl(var(--surface)/0.7)] hover:bg-[hsl(var(--surface)/0.95)]"><X className="h-3 w-3"/></button>
                             </div>
                           </div>
-                          <h3 className="mt-6 font-display text-xl font-semibold leading-snug">{e.note}</h3>
-                          <p className="mt-1 text-xs opacity-70">{new Date(e.date).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</p>
+                          <h3 className="mt-7 font-display text-xl font-semibold leading-snug tracking-tight">{e.note}</h3>
+                          <p className="mt-1.5 text-xs opacity-60 font-medium">{new Date(e.date).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</p>
                           <div className="mt-6 flex items-center justify-between">
-                            <span className="text-xs opacity-70">{wallets.find(w=>w.id===e.walletId)?.name||""}</span>
-                            <div className="flex -space-x-1.5">
-                              <span className="h-6 w-6 rounded-full bg-[hsl(var(--surface))] ring-2 ring-current/10" />
+                            <span className="text-xs opacity-60">{wallets.find(w=>w.id===e.walletId)?.name||"—"}</span>
+                            <div className="flex -space-x-2">
                               <span className="h-6 w-6 rounded-full bg-[hsl(var(--surface)/0.7)] ring-2 ring-current/10" />
+                              <span className="h-6 w-6 rounded-full bg-[hsl(var(--surface)/0.45)] ring-2 ring-current/10" />
                             </div>
                           </div>
                         </article>
                       );
                     })}
                     {filteredEntries.length===0 && (
-                      <div className="md:col-span-2 rounded-[28px] bg-secondary/40 p-10 text-center text-muted-foreground">
-                        <p className="font-display text-lg font-medium">No entries yet</p>
-                        <p className="text-sm mt-1">Add your first entry to get started</p>
+                      <div className="md:col-span-2 rounded-[28px] border-2 border-dashed border-border p-12 text-center text-muted-foreground">
+                        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-secondary mx-auto mb-3">
+                          <Plus className="h-5 w-5" />
+                        </div>
+                        <p className="font-display text-base font-semibold">No entries yet</p>
+                        <p className="text-sm mt-1 mb-4">Add your first entry to get started</p>
+                        <button onClick={()=>setShowNewEntry(true)} className="pill pill-dark mx-auto"><Plus className="h-4 w-4"/>New entry</button>
                       </div>
                     )}
                   </div>
@@ -1128,88 +1519,6 @@ export default function FinanceDashboard() {
               </div>
             )}
 
-            {/* ═══ SYNC ═══ */}
-            {activeTab==="Sync" && (
-              <div className="space-y-8">
-                <header>
-                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Across devices</p>
-                  <h1 className="mt-1 font-display text-4xl font-semibold tracking-tight md:text-5xl">Cloud sync</h1>
-                  <p className="mt-2 max-w-xl text-sm text-muted-foreground">Share your dashboard between devices with a sync ID. Encrypted in transit and at rest.</p>
-                </header>
-                <section className="grid gap-4 md:grid-cols-2">
-                  {/* Sync ID card */}
-                  <div className="surface p-6">
-                    <div className="flex items-center gap-3 mb-5">
-                      <div className="grid h-10 w-10 place-items-center rounded-xl bg-tile-mint text-[hsl(var(--tile-mint-fg))]"><Cloud className="h-5 w-5"/></div>
-                      <div><h3 className="font-display text-lg font-semibold">Your sync ID</h3><p className="text-xs text-muted-foreground">Use this to load your data on another device</p></div>
-                    </div>
-                    <div className="flex items-center gap-2 rounded-2xl border border-border bg-secondary px-4 py-3">
-                      <input value={syncId} onChange={e=>setSyncId(e.target.value)} className="flex-1 bg-transparent font-mono text-sm focus:outline-none"/>
-                      <button onClick={()=>{navigator.clipboard.writeText(syncId);setSyncCopied(true);setTimeout(()=>setSyncCopied(false),1500);}} className="pill pill-dark px-3 py-1.5 text-xs">
-                        {syncCopied?<Check className="h-3.5 w-3.5"/>:<Copy className="h-3.5 w-3.5"/>}
-                        {syncCopied?"Copied":"Copy"}
-                      </button>
-                    </div>
-                    <div className="mt-4 grid grid-cols-2 gap-2">
-                      <button onClick={()=>{try{localStorage.setItem("ledger.syncId",syncId);}catch{}}} className="pill pill-dark justify-center"><Upload className="h-4 w-4"/>Save to cloud</button>
-                      <button onClick={()=>{try{const s=localStorage.getItem("ledger.syncId");if(s)setSyncId(s);}catch{}}} className="pill pill-light justify-center"><Download className="h-4 w-4"/>Load from cloud</button>
-                    </div>
-                  </div>
-
-                  {/* Passcode card */}
-                  <form onSubmit={e=>{
-                    e.preventDefault();
-                    if(newPass.length<6){return;}
-                    if(newPass!==confirmPass){return;}
-                    setStoredPasscode(newPass); try{localStorage.setItem("ledger.passcode",newPass);}catch{}
-                    setNewPass(""); setConfirmPass(""); setShowPassInput(false);
-                  }} className="surface p-6">
-                    <div className="flex items-center gap-3 mb-5">
-                      <div className="grid h-10 w-10 place-items-center rounded-xl bg-tile-lavender text-[hsl(var(--tile-lavender-fg))]"><KeyRound className="h-5 w-5"/></div>
-                      <div className="flex-1">
-                        <h3 className="font-display text-lg font-semibold">Master passcode</h3>
-                        <p className="text-xs text-muted-foreground">Locks the dashboard on this device</p>
-                      </div>
-                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${storedPasscode?"bg-success/10 text-success":"bg-warning/15 text-warning"}`}>
-                        {storedPasscode?<ShieldCheck className="h-3.5 w-3.5"/>:<ShieldAlert className="h-3.5 w-3.5"/>}
-                        {storedPasscode?"Protected":"Not set"}
-                      </span>
-                    </div>
-                    <div className="space-y-3">
-                      <div className="relative">
-                        <input type={showPassInput?"text":"password"} value={newPass} onChange={e=>setNewPass(e.target.value)} placeholder={storedPasscode?"New passcode":"Choose a passcode"} autoComplete="new-password" maxLength={64}
-                          className="h-12 w-full rounded-2xl border border-border bg-secondary px-4 pr-12 text-center font-mono text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-primary/30"/>
-                        <button type="button" onClick={()=>setShowPassInput(s=>!s)} className="absolute right-3 top-1/2 -translate-y-1/2 grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:text-foreground">
-                          {showPassInput?<EyeOff className="h-4 w-4"/>:<Eye className="h-4 w-4"/>}
-                        </button>
-                      </div>
-                      {newPass && (
-                        <div>
-                          <div className="flex h-1.5 gap-1">
-                            {[0,1,2,3].map(i=><div key={i} className={`h-full flex-1 rounded-full transition-colors ${i<passStrength.score?passStrength.tone:"bg-muted"}`}/>)}
-                          </div>
-                          <p className="mt-1.5 text-[11px] text-muted-foreground">Strength: <span className="font-semibold text-foreground">{passStrength.label}</span> · use letters + numbers, 6+ chars</p>
-                        </div>
-                      )}
-                      <input type={showPassInput?"text":"password"} value={confirmPass} onChange={e=>setConfirmPass(e.target.value)} placeholder="Confirm passcode" autoComplete="new-password" maxLength={64}
-                        className="h-12 w-full rounded-2xl border border-border bg-secondary px-4 text-center font-mono text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-primary/30"/>
-                      <div className="flex gap-2">
-                        <button type="submit" disabled={newPass.length<6||newPass!==confirmPass} className="pill pill-dark flex-1 justify-center disabled:opacity-50">{storedPasscode?"Change passcode":"Set passcode"}</button>
-                        {storedPasscode && <button type="button" onClick={()=>{setStoredPasscode(null);try{localStorage.removeItem("ledger.passcode");}catch{}}} className="pill pill-light text-destructive"><Trash2 className="h-4 w-4"/>Remove</button>}
-                      </div>
-                    </div>
-                  </form>
-                </section>
-                <section className="surface p-6">
-                  <h3 className="font-display text-lg font-semibold">How it works</h3>
-                  <ol className="mt-3 space-y-2 text-sm text-muted-foreground">
-                    <li><span className="font-semibold text-foreground">1.</span> Generate a sync ID and click "Save to cloud".</li>
-                    <li><span className="font-semibold text-foreground">2.</span> On another device, paste the ID and click "Load from cloud".</li>
-                    <li><span className="font-semibold text-foreground">3.</span> Your wallets, cards, entries and goals appear instantly.</li>
-                  </ol>
-                </section>
-              </div>
-            )}
 
             {/* ═══ SETTINGS ═══ */}
             {activeTab==="Settings" && (
@@ -1259,6 +1568,56 @@ export default function FinanceDashboard() {
                       {(["light","dark","system"] as ThemeMode[]).map(t => (
                         <button key={t} onClick={()=>setTheme(t)} className={`pill capitalize ${theme===t?"pill-dark":"pill-light"}`}>{t}</button>
                       ))}
+                    </div>
+                  </div>
+
+                  {/* Master passcode */}
+                  <div className="surface p-6">
+                    <div className="flex items-center justify-between gap-3 mb-5">
+                      <div>
+                        <h3 className="font-display text-lg font-semibold">Master passcode</h3>
+                        <p className="text-xs text-muted-foreground">Set or update the passcode used to sign in.</p>
+                      </div>
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${hasPasscode ? "bg-success/10 text-success" : "bg-warning/15 text-warning"}`}>
+                        {hasPasscode ? "Enabled" : "Not set"}
+                      </span>
+                    </div>
+                    <div className="grid gap-3">
+                      {hasPasscode ? (
+                        <>
+                          <Field label="Current passcode">
+                            <FInput type="password" value={currentPasscode} onChange={e => setCurrentPasscode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="Current passcode" />
+                          </Field>
+                          <Field label="New passcode">
+                            <FInput type="password" value={newPasscode} onChange={e => setNewPasscode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="New passcode" />
+                          </Field>
+                          <Field label="Confirm passcode">
+                            <FInput type="password" value={confirmNewPasscode} onChange={e => setConfirmNewPasscode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="Confirm new passcode" />
+                          </Field>
+                          {passcodeSetupError && <p className="text-sm text-destructive font-medium">{passcodeSetupError}</p>}
+                          <div className="flex flex-wrap gap-2">
+                            <button type="button" onClick={handleSetPasscode} disabled={passcodeSetupLoading} className="pill pill-dark flex-1 justify-center disabled:opacity-50">
+                              {passcodeSetupLoading ? "Saving…" : "Update passcode"}
+                            </button>
+                            <button type="button" onClick={handleLockApp} className="pill pill-light text-destructive">
+                              Lock app
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <Field label="New passcode">
+                            <FInput type="password" value={newPasscode} onChange={e => setNewPasscode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="Choose a passcode" />
+                          </Field>
+                          <Field label="Confirm passcode">
+                            <FInput type="password" value={confirmNewPasscode} onChange={e => setConfirmNewPasscode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="Confirm passcode" />
+                          </Field>
+                          {passcodeSetupError && <p className="text-sm text-destructive font-medium">{passcodeSetupError}</p>}
+                          <button type="button" onClick={handleSetPasscode} disabled={passcodeSetupLoading} className="pill pill-dark justify-center disabled:opacity-50">
+                            {passcodeSetupLoading ? "Saving…" : "Set passcode"}
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
 
