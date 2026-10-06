@@ -2,6 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { settingsSchema } from "../../_lib/validation";
+import { createSessionToken } from "@/lib/session";
+
+async function sessionResponse(req: NextRequest, payload: Record<string, unknown>, status = 200) {
+  const response = NextResponse.json(payload, { status });
+  const token = await createSessionToken();
+  if (token) {
+    const isPublicHttps = req.headers.get("x-forwarded-proto") === "https" || req.headers.get("origin")?.startsWith("https://");
+    response.cookies.set("ledger_session", token, {
+      httpOnly: true,
+      secure: Boolean(isPublicHttps),
+      sameSite: isPublicHttps ? "none" : "lax",
+      path: "/",
+      maxAge: 60 * 60 * 12,
+    });
+  }
+  return response;
+}
 
 // Rate limiting: track failed passcode attempts per IP
 const failedAttempts = new Map<string, { count: number; resetTime: number }>();
@@ -155,7 +172,7 @@ export async function POST(req: NextRequest) {
       }
 
       clearFailedAttempts(ipKey);
-      return NextResponse.json({ success: true, authenticated: true });
+      return sessionResponse(req, { success: true, authenticated: true });
     }
 
     // Action: set initial passcode (when none exists)
@@ -180,7 +197,7 @@ export async function POST(req: NextRequest) {
         data: { passcode: newHash },
       });
 
-      return NextResponse.json({ success: true });
+      return sessionResponse(req, { success: true });
     }
 
     // Action: change passcode (requires current passcode verification)
@@ -205,7 +222,7 @@ export async function POST(req: NextRequest) {
       data: { passcode: newHash },
     });
 
-    return NextResponse.json({ success: true });
+    return sessionResponse(req, { success: true });
   } catch (err) {
     console.error("[POST /api/settings]", err);
     return NextResponse.json({ error: "Failed to update settings" }, { status: 500 });

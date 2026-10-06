@@ -1,31 +1,31 @@
 import type { Metadata } from "next";
-import { Inter, Space_Grotesk } from "next/font/google";
+import { DM_Mono, Manrope } from "next/font/google";
 import "./globals.css";
+import { AppProviders } from "./components/AppProviders";
 
-const inter = Inter({
+const manrope = Manrope({
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-sans",
   display: "swap",
 });
 
-const spaceGrotesk = Space_Grotesk({
+const dmMono = DM_Mono({
   subsets: ["latin"],
-  variable: "--font-display",
-  weight: ["500", "600", "700"],
+  variable: "--font-mono",
+  weight: ["400", "500"],
   display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Ledger — Personal Finance Dashboard",
-  description: "Track balances, spending, budgets and accounts in one beautiful place.",
+  title: "Korgon Finance — Private money cockpit",
+  description: "A focused personal finance workspace with clear insights and secure sessions.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head />
-      <body className={`${inter.variable} ${spaceGrotesk.variable} font-sans antialiased`}>
-        {children}
+      <body className={`${manrope.variable} ${dmMono.variable}`}>
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );

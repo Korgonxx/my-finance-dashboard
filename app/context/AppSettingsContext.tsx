@@ -63,42 +63,22 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
   const [currency, setCurrencyState] = useState<Currency>("USD");
   const [hideBalances, setHideBalancesState] = useState(false);
   const [currentPage, setCurrentPageState] = useState<AppPage>("home");
-  const [isDark, setIsDarkState] = useState(true);
-
-  // Load settings from API on mount
-  useEffect(() => {
-    async function loadSettings() {
-      try {
-        const res = await fetch('/api/settings');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.theme === 'dark' || data.theme === 'light') setIsDarkState(data.theme === 'dark');
-        }
-      } catch {}
-    }
-    loadSettings();
-  }, []);
+  const [isDark, setIsDarkState] = useState(() => {
+    try { return localStorage.getItem("korgon_theme") !== "light"; } catch { return true; }
+  });
 
   // Apply theme to DOM
   useEffect(() => {
     try {
       if (!isDark) {
         document.documentElement.classList.add('light');
-        document.body.style.background = '#F2F2F0';
+        document.body.style.background = '#f1f7fb';
       } else {
         document.documentElement.classList.remove('light');
-        document.body.style.background = '#080808';
+        document.body.style.background = '#070b12';
       }
+      localStorage.setItem("korgon_theme", isDark ? "dark" : "light");
     } catch {}
-  }, [isDark]);
-
-  // Persist theme to API
-  useEffect(() => {
-    fetch('/api/settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ theme: isDark ? 'dark' : 'light' }),
-    }).catch(() => {});
   }, [isDark]);
 
   // FIX: verifyAppPasscode now calls the server-side bcrypt check
